@@ -1,0 +1,10 @@
+{
+  "name": "jivika",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "api": "uv run uvicorn main:app --reload",
+    "build": "npm --prefix frontend run build",
+    "start": "uv run uvicorn main:app"
+  }
+}

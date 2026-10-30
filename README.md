@@ -50,8 +50,8 @@ Open http://127.0.0.1:8000, go to **Settings**, choose a provider, and paste you
 Run the API and the Vite dev server in two terminals:
 
 ```bash
-uv run uvicorn main:app --reload        # http://127.0.0.1:8000
-cd frontend && npm run dev              # http://localhost:5173 (proxies /api)
+npm run api                             # http://127.0.0.1:8000
+npm run dev                             # http://localhost:5173 (proxies /api)
 ```
 
 Optional settings are documented in [.env.example](.env.example).
