@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="frontend/public/favicon.svg" alt="Jivika logo" width="72" height="72">
+<img src="docs/brand/jivika-mark.svg" alt="Jivika logo" width="72" height="72">
 
 # Jivika
 
@@ -189,7 +189,9 @@ flowchart LR
 - Resume uploads go through `jivika/parsing.py`: pypdf by default, or [Docling](https://github.com/docling-project/docling) when it is installed or a docling-serve URL is set. `GET /api/parser` tells the app which parser is active and which file types it accepts.
 - Model lists come from each provider's live models endpoint, filtered to chat models and cached for an hour per provider and key hash (raw keys are never stored). The recommended model is used when no model is set.
 - In production FastAPI also serves the built frontend from `frontend/dist` and adds security headers (CSP, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, optional HSTS) to every response. API docs are at `/api/docs`.
-- The CSP is `script-src 'self'` everywhere except where the coding playground needs more. Pages under `/app/` add `'wasm-unsafe-eval'` (Pyodide and sql.js compile WebAssembly) and `worker-src 'self' blob:`. A dedicated worker follows the CSP of its own script response, so only the built worker bundles (`/assets/*worker*.js`) also get `'unsafe-eval'`, which the JavaScript runner needs for `new Function`. The app pages themselves cannot use eval, and the workers have no DOM or storage access.
+- The CSP is `script-src 'self'` and `worker-src 'self'` everywhere, including `/app/`. A dedicated worker follows the CSP of its own script response, so only the built worker bundles (`/assets/*worker*.js`) get `'wasm-unsafe-eval'` (Pyodide and sql.js compile WebAssembly) and `'unsafe-eval'` (the JavaScript runner uses `new Function`). Workers have no DOM or localStorage, network and storage APIs are disabled before user code runs, and `connect-src` is limited to this origin.
+- Pyodide (MPL-2.0, https://github.com/pyodide/pyodide) is redistributed unmodified, with its license notice.
+- Docling (optional) reads at most 10 pages per file and downloads its layout models on first use; prefetch them with `docling-tools models download`.
 
 ### URL structure
 
