@@ -1,0 +1,14 @@
+<form data-waitlist class="w-full max-w-md">
+            <input type="hidden" name="plan" value="pro" />
+            <div class="absolute -left-[9999px] size-px overflow-hidden" aria-hidden="true">
+              <label for="waitlist-website">Website</label>
+              <input id="waitlist-website" type="text" name="website" tabindex="-1" autocomplete="off" />
+            </div>
+            <label for="waitlist-email" class="sr-only">Email address</label>
+            <div class="flex flex-col gap-2 sm:flex-row">
+              <input id="waitlist-email" type="email" name="email" required maxlength="254" autocomplete="email" placeholder="you@example.com" class="field" />
+              <button type="submit" class="btn btn-primary">Join waitlist</button>
+            </div>
+            <p class="mt-3 text-[13px] text-muted">We will only email you about Jivika Pro. Unsubscribe anytime.</p>
+            <p data-status role="status" aria-live="polite" class="mt-3 text-[13px] empty:hidden"></p>
+          </form>
