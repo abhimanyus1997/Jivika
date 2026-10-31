@@ -29,7 +29,11 @@
       <section class="pt-16 pb-6 sm:pt-24 sm:pb-10">
         <div class="wrap hero-stagger text-center">
           <p class="badge"><svg viewBox="0 0 24 24" class="icon size-3.5 text-brand-600" aria-hidden="true"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>Bring your own key &middot; No sign-up</p>
-          <h1 class="h-display mx-auto mt-6 max-w-[760px]">Your job search, organised and sharpened.</h1>
+          <!-- Animated headline (site.css): the visible words are aria-hidden; the sr-only copy is the accessible sentence. -->
+          <h1 class="h-display hero-title mx-auto mt-6 max-w-[760px]">
+            <span class="sr-only">Your job search, organised, sharpened and tracked.</span>
+            <span aria-hidden="true"><span class="hero-word">Your</span> <span class="hero-word">job</span> <span class="hero-word">search,</span> <span class="hero-word hero-key"><span class="hero-cycle"><span>organised.</span><span>sharpened.</span><span>tracked.</span></span><svg class="hero-underline" viewBox="0 0 300 16" preserveAspectRatio="none" focusable="false"><path pathLength="1" d="M4 11.5C52 6.5 112 4.2 170 5.6c44 1 88 3.6 126 7.4M38 13.2c60-3.4 140-4.2 214-1.6"/></svg></span></span>
+          </h1>
           <p class="lead mx-auto mt-5 max-w-[640px]">Search live job listings, match your resume to roles, improve your CV and LinkedIn, plan your next move and prepare for interviews, using your own model key with your data kept in your browser.</p>
           <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
             <a href="%BASE%/app/" class="btn btn-primary h-11 px-5">Open the app <svg viewBox="0 0 24 24" class="icon size-4" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
@@ -54,7 +58,10 @@
       <section aria-label="Supported model providers" class="pt-14 pb-4">
         <div class="wrap flex flex-col items-center gap-4">
           <span class="t-overline">Works with</span>
-          <!--partial:providers-->
+          <!-- Static wrapped list without JS or with reduced motion; main.ts turns it into a marquee. -->
+          <div class="marquee w-full" data-marquee>
+            <!--partial:providers-->
+          </div>
         </div>
       </section>
 

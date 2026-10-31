@@ -106,6 +106,8 @@ if (motion.matches && 'IntersectionObserver' in window) {
       child.style.setProperty('--reveal-i', String(Math.min(i, 8)))
     })
   }
+  // Section titles get their own tracking reveal (site.css), on top of any parent [data-reveal] fade.
+  for (const h of document.querySelectorAll<HTMLElement>('main h2:not(.sr-only)')) h.dataset.titleReveal = ''
   const observer = new IntersectionObserver(
     (entries) => {
       for (const entry of entries) {
@@ -119,8 +121,23 @@ if (motion.matches && 'IntersectionObserver' in window) {
     },
     { rootMargin: '0px 0px -8% 0px' },
   )
-  document.querySelectorAll('[data-reveal]').forEach((el) => observer.observe(el))
+  document.querySelectorAll('[data-reveal], [data-title-reveal]').forEach((el) => observer.observe(el))
   document.documentElement.classList.add('motion-ok')
+}
+
+// "Works with" marquee: duplicate the provider list (the copy is hidden from assistive tech) so the CSS loop is seamless.
+// Without JS or with reduced motion the original wrapped list stays. Hover or keyboard focus pauses it (site.css).
+const marquee = document.querySelector<HTMLElement>('[data-marquee]')
+const marqueeList = marquee?.querySelector('ul')
+if (marquee && marqueeList && motion.matches) {
+  const copy = marqueeList.cloneNode(true) as HTMLElement
+  copy.setAttribute('aria-hidden', 'true')
+  const track = document.createElement('div')
+  track.className = 'marquee-track'
+  track.append(marqueeList, copy)
+  marquee.append(track)
+  marquee.tabIndex = 0
+  marquee.classList.add('is-running')
 }
 
 // Hero clip: one <video> per theme (index.html), shown by the .theme-*-only CSS. Only the visible one plays,

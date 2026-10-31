@@ -186,3 +186,161 @@ html[data-theme='dark'] img[src*='/providers/'] {
     transform: scale(1.01);
   }
 }
+
+/*
+ * Landing typography (index.html). Without JS the headline is CSS-only; with reduced motion every piece shows its final state:
+ * the words in place, the first cycling word ("organised."), the underline drawn, section titles at rest, providers as a wrapped list.
+ */
+.hero-key {
+  position: relative;
+  display: inline-block;
+}
+.hero-cycle {
+  display: inline-grid;
+  justify-items: center;
+  vertical-align: bottom;
+  /* Clip the roll to one line, with room for descenders. */
+  overflow: hidden;
+  padding: 0.08em 0 0.16em;
+  margin: -0.08em 0 -0.16em;
+}
+.hero-cycle > span {
+  grid-area: 1 / 1;
+}
+.hero-cycle > span + span {
+  display: none;
+}
+.hero-underline {
+  position: absolute;
+  left: -2%;
+  bottom: -0.2em;
+  width: 104%;
+  height: 0.3em;
+  overflow: visible;
+  pointer-events: none;
+  fill: none;
+  stroke: var(--color-accent-500);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.hero-underline path {
+  vector-effect: non-scaling-stroke;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hero-stagger > .hero-title {
+    animation: none;
+  }
+  .hero-word {
+    display: inline-block;
+    animation: rise-in 600ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation-delay: 80ms;
+  }
+  .hero-word:nth-child(2) { animation-delay: 150ms; }
+  .hero-word:nth-child(3) { animation-delay: 220ms; }
+  .hero-word:nth-child(4) { animation-delay: 290ms; }
+
+  /* Slot roll: three words share one grid cell; each is on screen for 2.5 s of a 7.5 s loop. */
+  @keyframes hero-roll {
+    0% {
+      opacity: 0;
+      transform: translateY(100%);
+    }
+    5%,
+    31% {
+      opacity: 1;
+      transform: none;
+    }
+    36%,
+    100% {
+      opacity: 0;
+      transform: translateY(-100%);
+    }
+  }
+  .hero-cycle > span,
+  .hero-cycle > span + span {
+    display: block;
+    animation: hero-roll 7.5s cubic-bezier(0.5, 0, 0.2, 1) 2.2s infinite both;
+  }
+  /* The first word starts in place (it arrives with the word reveal), then joins the loop. */
+  .hero-cycle > span:first-child {
+    animation-name: hero-roll-first;
+  }
+  @keyframes hero-roll-first {
+    0%,
+    31% {
+      opacity: 1;
+      transform: none;
+    }
+    36%,
+    95% {
+      opacity: 0;
+      transform: translateY(-100%);
+    }
+    95.01% {
+      transform: translateY(100%);
+    }
+    100% {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .hero-cycle > span:nth-child(2) { animation-delay: 4.7s; }
+  .hero-cycle > span:nth-child(3) { animation-delay: 7.2s; }
+
+  @keyframes draw-in {
+    from {
+      stroke-dashoffset: 1;
+    }
+  }
+  .hero-underline path {
+    stroke-dasharray: 1;
+    animation: draw-in 900ms cubic-bezier(0.6, 0, 0.3, 1) 700ms both;
+  }
+
+  /* Section titles: tracking settles from loose to the title's own value as they fade in (main.ts adds [data-title-reveal]). */
+  html.motion-ok [data-title-reveal] {
+    transition:
+      opacity 700ms ease-out,
+      letter-spacing 900ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  html.motion-ok [data-title-reveal]:not(.is-visible) {
+    opacity: 0;
+    letter-spacing: 0.02em;
+  }
+  .marquee-track {
+    animation: marquee 45s linear infinite;
+  }
+  .marquee:hover .marquee-track,
+  .marquee:focus-within .marquee-track {
+    animation-play-state: paused;
+  }
+}
+
+/* Provider marquee layout (main.ts duplicates the list into .marquee-track; the loop itself is motion-only above). */
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+.marquee.is-running {
+  overflow: hidden;
+  border-radius: 8px;
+  mask-image: linear-gradient(to right, transparent, #000 10%, #000 90%, transparent);
+}
+.marquee.is-running:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 4px;
+  mask-image: none;
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+}
+.marquee-track > ul {
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  padding-inline-end: 1.5rem;
+  white-space: nowrap;
+}
