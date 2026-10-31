@@ -10,10 +10,12 @@ const root = import.meta.dirname
 
 /**
  * Replaces <!--partial:name--> with frontend/partials/name.html (recursively; read fresh, so dev edits apply on reload),
+ * replaces %BASE% with the base path minus its trailing slash (links are written href="%BASE%/pricing/"),
  * marks links to the current page with aria-current="page", and emits sitemap.xml and robots.txt at build.
  * Runs before Vite's %VITE_*% env replacement, so partials can use env placeholders too.
+ * Vite itself adds the base to script, stylesheet, image and icon URLs.
  */
-function site(siteUrl: string): Plugin {
+function site(siteUrl: string, base: string): Plugin {
   return {
     name: 'jivika-site',
     transformIndexHtml: {
@@ -24,12 +26,15 @@ function site(siteUrl: string): Plugin {
           src.replace(/<!--partial:([\w-]+)-->/g, (_, name: string) =>
             inject(readFileSync(resolve(root, 'partials', `${name}.html`), 'utf8')),
           )
-        return inject(html).replaceAll(`data-nav="${page}"`, `data-nav="${page}" aria-current="page"`)
+        return inject(html)
+          .replaceAll('%BASE%', base.slice(0, -1))
+          .replaceAll(`data-nav="${page}"`, `data-nav="${page}" aria-current="page"`)
       },
     },
     generateBundle() {
-      const base = siteUrl.replace(/\/$/, '')
-      const urls = PAGES.map((p) => `  <url><loc>${base}${p}</loc></url>`).join('\n')
+      // VITE_SITE_URL already includes any sub-path (https://abhimanyu.fyi/jivika), so the base is not added again.
+      const site = siteUrl.replace(/\/$/, '')
+      const urls = PAGES.map((p) => `  <url><loc>${site}${p}</loc></url>`).join('\n')
       this.emitFile({
         type: 'asset',
         fileName: 'sitemap.xml',
@@ -39,7 +44,7 @@ function site(siteUrl: string): Plugin {
       this.emitFile({ type: 'asset', fileName: 'robots.txt', source: `User-agent: *
 Allow: /
 
-Sitemap: ${base}/sitemap.xml
+Sitemap: ${site}/sitemap.xml
 ` })
     },
   }
@@ -47,14 +52,19 @@ Sitemap: ${base}/sitemap.xml
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, root, 'VITE_')
+  // Sub-path to serve from, e.g. /jivika/ (pair with JIVIKA_BASE_PATH=/jivika on the server). Normalised to '/x/' or '/'.
+  const segment = (env.VITE_BASE_PATH || '').replace(/^\/+|\/+$/g, '')
+  const base = segment ? `/${segment}/` : '/'
   const html = [...PAGES, '/app/'].map((p) => resolve(root, `.${p}index.html`))
   return {
+    base,
     appType: 'mpa', // unknown dev routes 404 instead of falling back to the landing page
-    plugins: [react(), tailwindcss(), site(env.VITE_SITE_URL || 'https://jivika.app')],
+    plugins: [react(), tailwindcss(), site(env.VITE_SITE_URL || 'https://jivika.app', base)],
     build: { rollupOptions: { input: [...html, resolve(root, '404.html')] } },
     server: {
       port: 5173,
-      proxy: { '/api': 'http://127.0.0.1:8000' },
+      // Strip the sub-path so a plain `npm run api` (served at root) answers; run the API without JIVIKA_BASE_PATH in dev.
+      proxy: { [`${base}api`]: { target: 'http://127.0.0.1:8000', rewrite: (p) => p.slice(base.length - 1) } },
     },
   }
 })

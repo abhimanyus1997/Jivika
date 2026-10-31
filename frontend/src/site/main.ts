@@ -44,7 +44,7 @@ for (const form of document.querySelectorAll<HTMLFormElement>('form[data-waitlis
     button.disabled = true
     button.textContent = 'Joining...'
     try {
-      const res = await fetch('/api/waitlist', {
+      const res = await fetch(`${import.meta.env.BASE_URL}api/waitlist`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -63,6 +63,8 @@ for (const form of document.querySelectorAll<HTMLFormElement>('form[data-waitlis
       } else if (res.status === 422 || res.status === 400) {
         input.setAttribute('aria-invalid', 'true')
         show('Please enter a valid email address.', false)
+      } else if (res.status === 503 && typeof body.detail === 'string') {
+        show(body.detail, false)
       } else {
         show('Something went wrong. Please try again later.', false)
       }

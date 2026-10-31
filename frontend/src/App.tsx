@@ -238,7 +238,7 @@ function Sidebar({
         <NavItem page={settings} active={current === 'settings'} compact={compact} onNavigate={onNavigate} />
         <ModelCard compact={compact} />
         <a
-          href="/"
+          href={import.meta.env.BASE_URL}
           aria-label={compact ? 'Back to site' : undefined}
           title={compact ? 'Back to site' : undefined}
           className={`flex h-7 items-center gap-2 rounded-lg px-2.5 text-[12.5px] text-faint transition-colors duration-150 hover:bg-subtle hover:text-ink ${compact ? 'justify-center' : ''}`}

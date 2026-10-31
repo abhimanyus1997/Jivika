@@ -4,7 +4,7 @@ import { api, useAction } from '../lib/api'
 import { useResume } from '../lib/store'
 import { ErrorMessage } from './ui'
 
-const MAX_MB = 10
+const MAX_MB = 10 // client-side ceiling; the server enforces its own (lower on Vercel) limit and explains it
 
 /** Drag-and-drop PDF upload. The parsed text is saved as the shared resume. */
 export function ResumeDropzone({ compact = false }: { compact?: boolean }) {
@@ -59,7 +59,7 @@ export function ResumeDropzone({ compact = false }: { compact?: boolean }) {
             </>
           )}
         </span>
-        <span className="text-xs text-faint">PDF up to {MAX_MB} MB. Text is extracted on the server and not stored.</span>
+        <span className="text-xs text-faint">PDF only. Text is extracted on the server and not stored.</span>
       </button>
       <input
         ref={input}

@@ -123,7 +123,8 @@ function errorMessage(status: number, body: unknown): string {
   if (Array.isArray(detail) && detail.length) {
     return detail.map((d) => (d as { msg?: string }).msg ?? 'Invalid request.').join(' ')
   }
-  if (status === 413) return 'The file is too large.'
+  // Vercel rejects bodies over 4.5 MB itself, without a JSON detail.
+  if (status === 413) return 'The PDF is too large to upload. Try a smaller file.'
   // A dev proxy or gateway answers 502-504 without a JSON body when the API is down.
   if (status >= 502 && status <= 504) return UNREACHABLE
   return `Request failed (${status}).`
@@ -148,7 +149,7 @@ async function request<T>(path: string, init: { body?: unknown; form?: FormData;
 
   let res: Response
   try {
-    res = await fetch(`/api${path}`, { method, headers, body })
+    res = await fetch(`${import.meta.env.BASE_URL}api${path}`, { method, headers, body })
   } catch {
     throw new ApiError(0, UNREACHABLE)
   }
