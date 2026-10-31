@@ -24,12 +24,22 @@ export default function Settings() {
   const [providers, setProviders] = useState<Provider[]>(FALLBACK_PROVIDERS)
   const [key, setKey] = useState(getKey)
   const [show, setShow] = useState(false)
-  const [verified, setVerified] = useState('')
+  const [verified, setVerified] = useState<{ model: string; fallbackFrom?: string } | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
   const keyVerified = useKeyVerified()
   const demo = useDemo()
   const verify = useAction(api.verify)
   const provider = providers.find((p) => p.id === settings.provider) ?? providers[0]
+
+  // #settings?focus=model (from 'Choose another model') focuses the model picker.
+  useEffect(() => {
+    const focus = () => {
+      if (/[?&]focus=model/.test(location.hash)) document.querySelector<HTMLInputElement>('#model-field input')?.focus()
+    }
+    focus()
+    window.addEventListener('hashchange', focus)
+    return () => window.removeEventListener('hashchange', focus)
+  }, [])
 
   useEffect(() => {
     api.providers().then(setProviders, () => undefined)
@@ -39,7 +49,7 @@ export default function Settings() {
   useEffect(() => saveKey(key.trim(), settings.remember), [key, settings.remember])
 
   function resetVerification() {
-    setVerified('')
+    setVerified(null)
     setKeyVerified(false)
   }
 
@@ -47,7 +57,7 @@ export default function Settings() {
     resetVerification()
     const r = await verify.run()
     if (r?.demo) return
-    if (r?.ok) setVerified(r.model)
+    if (r?.ok) setVerified({ model: r.model, fallbackFrom: r.fallback_from })
     setKeyVerified(!!r?.ok)
   }
 
@@ -115,6 +125,7 @@ export default function Settings() {
                   <input className={`${inputCls} font-mono`} value={demo.model} readOnly aria-readonly="true" />
                 </Field>
               ) : (
+                <div id="model-field">
                 <ModelPicker
                   provider={provider.id}
                   providerName={provider.name}
@@ -127,6 +138,7 @@ export default function Settings() {
                     resetVerification()
                   }}
                 />
+                </div>
               )}
               {provider.id === 'qwen' && <Note>Qwen models are also available through Groq and OpenRouter.</Note>}
             </div>
@@ -210,7 +222,13 @@ export default function Settings() {
                   <div className="flex items-center gap-3">
                     {verified && (
                       <span role="status" className="text-[13px] text-muted">
-                        Works with <span className="font-mono text-ink">{verified}</span>
+                        Answered by <span className="font-mono text-ink">{verified.model}</span>
+                        {verified.fallbackFrom && (
+                          <>
+                            {' '}
+                            (fell back from <span className="font-mono">{verified.fallbackFrom}</span>)
+                          </>
+                        )}
                       </span>
                     )}
                     <Button variant="primary" icon={ShieldCheck} onClick={runVerify} loading={verify.loading} disabled={!key.trim()}>
@@ -271,7 +289,7 @@ export default function Settings() {
               onClick={() => {
                 clearAll()
                 setKey('')
-                setVerified('')
+                setVerified(null)
                 setConfirmClear(false)
                 toast('Local data cleared')
               }}

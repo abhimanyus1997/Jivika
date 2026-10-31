@@ -24,9 +24,9 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useCallback, useEffect, useState, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
-import { FALLBACK_PROVIDERS, loadDemo, useDemoActive } from './lib/api'
+import { FALLBACK_PROVIDERS, loadDemo, useAnswered, useDemoActive } from './lib/api'
 import { useApiKey, useKeyVerified, useProfile, useSettings, useStored } from './lib/store'
-import { Avatar, Badge, Dialog, Logo, ProviderIcon, ShortcutHint, Toaster } from './components/ui'
+import { AnsweredBy, Avatar, Badge, Dialog, Logo, ProviderIcon, ShortcutHint, Toaster } from './components/ui'
 import { CommandPalette, useCtrlK, type Command } from './components/CommandPalette'
 import { ThemeToggle } from './components/ThemeToggle'
 import Dashboard from './pages/Dashboard'
@@ -103,13 +103,14 @@ function useKeyState() {
   const key = useApiKey()
   const verified = useKeyVerified()
   const demo = useDemoActive()
+  const answered = useAnswered()
   const [settings] = useSettings()
   if (demo) {
     return {
       ...KEY_STATES.demo,
       providerId: demo.provider,
       provider: `Demo · ${demo.provider_name}`,
-      model: demo.model,
+      model: answered?.model ?? demo.preferred_model ?? demo.model,
       remaining: demo.remaining_hourly,
     }
   }
@@ -122,6 +123,13 @@ function useKeyState() {
     model: settings.model || provider?.default_model || 'Default model',
     remaining: null,
   }
+}
+
+/** Shows which model produced the last AI result on this page. */
+function AnsweredNote({ page }: { page: string }) {
+  const a = useAnswered()
+  // Settings shows its own verify result.
+  return a && a.page === page && page !== 'settings' ? <AnsweredBy {...a} /> : null
 }
 
 function KeyPill() {
@@ -412,6 +420,7 @@ export default function App() {
         </header>
         <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[1200px] flex-1 space-y-6 px-6 py-6 outline-none md:px-8 md:py-8">
           <PageComponent />
+          <AnsweredNote page={pageId} />
         </main>
       </div>
 

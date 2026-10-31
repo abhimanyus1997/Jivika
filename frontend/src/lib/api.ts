@@ -13,7 +13,7 @@ export interface Provider {
 
 /** Used until /api/providers responds, and if it cannot be reached. */
 export const FALLBACK_PROVIDERS: Provider[] = [
-  { id: 'gemini', name: 'Google Gemini', default_model: 'gemini-3.8-flash', key_url: 'https://aistudio.google.com/apikey', json_mode: true },
+  { id: 'gemini', name: 'Google Gemini', default_model: 'gemini-2.5-flash', key_url: 'https://aistudio.google.com/apikey', json_mode: true },
   { id: 'openai', name: 'OpenAI', default_model: 'gpt-6-luna', key_url: 'https://platform.openai.com/api-keys', json_mode: true },
   { id: 'anthropic', name: 'Anthropic Claude', default_model: 'claude-haiku-5-5', key_url: 'https://platform.claude.com/settings/keys', json_mode: false },
   { id: 'groq', name: 'Groq', default_model: 'openai/gpt-oss-120b', key_url: 'https://console.groq.com/keys', json_mode: true },
@@ -53,6 +53,9 @@ export interface DemoStatus {
   hourly_limit: number
   daily_limit: number
   remaining_hourly: number | null
+  /** Per-model state of the demo pool (Groq free tier). */
+  pool?: { model: string; state: 'ok' | 'busy' | 'exhausted'; remaining_requests?: number; resets_in_seconds?: number }[]
+  preferred_model?: string
 }
 
 /* ---------- Live job search ---------- */
@@ -414,7 +417,29 @@ export class ApiError extends Error {
 }
 
 /** The server's 429 text when the shared demo quota runs out. */
-export const isDemoLimit = (message: string) => /demo limit/i.test(message)
+export const isDemoLimit = (message: string) => /demo limit|demo is busy/i.test(message)
+
+/** Provider quota or overload errors, where another model may still work. */
+export const isModelUnavailable = (message: string) => /quota|overloaded|rate limit|another model/i.test(message)
+
+/* ---------- Model that answered (X-Jivika-Model / X-Jivika-Fallback) ---------- */
+
+export interface Answered {
+  model: string
+  fallbackFrom?: string
+  reason?: string
+  /** Page (hash) the call was made from, so the note shows only there. */
+  page: string
+}
+let answered: Answered | null = null
+const answeredSubs = new Set<() => void>()
+const subscribeAnswered = (cb: () => void) => {
+  answeredSubs.add(cb)
+  return () => {
+    answeredSubs.delete(cb)
+  }
+}
+export const useAnswered = () => useSyncExternalStore(subscribeAnswered, () => answered)
 
 const UNREACHABLE = 'Cannot reach the Jivika server. Make sure it is running and try again.'
 
@@ -506,6 +531,13 @@ async function request<T>(
   if (res.headers.get('X-Jivika-Demo') === '1' && demo && remaining !== null && remaining !== '' && !Number.isNaN(Number(remaining))) {
     setDemo({ ...demo, remaining_hourly: Number(remaining) })
   }
+  const model = res.headers.get('X-Jivika-Model')
+  if (model && res.ok) {
+    const fallbackFrom = res.headers.get('X-Jivika-Fallback') || undefined
+    const reason = res.headers.get('X-Jivika-Fallback-Reason') || undefined
+    answered = { model, fallbackFrom, reason, page: location.hash.slice(1).split('?')[0] || 'dashboard' }
+    answeredSubs.forEach((f) => f())
+  }
   const data: unknown = await res.json().catch(() => null)
   if (res.status === 429 && demo && isDemoLimit(errorMessage(res.status, data))) setDemo({ ...demo, remaining_hourly: 0 })
   if (!res.ok) throw new ApiError(res.status, errorMessage(res.status, data))
@@ -522,7 +554,7 @@ export const api = {
   },
   jobDetail: (source: string, id: string) =>
     request<{ description: string; url: string }>(`/jobs/detail?${new URLSearchParams({ source, id })}`),
-  verify: () => request<{ ok: boolean; model: string; demo?: boolean; provider?: string; remaining_hourly?: number | null }>('/providers/verify', { ai: true }),
+  verify: () => request<{ ok: boolean; model: string; fallback_from?: string; demo?: boolean; provider?: string; remaining_hourly?: number | null }>('/providers/verify', { ai: true }),
   parseResume: (file: File) => {
     const form = new FormData()
     form.append('file', file)
