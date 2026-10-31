@@ -1,5 +1,7 @@
 import { Check, ExternalLink, Eye, EyeOff, Lock, ShieldCheck, Sparkles, Trash2 } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
+import { ModelPicker } from '../components/ModelPicker'
+import { ThemeToggle } from '../components/ThemeToggle'
 import { Badge, Button, Card, ErrorMessage, Field, IconButton, inputCls, Modal, Note, PageHeader, ProviderIcon, toast } from '../components/ui'
 import { api, FALLBACK_PROVIDERS, useAction, useDemo, type Provider } from '../lib/api'
 import { clearAll, getKey, saveKey, setKeyVerified, useKeyVerified, useSettings } from '../lib/store'
@@ -91,7 +93,8 @@ export default function Settings() {
                           checked={active}
                           className="sr-only"
                           onChange={() => {
-                            setSettings({ ...settings, provider: p.id, model: p.default_model })
+                            // Blank model: the server picks the recommended model from the live list.
+                            setSettings({ ...settings, provider: p.id, model: '' })
                             resetVerification()
                           }}
                         />
@@ -106,18 +109,26 @@ export default function Settings() {
                   })}
                 </div>
               </fieldset>
-              <Field label="Model" hint={`Defaults to ${provider.default_model} when left blank.`}>
-                <input
-                  className={`${inputCls} font-mono text-[13px]`}
+              {demo?.enabled && !key.trim() ? (
+                // Without a key every request uses the demo model, so a pick here would be ignored.
+                <Field label="Model" hint={`The demo always uses ${demo.model}. Add your own ${provider.name} key to choose a model.`}>
+                  <input className={`${inputCls} font-mono`} value={demo.model} readOnly aria-readonly="true" />
+                </Field>
+              ) : (
+                <ModelPicker
+                  provider={provider.id}
+                  providerName={provider.name}
+                  apiKey={key}
+                  canListWithoutKey={provider.id === 'openrouter'}
+                  fallback={provider.default_model}
                   value={settings.model}
-                  placeholder={provider.default_model}
-                  onChange={(e) => {
-                    setSettings({ ...settings, model: e.target.value })
+                  onChange={(model) => {
+                    setSettings({ ...settings, model })
                     resetVerification()
                   }}
-                  spellCheck={false}
                 />
-              </Field>
+              )}
+              {provider.id === 'qwen' && <Note>Qwen models are also available through Groq and OpenRouter.</Note>}
             </div>
           </Card>
         </Section>
@@ -210,6 +221,12 @@ export default function Settings() {
               </div>
             </Card>
           </div>
+        </Section>
+
+        <Section title="Appearance" description="Light, dark, or follow your system setting. Applies to the app and the website in this browser.">
+          <Card>
+            <ThemeToggle labeled />
+          </Card>
         </Section>
 
         <Section
