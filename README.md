@@ -166,6 +166,12 @@ Press Ctrl K, type a few letters and press Enter to jump to any page or action. 
 
 </details>
 
+## Jivika Clipper
+
+Naukri, and at times LinkedIn, block server-side imports of job links, and Jivika does not work around bot protection. Jivika Clipper is a Manifest V3 browser extension (Chrome, Edge, Brave) that reads the job from the page you are viewing, in your own browser, when you click its button. It uses only the `activeTab` and `scripting` permissions, sends nothing to Jivika's servers, and hands the job to the app in the URL fragment (`/app/#match?clip=<payload>`), which is never sent to any server. The app validates the payload, caps every field, treats it as plain text and removes it from the URL.
+
+Install steps, the bookmarklet fallback and the list of supported sites are on the [Clipper page](https://jivika.abhimanyu.fyi/clipper/). The extension source lives in `extension/`.
+
 ## How it works
 
 ```mermaid
