@@ -1,0 +1,182 @@
+/*
+ * A4 cover letter. The paper is white with dark ink in both themes (it is a printed document), so
+ * colors are fixed here instead of reading the theme variables.
+ */
+.letter {
+  --lt-ink: #1c1b19;
+  --lt-muted: #5c5a54;
+  --lt-rule: #d6d4ce;
+  --lt-accent: #1f7a4d;
+  --lt-pad-y: 20mm;
+  --lt-pad-x: 22mm;
+  --lt-gap: 7mm;
+  --lt-body: 10.5pt;
+  --lt-leading: 1.6;
+
+  box-sizing: border-box;
+  width: 210mm;
+  min-height: 297mm;
+  padding: var(--lt-pad-y) var(--lt-pad-x);
+  background: #fff;
+  color: var(--lt-ink);
+  font-family: 'Lora', Georgia, 'Times New Roman', serif;
+  font-size: var(--lt-body);
+  line-height: var(--lt-leading);
+  color-scheme: light;
+  text-align: left;
+}
+.letter > * + * {
+  margin-top: var(--lt-gap);
+}
+
+.lt-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 8mm;
+}
+.lt-name {
+  margin: 0;
+  font-family: 'Josefin Sans Variable', 'Century Gothic', 'Futura', sans-serif;
+  font-size: 26pt;
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+.lt-title {
+  margin-top: 2.5mm;
+  font-family: 'Josefin Sans Variable', 'Century Gothic', 'Futura', sans-serif;
+  font-size: 9.5pt;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--lt-muted);
+}
+.lt-contact {
+  flex-shrink: 0;
+  font-style: italic;
+  font-size: 9pt;
+  line-height: 1.55;
+  text-align: right;
+  color: var(--lt-muted);
+  overflow-wrap: anywhere;
+  max-width: 70mm;
+}
+.lt-rule {
+  border: 0;
+  border-top: 0.6pt solid var(--lt-rule);
+  margin-bottom: 0;
+}
+.lt-date {
+  text-align: right;
+}
+.lt-recipient {
+  white-space: pre-line;
+}
+.lt-ref {
+  font-family: 'Josefin Sans Variable', 'Century Gothic', 'Futura', sans-serif;
+  font-size: 9.5pt;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.lt-body > * + * {
+  margin-top: 1em;
+}
+.lt-body p {
+  white-space: pre-line;
+}
+.lt-sign img {
+  display: block;
+  height: 16mm;
+  width: auto;
+  max-width: 60mm;
+  margin: 2mm 0;
+}
+.lt-script {
+  display: block;
+  margin: 1mm 0;
+  font-family: 'Great Vibes', cursive;
+  font-size: 26pt;
+  line-height: 1.2;
+}
+
+/* Modern: evergreen accent rule and sans headings. */
+.letter[data-template='modern'] .lt-name {
+  font-family: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  font-size: 24pt;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+.letter[data-template='modern'] .lt-title {
+  font-family: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  font-size: 10.5pt;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--lt-accent);
+}
+.letter[data-template='modern'] .lt-contact {
+  font-family: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  font-style: normal;
+}
+.letter[data-template='modern'] .lt-rule {
+  border-top: 2.5pt solid var(--lt-accent);
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+.letter[data-template='modern'] .lt-ref {
+  font-family: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  color: var(--lt-accent);
+}
+
+/* Compact: tighter spacing so a full letter fits one page. */
+.letter[data-template='compact'] {
+  --lt-pad-y: 13mm;
+  --lt-pad-x: 16mm;
+  --lt-gap: 4.5mm;
+  --lt-body: 10pt;
+  --lt-leading: 1.45;
+}
+.letter[data-template='compact'] .lt-name {
+  font-size: 20pt;
+}
+.letter[data-template='compact'] .lt-body > * + * {
+  margin-top: 0.7em;
+}
+
+/* Print: only the letter, on A4. The page margins replace the on-screen padding. */
+.letter-print {
+  display: none;
+}
+@page letter {
+  size: A4;
+  margin: 20mm 22mm;
+}
+@page letter-compact {
+  size: A4;
+  margin: 13mm 16mm;
+}
+@media print {
+  body:has(> .letter-print) {
+    background: #fff !important;
+    min-height: 0;
+  }
+  body:has(> .letter-print) > :not(.letter-print) {
+    display: none !important;
+  }
+  .letter-print {
+    display: block;
+    page: letter;
+  }
+  .letter-print[data-template='compact'] {
+    page: letter-compact;
+  }
+  .letter-print .letter {
+    width: auto;
+    min-height: 0;
+    padding: 0;
+  }
+}
