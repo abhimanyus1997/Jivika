@@ -22,7 +22,7 @@ interface WorkerScope {
   addEventListener(type: 'message', listener: (event: MessageEvent) => void): void
 }
 
-const LOCKED = ['postMessage', 'onmessage', 'fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource', 'importScripts', 'indexedDB', 'caches', 'Worker', 'BroadcastChannel']
+const LOCKED = ['postMessage', 'onmessage', 'fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource', 'importScripts', 'indexedDB', 'caches', 'Worker', 'BroadcastChannel', 'WebTransport']
 
 /**
  * `prepare` loads the runtime as soon as the worker starts (it may fetch), so a spare worker can warm up

@@ -14,7 +14,10 @@ function useParserInfo() {
   const [info, setInfo] = useState<ParserInfo>({ docling: false })
   useEffect(() => {
     let live = true
-    parserInfo ??= api.parser()
+    parserInfo ??= api.parser().catch(() => {
+      parserInfo = null // retry on the next mount instead of caching the failure
+      return { docling: false } as ParserInfo
+    })
     parserInfo.then((i) => live && setInfo(i))
     return () => {
       live = false

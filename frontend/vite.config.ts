@@ -75,6 +75,16 @@ function pyodide(base: string): Plugin {
     generateBundle() {
       for (const file of PYODIDE_FILES)
         this.emitFile({ type: 'asset', fileName: PYODIDE_PATH + file, source: readFileSync(resolve(pyodideDir, file)) })
+      // The npm package ships no LICENSE file, so the MPL-2.0 notice (license and source location) is written here.
+      const { version, license } = JSON.parse(readFileSync(resolve(pyodideDir, 'package.json'), 'utf8'))
+      this.emitFile({
+        type: 'asset',
+        fileName: `${PYODIDE_PATH}LICENSE`,
+        source: `Pyodide ${version} is redistributed here unmodified under the Mozilla Public License 2.0 (${license}).
+License text: https://www.mozilla.org/en-US/MPL/2.0/
+Source code: https://github.com/pyodide/pyodide
+`,
+      })
     },
   }
 }

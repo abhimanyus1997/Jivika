@@ -221,6 +221,11 @@ function SignaturePad({ value, onChange }: { value: string; onChange: (url: stri
     return [((e.clientX - r.left) * c.width) / r.width, ((e.clientY - r.top) * c.height) / r.height] as const
   }
 
+  const endStroke = () => {
+    if (!drawing.current) return
+    drawing.current = false
+    onChange(canvas.current!.toDataURL('image/png'))
+  }
   return (
     <div className="space-y-2">
       <canvas
@@ -249,11 +254,9 @@ function SignaturePad({ value, onChange }: { value: string; onChange: (url: stri
           ctx?.lineTo(x, y)
           ctx?.stroke()
         }}
-        onPointerUp={() => {
-          if (!drawing.current) return
-          drawing.current = false
-          onChange(canvas.current!.toDataURL('image/png'))
-        }}
+        onPointerUp={endStroke}
+        onPointerCancel={endStroke}
+        onLostPointerCapture={endStroke}
       />
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-faint">Saved in this browser only.</span>
