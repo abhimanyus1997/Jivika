@@ -1,0 +1,75 @@
+<!doctype html>
+<!-- Internal note: this policy is a plain-language draft and should be reviewed by legal counsel before commercial launch. -->
+<html lang="en">
+  <head>
+    <!--partial:head-->
+    <title>Privacy policy - Jivika</title>
+    <meta name="description" content="How Jivika handles your API key, resume, results and waitlist email. Your data stays in your browser; we use no cookies, analytics or ads." />
+    <link rel="canonical" href="%VITE_SITE_URL%/privacy/" />
+    <meta property="og:title" content="Privacy policy - Jivika" />
+    <meta property="og:description" content="How Jivika handles your API key, resume, results and waitlist email." />
+    <meta property="og:url" content="%VITE_SITE_URL%/privacy/" />
+    <meta name="twitter:title" content="Privacy policy - Jivika" />
+    <meta name="twitter:description" content="How Jivika handles your API key, resume, results and waitlist email." />
+  </head>
+  <body class="site-body">
+    <!--partial:header-->
+    <main id="main">
+      <div class="wrap pt-16 pb-20 sm:pt-24 sm:pb-28">
+        <div class="mx-auto max-w-[720px]">
+          <p class="eyebrow">Legal</p>
+          <h1 class="h-display mt-4">Privacy policy</h1>
+          <p class="mt-4 text-sm text-faint">Last updated: 31 October 2026</p>
+
+          <div class="prose-legal mt-10">
+            <p>This policy explains what information %VITE_COMPANY_NAME% (&ldquo;Jivika&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;), operated by Abhimanyu Singh in India, handles when you use this website and the Jivika app, where it is kept and what control you have over it. In short: your key and your career data stay in your browser, and we keep as little as we can.</p>
+
+            <h2>What is stored in your browser</h2>
+            <p>The app stores the following in your browser&rsquo;s local storage or session storage on your device. We do not receive a copy of this storage.</p>
+            <ul>
+              <li><strong>Your model API key.</strong> Kept in session storage by default, which is cleared when you close the tab, or in local storage if you choose to remember it on this device.</li>
+              <li><strong>Your resume and profile</strong>, analysis results, scores and their history, cover letters and tracked applications.</li>
+              <li><strong>Preferences</strong> such as your chosen provider and model, and interface settings.</li>
+            </ul>
+            <p>You can delete all of this at any time with Clear all local data in the app&rsquo;s Settings, or by clearing site data in your browser.</p>
+
+            <h2>What passes through our server</h2>
+            <p>When you run a tool, the app sends the relevant content, such as your resume text or a job description, to our server along with your API key in a request header. The server uses the key to call the model provider you selected and returns the response to your browser.</p>
+            <ul>
+              <li>Your API key is used only for that request. It is not stored, logged or returned by the server.</li>
+              <li>Resume files and the content of your requests are processed only to produce a response and are not kept after the request ends. They are never written to a database. Uploads larger than 1 MB may be buffered in a temporary file that is deleted when the request finishes.</li>
+            </ul>
+
+            <h2>Model providers</h2>
+            <p>The model provider you choose, such as Google Gemini, OpenAI, Groq or OpenRouter, receives the content sent in each request and processes it under its own terms and privacy policy. You have the relationship with that provider through your own account and key. Please review their policies before you use them with personal information.</p>
+
+            <h2>Where data is processed</h2>
+            <p>Our server and the model provider you choose may be located outside India. By using a provider, you understand that the content you send is processed in the countries where that provider operates.</p>
+
+            <h2>Waitlist</h2>
+            <p>If you join the Pro waitlist, we store your email address, the plan you are interested in, the page you signed up from and the time you signed up in a database on our server. We use it solely to contact you about Jivika Pro. We do not sell it or share it for marketing. You can ask us to delete it at any time by emailing <a href="mailto:%VITE_CONTACT_EMAIL%">%VITE_CONTACT_EMAIL%</a>, and you can unsubscribe from any email we send. We keep your entry until Pro launches and we have contacted you about it, or until you ask us to delete it, whichever comes first.</p>
+
+            <h2>Server logs</h2>
+            <p>Like most web services, our server and hosting provider may record minimal request metadata, such as IP address, time, requested path and response status, to operate the service, prevent abuse and fix problems. To limit abuse of the waitlist, the IP addresses of waitlist requests are also held in server memory for rate limiting. They are never written to disk and are discarded when the server restarts or newer entries replace them. These logs do not include your API key or the content of your requests.</p>
+
+            <h2>Cookies, analytics and ads</h2>
+            <p>We do not use cookies, analytics or advertising trackers. Fonts and other assets are served from our own domain, so loading the site does not contact third parties.</p>
+
+            <h2>Your rights and requests</h2>
+            <p>You can ask to access, correct or delete personal information we hold about you, which in practice is limited to a waitlist entry. Email <a href="mailto:%VITE_CONTACT_EMAIL%">%VITE_CONTACT_EMAIL%</a> and we will respond within a reasonable time. Data held in your browser is under your control and can be removed by you directly.</p>
+
+            <h2>Children</h2>
+            <p>Jivika is not intended for children under 16, and we do not knowingly collect information from them.</p>
+
+            <h2>Changes to this policy</h2>
+            <p>We may update this policy as the product changes, for example when Pro launches. We will change the date at the top of this page and, for significant changes, give notice on the site or by email to waitlist members.</p>
+
+            <h2>Contact</h2>
+            <p>Questions about privacy, and grievances under Indian law, can be sent to Abhimanyu Singh at <a href="mailto:%VITE_CONTACT_EMAIL%">%VITE_CONTACT_EMAIL%</a>.</p>
+          </div>
+        </div>
+      </div>
+    </main>
+    <!--partial:footer-->
+  </body>
+</html>
