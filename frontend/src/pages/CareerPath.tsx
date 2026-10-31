@@ -1,5 +1,7 @@
-import { BookOpen, Route } from 'lucide-react'
+import { ArrowUpRight, BookOpen, Route } from 'lucide-react'
+import { MarketData } from '../components/MarketData'
 import { ResumeSource } from '../components/Resume'
+import { RoadmapView } from '../components/RoadmapView'
 import {
   ActionHint,
   Badge,
@@ -16,6 +18,7 @@ import {
   scoreBand,
   SkeletonCard,
 } from '../components/ui'
+import { FEATURED_ROADMAPS } from '../lib/roadmap'
 import { api, CURRENCIES, useAction, useAiReady, type CareerPath, type Currency } from '../lib/api'
 import { pushHistory, useCareerPath, useProfile, useResume, useStored } from '../lib/store'
 
@@ -84,6 +87,39 @@ export default function CareerPathPage() {
               <ActionHint show={key && missing}>{missing}</ActionHint>
             </div>
           </Card>
+          <Card title="Popular roadmaps" description="Pick one as your target, or open the official guide." className="mt-6">
+            <ul className="space-y-3">
+              {FEATURED_ROADMAPS.map((r) => (
+                <li key={r.slug} className="rounded-lg border border-line p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="t-title">{r.name}</p>
+                      <p className="text-[13px] text-muted">{r.text}</p>
+                    </div>
+                    <a
+                      href={`https://roadmap.sh/${r.slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 text-faint hover:text-ink"
+                      aria-label={`Open the ${r.name} roadmap on roadmap.sh`}
+                      title="Open on roadmap.sh"
+                    >
+                      <ArrowUpRight className="size-4" strokeWidth={1.75} />
+                    </a>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant={form.target_role === r.role ? 'brand' : 'secondary'}
+                    className="mt-2"
+                    onClick={() => setForm({ ...form, target_role: r.role })}
+                    aria-pressed={form.target_role === r.role}
+                  >
+                    {form.target_role === r.role ? 'Target set' : 'Use as target'}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </Card>
         </div>
 
         <div className="min-w-0 space-y-6">
@@ -97,11 +133,11 @@ export default function CareerPathPage() {
               <EmptyState
                 icon={<Route strokeWidth={1.75} />}
                 title="No career path yet"
-                text="Your career timeline, estimated salaries and skills to build will appear here."
+                text="Your career timeline, salary estimates, market data and a personalised learning roadmap will appear here."
               />
             </Card>
           ) : (
-            <Results path={path} />
+            <Results path={path} location={form.location} currency={form.currency} />
           )}
         </div>
       </div>
@@ -109,7 +145,7 @@ export default function CareerPathPage() {
   )
 }
 
-function Results({ path }: { path: CareerPath }) {
+function Results({ path, location, currency }: { path: CareerPath; location: string; currency: Currency }) {
   const band = scoreBand(path.career_score)
   return (
     <>
@@ -128,9 +164,11 @@ function Results({ path }: { path: CareerPath }) {
         </div>
       </Card>
 
-      <Card title="Career timeline" description="Salary ranges are estimates and vary by employer and market.">
-        <CareerTimeline path={path} />
+      <Card title="Career timeline" description="AI salary ranges are estimates; market data comes from live sources where available.">
+        <CareerTimeline path={path} extra={(title) => <MarketData title={title} location={location} currency={currency} />} />
       </Card>
+
+      {path.roadmap && <RoadmapView roadmap={path.roadmap} />}
 
       <Card title="Skills to build" description="What closes the gap to your next role." padding={false}>
         {path.skills_to_build.length ? (

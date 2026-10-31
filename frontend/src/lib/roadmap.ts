@@ -1,0 +1,90 @@
+/**
+ * Skill names that have their own roadmap.sh guide, mapped to its slug. Every slug is on the server's
+ * allow-list (jivika/schemas.py ROADMAP_SH). Used to link ATS keyword chips.
+ */
+const SKILL_SLUGS: Record<string, string> = {
+  python: 'python',
+  sql: 'sql',
+  docker: 'docker',
+  kubernetes: 'kubernetes',
+  k8s: 'kubernetes',
+  aws: 'aws',
+  'amazon web services': 'aws',
+  react: 'react',
+  'react.js': 'react',
+  reactjs: 'react',
+  'node.js': 'nodejs',
+  nodejs: 'nodejs',
+  node: 'nodejs',
+  java: 'java',
+  go: 'golang',
+  golang: 'golang',
+  linux: 'linux',
+  git: 'git-github',
+  github: 'git-github',
+  terraform: 'terraform',
+  mongodb: 'mongodb',
+  postgresql: 'postgresql-dba',
+  postgres: 'postgresql-dba',
+  'system design': 'system-design',
+  'api design': 'api-design',
+  'rest apis': 'api-design',
+  'machine learning': 'machine-learning',
+  ml: 'machine-learning',
+  'deep learning': 'machine-learning',
+  pytorch: 'machine-learning',
+  tensorflow: 'machine-learning',
+  'scikit-learn': 'machine-learning',
+  mlops: 'mlops',
+  mlflow: 'mlops',
+  kubeflow: 'mlops',
+  'model deployment': 'mlops',
+  'ai engineering': 'ai-engineer',
+  'generative ai': 'ai-engineer',
+  genai: 'ai-engineer',
+  llm: 'ai-engineer',
+  llms: 'ai-engineer',
+  rag: 'ai-engineer',
+  langchain: 'ai-engineer',
+  'ai agents': 'ai-engineer',
+  'forward deployed engineering': 'forward-deployed-engineer',
+  'solutions engineering': 'forward-deployed-engineer',
+  devops: 'devops',
+  'prompt engineering': 'prompt-engineering',
+  'data analysis': 'data-analyst',
+  'data engineering': 'data-engineer',
+  'product management': 'product-manager',
+  'ux design': 'ux-design',
+  'cyber security': 'cyber-security',
+  cybersecurity: 'cyber-security',
+  blockchain: 'blockchain',
+  android: 'android',
+  ios: 'ios',
+  'computer science': 'computer-science',
+  statistics: 'ai-data-scientist',
+  'a/b testing': 'ai-data-scientist',
+  'data science': 'ai-data-scientist',
+  tableau: 'data-analyst',
+  'power bi': 'data-analyst',
+  excel: 'data-analyst',
+  spark: 'data-engineer',
+  'apache spark': 'data-engineer',
+  airflow: 'data-engineer',
+  'apache airflow': 'data-engineer',
+  dbt: 'data-engineer',
+}
+
+export function roadmapUrlForSkill(skill: string): string | null {
+  const slug = SKILL_SLUGS[skill.trim().toLowerCase()]
+  return slug ? `https://roadmap.sh/${slug}` : null
+}
+
+/** Default roadmaps suggested on Career path. Descriptions are our own; the official guides live on roadmap.sh. */
+export const FEATURED_ROADMAPS = [
+  { slug: 'ai-engineer', name: 'AI Engineer', role: 'AI Engineer', text: 'Build applications on large language models: prompting, RAG, agents and evaluation.' },
+  { slug: 'machine-learning', name: 'Machine Learning', role: 'Machine Learning Engineer', text: 'Train, evaluate and improve models, from classical ML to deep learning.' },
+  { slug: 'mlops', name: 'MLOps', role: 'MLOps Engineer', text: 'Ship and run models in production: pipelines, serving, monitoring and platforms.' },
+  { slug: 'forward-deployed-engineer', name: 'Forward Deployed Engineer', role: 'Forward Deployed Engineer', text: 'Deliver AI and software solutions directly with customers, from discovery to deployment.' },
+] as const
+
+export const ROADMAP_ATTRIBUTION = 'Roadmap links point to roadmap.sh, an independent community project.'
