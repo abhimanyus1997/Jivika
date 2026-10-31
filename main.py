@@ -40,7 +40,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from openai import OpenAI
 from pydantic import AfterValidator, BaseModel, Field, ValidationError
-from jivika import ats, coding, importer, jobs, parsing, resources, salary
+from jivika import ats, coding, importer, jobs, llm, parsing, resources, salary
 from jivika import models as model_lists
 from jivika.ats import STOPWORDS, tokens as _tokens  # noqa: F401  (keyword coverage shares the ATS tokenizer)
 from jivika.schemas import (  # noqa: F401  (re-exported for tests and callers)
@@ -97,6 +97,8 @@ from jivika.schemas import (  # noqa: F401  (re-exported for tests and callers)
 
 load_dotenv()
 mimetypes.add_type("text/javascript", ".js")  # Windows registry may map .js to text/plain
+mimetypes.add_type("text/javascript", ".mjs")  # Pyodide loads pyodide.asm.mjs; Python 3.11 has no .mjs mapping
+mimetypes.add_type("application/wasm", ".wasm")
 
 log = logging.getLogger("jivika")
 
@@ -121,6 +123,7 @@ class LLMConfig:
     model: str
     # Demo requests are charged in ask(), only when the provider is actually called (not on 422s).
     demo_ip: str | None = None
+    # Receives X-Jivika-Model (and X-Jivika-Fallback) after the call.
     response: Response | None = None
 
 
@@ -143,11 +146,13 @@ def byok(
     # Header values are forwarded to the provider and must be printable ASCII.
     if not (key.isascii() and key.isprintable()):
         raise HTTPException(401, "The API key format is invalid.")
-    # No model chosen: the live list's recommendation for this key if it was listed recently, else the static default.
-    model = x_llm_model.strip() or model_lists.cached_recommended(provider, key) or PROVIDERS[provider]["default_model"]
+    # No model chosen: the model that last answered for this key, else the live list's recommendation if it was
+    # listed recently, else the static default.
+    model = (x_llm_model.strip() or llm.last_success(provider, key) or model_lists.cached_recommended(provider, key)
+             or PROVIDERS[provider]["default_model"])
     if not (model.isascii() and model.isprintable()):
         raise HTTPException(400, "The model name is invalid.")
-    return LLMConfig(provider=provider, key=key, model=model)
+    return LLMConfig(provider=provider, key=key, model=model, response=response)
 
 
 def optional_llm(
@@ -178,14 +183,106 @@ def _is_auth_error(exc: openai.APIError) -> bool:
 # Output budgets for tasks with long answers; provider defaults (often 8k tokens with reasoning) truncate them.
 TASK_MAX_TOKENS = {"coding_problems": 16_000}
 _JSON_FAILED = re.compile(r"failed to (?:validate|generate) json", re.I)
+MAX_MODEL_ATTEMPTS = 3
+FAILOVER_BUDGET = 150  # seconds; no further model is tried after this, keeping the worst case under Vercel's 300 s
+OVERLOAD_RETRY_MAX = 3  # seconds of Retry-After honoured before retrying an overloaded model once
 
 
-def complete_json(provider: str, key: str, model: str, system: str, user: str, schema_model, max_tokens: int | None = None):
-    """Call the provider once (plus one retry on invalid output) and return a validated model. max_tokens raises
-    the output budget; a model that rejects it is retried once without it."""
+class _Unavailable(Exception):
+    """A model that is out of quota, rate limited, overloaded or missing; the next candidate may still work."""
+
+    def __init__(self, kind: str, exc: openai.APIError):
+        super().__init__(kind)
+        self.kind, self.message = kind, str(exc)
+        self.headers = getattr(getattr(exc, "response", None), "headers", None) or {}
+        self.retry_after = llm.seconds(self.headers.get("retry-after"))
+
+
+def _messages(system: str, user: str, schema_model) -> list[dict]:
+    schema = json.dumps(schema_model.model_json_schema())
+    return [
+        {"role": "system", "content": f"{BASE_RULES}\n\n{system}\n\nRespond with a single JSON object that conforms to this JSON schema:\n{schema}"},
+        {"role": "user", "content": user},
+    ]
+
+
+def _estimate(messages: list[dict], max_tokens: int | None) -> int:
+    """Rough token cost for Groq's per-minute budget: 4 characters per token plus the output budget."""
+    return sum(len(m["content"]) for m in messages) // 4 + (max_tokens or 0)
+
+
+def _create(client, model: str, messages: list[dict], options: dict):
+    """(completion, response headers). The raw response exposes Groq's x-ratelimit-* headers."""
+    raw = getattr(client.chat.completions, "with_raw_response", None)
+    if raw is None:  # test doubles
+        return client.chat.completions.create(model=model, messages=messages, **options), {}
+    response = raw.create(model=model, messages=messages, **options)
+    return response.parse(), response.headers
+
+
+def _one_model(provider: str, client, model: str, messages: list[dict], options: dict, schema_model):
+    """One model: retries once on invalid JSON, once without the output budget if rejected, and once after a
+    short wait when overloaded. Raises _Unavailable for errors another model may not have."""
+    name = PROVIDERS[provider]["name"]
+    options = dict(options)
+    json_tries, overload_retried = 0, False
+    while json_tries < 2:
+        try:
+            response, headers = _create(client, model, messages, options)
+        except openai.APIError as exc:
+            if _is_auth_error(exc):
+                raise HTTPException(401, f"The API key was rejected by {name}.") from None
+            if isinstance(exc, openai.NotFoundError):
+                raise _Unavailable("missing", exc) from None
+            if kind := llm.classify(getattr(exc, "status_code", None), str(exc)):
+                failure = _Unavailable(kind, exc)
+                if kind == "overloaded" and not overload_retried:
+                    overload_retried = True
+                    time.sleep(min(failure.retry_after or 1, OVERLOAD_RETRY_MAX))
+                    continue
+                raise failure from None
+            if isinstance(exc, openai.BadRequestError) and _JSON_FAILED.search(str(exc)):
+                log.info("Provider %s rejected its own JSON, retrying once", provider)  # Groq json_validate_failed
+                json_tries += 1
+                continue
+            if isinstance(exc, openai.BadRequestError) and "max_completion_tokens" in options and "token" in str(exc).lower():
+                log.info("Provider %s rejected the output budget, retrying without it", provider)
+                options.pop("max_completion_tokens")
+                continue
+            log.warning("Provider %s error: %s", provider, type(exc).__name__)
+            raise HTTPException(502, "The model provider returned an error.") from None
+        content = (response.choices[0].message.content or "") if response.choices else ""
+        try:
+            return schema_model.model_validate_json(_strip_fences(content)), headers
+        except ValidationError:
+            log.info("Invalid JSON from %s, retrying once", provider)
+            json_tries += 1
+    raise HTTPException(502, "The model returned an invalid response. Please try again.")
+
+
+def _unavailable(name: str, tried: list[tuple[str, str]]) -> HTTPException:
+    """The provider's reason for the first model, plus the fallbacks that also failed. Never keys or URLs."""
+    first, kind = tried[0]
+    reason = {
+        "quota": f"{name} quota exceeded for {first}.",
+        "rate": f"Rate limit reached at {name} for {first}.",
+        "overloaded": f"{name} is overloaded right now ({first}).",
+        "missing": f"{name} does not offer {first} for this key.",
+    }[kind]
+    if others := [m for m, _ in tried[1:]]:
+        reason += f" Tried {', '.join(others)}: also unavailable."
+    reason += " Try again or choose another model." if kind == "overloaded" else " Wait and retry, or choose another model."
+    status = 429 if kind in ("quota", "rate") else 503 if kind == "overloaded" else 502
+    return HTTPException(status, reason, headers={"Retry-After": "60"} if status == 429 else None)
+
+
+def complete_json(provider: str, key: str, model: str, system: str, user: str, schema_model, max_tokens: int | None = None,
+                  *, meta: dict | None = None, pool: list[str] | None = None):
+    """A validated schema_model from the provider. Quota, rate-limit, overload and missing-model errors fail over to
+    the next candidate (at most MAX_MODEL_ATTEMPTS models): pool order for the demo (by remaining Groq limits),
+    else the chosen model then the provider's stable fallbacks. meta receives model, fallback_from, fallback_reason."""
     spec = PROVIDERS[provider]
-    name = spec["name"]
-    client = OpenAI(api_key=key, base_url=spec["base_url"], timeout=60, max_retries=1)  # worst case ~240 s with the JSON retry, under Vercel's 300 s
+    client = OpenAI(api_key=key, base_url=spec["base_url"], timeout=60, max_retries=0)  # retries are handled here
     options = dict(spec.get("extra", {}))
     if spec["json_mode"]:
         options["response_format"] = {"type": "json_object"}
@@ -193,39 +290,44 @@ def complete_json(provider: str, key: str, model: str, system: str, user: str, s
         options["temperature"] = 0.3
     if max_tokens:
         options["max_completion_tokens"] = max_tokens
-    schema = json.dumps(schema_model.model_json_schema())
-    messages = [
-        {
-            "role": "system",
-            "content": f"{BASE_RULES}\n\n{system}\n\nRespond with a single JSON object that "
-            f"conforms to this JSON schema:\n{schema}",
-        },
-        {"role": "user", "content": user},
-    ]
-    for _ in range(2):
+    messages = _messages(system, user, schema_model)
+    estimate = _estimate(messages, max_tokens)
+    models = pool or llm.candidates(provider, model, model_lists.cached_ids(provider, key), spec["default_model"], model_lists.stable)
+    deadline = time.monotonic() + FAILOVER_BUDGET
+    tried: list[tuple[str, str]] = []
+    for _ in range(MAX_MODEL_ATTEMPTS):
+        done = [m for m, _ in tried]
+        if pool:
+            try:
+                current = llm.pick(pool, estimate, exclude=done)
+            except llm.PoolUnavailable as exc:
+                raise HTTPException(429, str(exc), headers={"Retry-After": str(exc.retry_after)}) from None
+        else:
+            current = next((m for m in models if m not in done and not llm.cooling(provider, key, m)), None)
+            if current is None and not tried:
+                current = models[0]  # everything is cooling down: the cooldown is a hint, try the first anyway
+        if current is None or (tried and time.monotonic() > deadline):
+            break
         try:
-            response = client.chat.completions.create(model=model, messages=messages, **options)
-        except openai.APIError as exc:
-            if _is_auth_error(exc):
-                raise HTTPException(401, f"The API key was rejected by {name}.") from None
-            if isinstance(exc, openai.RateLimitError):
-                raise HTTPException(429, f"Rate limit reached at {name}. Please wait and retry.") from None
-            if isinstance(exc, openai.BadRequestError) and _JSON_FAILED.search(str(exc)):
-                log.info("Provider %s rejected its own JSON, retrying once", provider)  # Groq json_validate_failed
-                continue
-            if isinstance(exc, openai.BadRequestError) and max_tokens and "token" in str(exc).lower():
-                log.info("Provider %s rejected the output budget, retrying without it", provider)
-                options.pop("max_completion_tokens", None)
-                max_tokens = None
-                continue
-            log.warning("Provider %s error: %s", provider, type(exc).__name__)
-            raise HTTPException(502, "The model provider returned an error.") from None
-        content = (response.choices[0].message.content or "") if response.choices else ""
-        try:
-            return schema_model.model_validate_json(_strip_fences(content))
-        except ValidationError:
-            log.info("Invalid JSON from %s, retrying once", provider)
-    raise HTTPException(502, "The model returned an invalid response. Please try again.")
+            result, headers = _one_model(provider, client, current, messages, options, schema_model)
+        except _Unavailable as exc:
+            tried.append((current, exc.kind))
+            wait = exc.retry_after or (llm.COOL_OVERLOADED if exc.kind == "overloaded" else llm.COOL_QUOTA)
+            log.info("Model %s at %s unavailable (%s), trying the next one", current, provider, exc.kind)
+            if pool:
+                llm.observe(current, exc.headers, limited=True, retry_after=wait, message=exc.message)
+            else:
+                llm.cool(provider, key, current, wait)
+            continue
+        if pool:
+            llm.observe(current, headers)
+        llm.succeeded(provider, key, current)
+        if meta is not None:
+            meta["model"] = current
+            if tried:
+                meta.update(fallback_from=tried[0][0], fallback_reason=llm.REASONS[tried[0][1]])
+        return result
+    raise _unavailable(spec["name"], tried)
 
 
 def _strip_fences(text: str) -> str:
@@ -235,21 +337,65 @@ def _strip_fences(text: str) -> str:
     return text
 
 
+def answered_headers(response: Response | None, model: str, meta: dict):
+    """X-Jivika-Model (the model that answered) and, after a fallback, X-Jivika-Fallback and its reason."""
+    if response is None:
+        return
+    response.headers["X-Jivika-Model"] = meta.get("model", model)
+    if meta.get("fallback_from"):
+        response.headers["X-Jivika-Fallback"] = meta["fallback_from"]
+        response.headers["X-Jivika-Fallback-Reason"] = meta["fallback_reason"]
+
+
+# Demo calls must fit Groq's free tier (8K tokens per minute per model): shorter inputs and output budgets.
+DEMO_FIELD_CHARS = {"resume": 10_000, "job_description": 6_000}
+DEMO_OTHER_CHARS = 4_000
+DEMO_MAX_TOKENS, DEMO_LONG_MAX_TOKENS = 2_500, 4_000
+DEMO_LONG_TASKS = ("coding_problems", "career_path")
+DEMO_TOKEN_TARGET = 7_500
+
+
+def _user(sections: dict) -> str:
+    return "\n\n".join(f"## {label.replace('_', ' ').title()}\n{value}" for label, value in sections.items() if value)
+
+
+def demo_sections(task: str, schema_model, sections: dict, max_tokens: int) -> dict:
+    """Inputs cut to the demo budgets; if the estimate is still above DEMO_TOKEN_TARGET, the longest field is cut further."""
+    out = {k: (v or "")[: DEMO_FIELD_CHARS.get(k, DEMO_OTHER_CHARS)] for k, v in sections.items()}
+    for _ in range(3):
+        over = _estimate(_messages(PROMPTS[task], _user(out), schema_model), max_tokens) - DEMO_TOKEN_TARGET
+        longest = max(out, key=lambda k: len(out[k]), default=None)
+        if over <= 0 or longest is None or len(out[longest]) <= 1_000:
+            break
+        out[longest] = out[longest][: max(1_000, len(out[longest]) - over * 4)]
+    return out
+
+
 def ask(cfg: LLMConfig, task: str, schema_model, **sections: str):
-    user = "\n\n".join(f"## {label.replace('_', ' ').title()}\n{value}" for label, value in sections.items() if value)
-    budget = {"max_tokens": TASK_MAX_TOKENS[task]} if task in TASK_MAX_TOKENS else {}
-    if cfg.demo_ip is None:
-        return complete_json(cfg.provider, cfg.key, cfg.model, PROMPTS[task], user, schema_model, **budget)
+    demo = cfg.demo_ip is not None
+    max_tokens = TASK_MAX_TOKENS.get(task)
+    if demo:
+        max_tokens = DEMO_LONG_MAX_TOKENS if task in DEMO_LONG_TASKS else DEMO_MAX_TOKENS
+        sections = demo_sections(task, schema_model, sections, max_tokens)
+    user = _user(sections)
+    budget = {"max_tokens": max_tokens} if max_tokens else {}
+    meta: dict = {}
+    if not demo:
+        result = complete_json(cfg.provider, cfg.key, cfg.model, PROMPTS[task], user, schema_model, **budget, meta=meta)
+        answered_headers(cfg.response, cfg.model, meta)
+        return result
     remaining = use_demo(cfg.demo_ip)
     if cfg.response is not None:
         cfg.response.headers.update({"X-Jivika-Demo": "1", "X-Jivika-Demo-Remaining": str(remaining)})
     try:
-        return complete_json(cfg.provider, cfg.key, cfg.model, PROMPTS[task], user, schema_model, **budget)
+        result = complete_json(cfg.provider, cfg.key, cfg.model, PROMPTS[task], user, schema_model, **budget, meta=meta, pool=demo_pool())
     except HTTPException as exc:
         if exc.status_code != 401:
             raise
         log.error("Demo key rejected by %s", PROVIDERS[cfg.provider]["name"])  # never the key
         raise HTTPException(503, DEMO_UNAVAILABLE) from None
+    answered_headers(cfg.response, cfg.model, meta)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -260,6 +406,7 @@ DEMO_PROVIDER = "groq"
 DEMO_LIMIT_REACHED = "Demo limit reached. Add your own API key in Settings to keep going."
 DEMO_UNAVAILABLE = "The demo model is unavailable right now. Add your own API key in Settings."
 DEMO_MAX_KEYS = 10_000
+GROQ_FREE_RPD, GROQ_FREE_RPM = 1_000, 30  # per model on Groq's free tier
 _demo_counts: dict[str, int] = {}
 _demo_lock = threading.Lock()
 
@@ -268,13 +415,38 @@ def demo_key() -> str:
     return os.getenv("JIVIKA_DEMO_GROQ_KEY", "").strip()
 
 
-def demo_model() -> str:
-    """JIVIKA_DEMO_MODEL, else the recommended model from Groq's live list (cached an hour), else the static default."""
+def demo_pool() -> list[str]:
+    """JIVIKA_DEMO_MODEL alone when set, else JIVIKA_DEMO_MODELS (default llm.DEMO_MODELS) filtered by Groq's live list."""
     if model := os.getenv("JIVIKA_DEMO_MODEL", "").strip():
-        return model
-    if key := demo_key():
-        return model_lists.list_models(DEMO_PROVIDER, key)["recommended"]
-    return PROVIDERS[DEMO_PROVIDER]["default_model"]
+        return [model]
+    wanted = [m.strip() for m in os.getenv("JIVIKA_DEMO_MODELS", "").split(",") if m.strip()] or list(llm.DEMO_MODELS)
+    listed = model_lists.list_models(DEMO_PROVIDER, key) if (key := demo_key()) else None
+    live = {m["id"] for m in listed["models"]} if listed and listed["source"] == "live" else None
+    return [m for m in wanted if not live or m in live] or wanted
+
+
+def demo_model() -> str:
+    """The pool model the next demo request would use (the first one when none is available)."""
+    pool = demo_pool()
+    try:
+        return llm.pick(pool, 0)
+    except llm.PoolUnavailable:
+        return pool[0]
+
+
+def demo_pool_status() -> list[dict]:
+    pool = demo_pool()
+    states = llm.pool_states(pool)
+    out = []
+    for model in pool:
+        state, wait = llm.pool_status(model, states[model])
+        entry = {"model": model, "state": state}
+        if states[model].get("rpd") is not None:
+            entry["remaining_requests"] = states[model]["rpd"]
+        if wait:
+            entry["resets_in_seconds"] = int(wait) + 1
+        out.append(entry)
+    return out
 
 
 def _env_int(name: str, default: int) -> int:
@@ -285,8 +457,13 @@ def _env_int(name: str, default: int) -> int:
 
 
 def demo_limits() -> tuple[int, int]:
-    """(per-IP hourly, global daily) demo request limits."""
-    return _env_int("JIVIKA_DEMO_HOURLY_LIMIT", 20), _env_int("JIVIKA_DEMO_DAILY_LIMIT", 500)
+    """(per-IP hourly, global daily) demo request limits. The daily default keeps 10% headroom under the pool's RPD."""
+    return _env_int("JIVIKA_DEMO_HOURLY_LIMIT", 20), _env_int("JIVIKA_DEMO_DAILY_LIMIT", int(0.9 * GROQ_FREE_RPD * len(demo_pool())))
+
+
+def demo_minute_limit() -> int:
+    """Global demo requests per minute; the default keeps 15% headroom under the pool's RPM."""
+    return _env_int("JIVIKA_DEMO_MINUTE_LIMIT", int(0.85 * GROQ_FREE_RPM * len(demo_pool())))
 
 
 def _demo_windows(ip: str) -> tuple[str, str]:
@@ -328,13 +505,17 @@ def use_demo(ip: str) -> int:
     """Count one demo request; 429 when over a limit. Returns the runs left for this IP this hour."""
     hourly, daily = demo_limits()
     ip_key, day_key = _demo_windows(ip)
-    over = HTTPException(429, DEMO_LIMIT_REACHED, headers={"X-Jivika-Demo": "1", "X-Jivika-Demo-Remaining": "0"})
+    flags = {"X-Jivika-Demo": "1", "X-Jivika-Demo-Remaining": "0"}
     used = _demo_count(ip_key, 3600, True)
     if used > hourly:
-        raise over
+        raise HTTPException(429, DEMO_LIMIT_REACHED, headers=flags)
     used_today = _demo_count(day_key, 86400, True)
     if used_today > daily:
-        raise over
+        raise HTTPException(429, llm.DEMO_EXHAUSTED, headers=flags)
+    now = int(time.time())
+    if _demo_count(f"jivika:demo:min:{now // 60}", 60, True) > demo_minute_limit():
+        wait = 60 - now % 60
+        raise HTTPException(429, llm.DEMO_BUSY.format(wait), headers={"Retry-After": str(wait), "X-Jivika-Demo": "1"})
     return max(0, min(hourly - used, daily - used_today))
 
 
@@ -345,6 +526,17 @@ def demo_remaining(ip: str) -> int | None:
     if used is None or used_today is None:
         return None
     return max(0, min(hourly - used, daily - used_today))
+
+
+def _pool_store():
+    """Upstash Redis for the demo pool's per-model limits, when configured."""
+    if not (config := redis_config()):
+        return None
+    return (lambda keys: redis_http(*config, ["MGET", *keys])["result"],
+            lambda key, value, ttl: redis_http(*config, ["SET", key, value, "EX", str(ttl)]))
+
+
+llm.store = _pool_store
 
 
 # ---------------------------------------------------------------------------
@@ -369,7 +561,8 @@ def keyword_coverage(resume: str, job_description: str, required_skills: list[st
 app = FastAPI(title="Jivika", version="0.1.0", docs_url="/api/docs", openapi_url="/api/openapi.json")
 
 if origins := [o.strip() for o in os.getenv("JIVIKA_CORS_ORIGINS", "").split(",") if o.strip()]:
-    app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["*"], allow_headers=["*"])
+    app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["*"], allow_headers=["*"], expose_headers=[
+        "X-Jivika-Model", "X-Jivika-Fallback", "X-Jivika-Fallback-Reason", "X-Jivika-Demo", "X-Jivika-Demo-Remaining", "Retry-After"])
 
 class BodySizeLimit:
     """Reject oversized request bodies before they are read or spooled to disk."""
@@ -443,9 +636,9 @@ _CSP_REST = (
     b"frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 )
 CSP = (b"content-security-policy", b"default-src 'self'; script-src 'self'; " + _CSP_REST)
-# The app (/app/*) runs the coding playground in Web Workers. Its pages may compile WebAssembly
-# ('wasm-unsafe-eval', for Pyodide and sql.js) and start same-origin or blob: workers; plain eval stays blocked.
-CSP_APP = (b"content-security-policy", b"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; " + _CSP_REST)
+# The app (/app/*) runs the coding playground in same-origin Web Workers; WebAssembly and eval happen only inside
+# them, under CSP_WORKER, so the pages themselves need nothing beyond worker-src 'self'.
+CSP_APP = (b"content-security-policy", b"default-src 'self'; script-src 'self'; worker-src 'self'; " + _CSP_REST)
 # A dedicated worker script is governed by the CSP of its own response, not the page's. Only worker bundles
 # (built files named *worker*.js under assets/) may eval, which the JavaScript runner needs for new Function;
 # workers have no DOM, cookies or storage access, and each run's worker is terminated afterwards.
@@ -512,9 +705,11 @@ def demo(request: Request, response: Response):
         "enabled": enabled,
         "provider": DEMO_PROVIDER,
         "provider_name": PROVIDERS[DEMO_PROVIDER]["name"],
-        "model": demo_model(),
+        "model": demo_model(),  # the preferred pool model right now
+        "pool": demo_pool_status() if enabled else [],
         "hourly_limit": hourly,
         "daily_limit": daily,
+        "minute_limit": demo_minute_limit(),
         "remaining_hourly": demo_remaining(client_ip(request)) if enabled else None,
     }
 
@@ -531,8 +726,13 @@ def verify(
         # Report demo status instead of calling Groq with the shared key (and spending quota) on every check.
         return {"ok": True, "model": demo_model(), "demo": True, "provider": DEMO_PROVIDER, "remaining_hourly": demo_remaining(client_ip(request))}
     cfg = byok(request, response, x_llm_provider, x_llm_key, x_llm_model)
-    complete_json(cfg.provider, cfg.key, cfg.model, PROMPTS["verify"], "Ping", Ping)
-    return {"ok": True, "model": cfg.model}
+    meta: dict = {}
+    complete_json(cfg.provider, cfg.key, cfg.model, PROMPTS["verify"], "Ping", Ping, meta=meta)
+    answered_headers(response, cfg.model, meta)
+    out = {"ok": True, "model": meta.get("model", cfg.model)}
+    if meta.get("fallback_from"):
+        out.update(fallback_from=meta["fallback_from"], fallback_reason=meta["fallback_reason"])
+    return out
 
 
 @app.get("/api/parser")

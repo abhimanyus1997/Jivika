@@ -12,7 +12,7 @@ JOB = {"resume": "Python developer", "job_description": "Python engineer"}
 def calls(monkeypatch):
     seen = []
 
-    def fake(provider, key, model, system, user, schema_model):
+    def fake(provider, key, model, system, user, schema_model, **_):
         seen.append({"provider": provider, "key": key, "model": model})
         return schema_model.model_validate({"match_score": 50, "ok": True})
 
@@ -28,7 +28,7 @@ def demo(monkeypatch):
 def test_demo_disabled_without_key():
     body = client.get("/api/demo").json()
     assert body["enabled"] is False and body["remaining_hourly"] is None
-    assert body["provider"] == "groq" and body["hourly_limit"] == 20 and body["daily_limit"] == 500
+    assert body["provider"] == "groq" and body["hourly_limit"] == 20 and body["daily_limit"] == 2700
 
 
 def test_no_key_and_no_demo_is_401(calls):
@@ -59,8 +59,10 @@ def test_demo_status_never_leaks_key(demo):
         "provider": "groq",
         "provider_name": "Groq",
         "model": main.PROVIDERS["groq"]["default_model"],
+        "pool": [{"model": m, "state": "ok"} for m in main.llm.DEMO_MODELS],
         "hourly_limit": 20,
-        "daily_limit": 500,
+        "daily_limit": 2700,  # 90% of 1,000 requests per day for each of the three pool models
+        "minute_limit": 76,  # 85% of 30 requests per minute for each
         "remaining_hourly": 20,
     }
     assert DEMO_KEY not in r.text and "gsk_" not in r.text
@@ -141,7 +143,7 @@ def test_redis_failure_falls_back_to_memory(demo, calls, monkeypatch):
 
     monkeypatch.setattr(main, "redis_http", broken)
     assert client.post("/api/match", json=JOB).status_code == 200
-    assert len(main._demo_counts) == 2
+    assert len(main._demo_counts) == 3  # hour, day and minute windows
     assert client.get("/api/demo").json()["remaining_hourly"] is None
 
 
@@ -153,7 +155,7 @@ def test_invalid_requests_do_not_spend_demo_quota(demo, calls):
 
 
 def test_rejected_demo_key_is_503_not_a_user_key_error(demo, monkeypatch):
-    def rejected(*args):
+    def rejected(*args, **_):
         raise main.HTTPException(401, "The API key was rejected by Groq.")
 
     monkeypatch.setattr(main, "complete_json", rejected)

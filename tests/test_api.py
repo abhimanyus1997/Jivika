@@ -15,7 +15,7 @@ def fake_llm(monkeypatch):
     calls = []
     payloads = {}
 
-    def fake(provider, key, model, system, user, schema_model):
+    def fake(provider, key, model, system, user, schema_model, **_):
         calls.append({"provider": provider, "key": key, "model": model, "system": system, "user": user})
         return schema_model.model_validate(payloads.get(schema_model.__name__, {}))
 
@@ -260,7 +260,7 @@ class FakeOpenAI:
 
     def create(self, **kwargs):
         FakeOpenAI.seen.append(kwargs)
-        item = FakeOpenAI.responses.pop(0)
+        item = FakeOpenAI.responses.pop(0) if len(FakeOpenAI.responses) > 1 else FakeOpenAI.responses[0]  # the last one repeats
         if isinstance(item, Exception):
             raise item
         msg = type("M", (), {"content": item})
@@ -271,6 +271,7 @@ class FakeOpenAI:
 def fake_openai(monkeypatch):
     FakeOpenAI.responses, FakeOpenAI.seen = [], []
     monkeypatch.setattr(main, "OpenAI", FakeOpenAI)
+    monkeypatch.setattr(main.time, "sleep", lambda s: None)
     return FakeOpenAI
 
 
@@ -305,7 +306,8 @@ def test_complete_json_retries_once_then_502(fake_openai):
     [
         (api_error(openai.AuthenticationError, 401), 401, "rejected by Groq"),
         (api_error(openai.RateLimitError, 429), 429, "Rate limit"),
-        (api_error(openai.InternalServerError, 500), 502, "provider returned an error"),
+        (api_error(openai.InternalServerError, 500), 503, "overloaded"),
+        (api_error(openai.UnprocessableEntityError, 422), 502, "provider returned an error"),
     ],
 )
 def test_complete_json_maps_provider_errors(fake_openai, exc, status, text):

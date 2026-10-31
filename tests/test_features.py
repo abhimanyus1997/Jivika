@@ -17,7 +17,7 @@ HEADERS = {"X-LLM-Provider": "groq", "X-LLM-Key": "user-key"}
 def fake_llm(monkeypatch):
     payloads, calls = {}, []
 
-    def fake(provider, key, model, system, user, schema_model):
+    def fake(provider, key, model, system, user, schema_model, **_):
         calls.append({"provider": provider, "key": key, "model": model, "system": system, "user": user})
         if isinstance(payloads.get(schema_model.__name__), Exception):
             raise payloads[schema_model.__name__]

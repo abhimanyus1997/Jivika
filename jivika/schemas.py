@@ -17,7 +17,7 @@ PROVIDERS = {
     "gemini": {
         "name": "Google Gemini",
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
-        "default_model": "gemini-3.8-flash",
+        "default_model": "gemini-2.5-flash",  # stable; newer 3.x flash ids hit free-tier quota 0 or 503s (2026-10-31)
         "key_url": "https://aistudio.google.com/apikey",
         "json_mode": True,
         "temperature": True,
