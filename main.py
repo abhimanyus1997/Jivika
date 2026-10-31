@@ -1,10 +1,13 @@
-"""Jivika API: a stateless, bring-your-own-key career toolkit.
+"""Jivika API: a bring-your-own-key career toolkit plus the public site.
 
-The server never stores API keys or user data. Every AI request carries the
+The server never stores API keys or resume data. Every AI request carries the
 caller's provider, key and (optional) model in headers and is forwarded to an
-OpenAI-compatible endpoint.
+OpenAI-compatible endpoint. The only server-side state is the Pro waitlist
+(email, plan, source) in SQLite.
 """
 
+import csv
+import hmac
 import io
 import json
 import logging
@@ -12,16 +15,19 @@ import math
 import mimetypes
 import os
 import re
+import sqlite3
+import time
+from contextlib import closing
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Literal
 
 import openai
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from openai import OpenAI
 from pydantic import AfterValidator, BaseModel, BeforeValidator, Field, ValidationError
 from pypdf import PdfReader
@@ -462,6 +468,45 @@ class BodySizeLimit:
 
 app.add_middleware(BodySizeLimit)
 
+SECURITY_HEADERS = [
+    (b"x-content-type-options", b"nosniff"),
+    (b"referrer-policy", b"strict-origin-when-cross-origin"),
+    (b"x-frame-options", b"DENY"),
+    (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
+]
+CSP = (
+    b"content-security-policy",
+    b"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+    b"font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+)
+HSTS = (b"strict-transport-security", b"max-age=31536000")
+
+
+class SecurityHeaders:
+    """Add security headers to every response. Swagger UI (/api/docs) loads from a CDN, so it skips CSP."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        extra = list(SECURITY_HEADERS)
+        if not scope["path"].startswith("/api/docs"):
+            extra.append(CSP)
+        if os.getenv("JIVIKA_HSTS") == "1":
+            extra.append(HSTS)
+
+        async def send_with_headers(message):
+            if message["type"] == "http.response.start":
+                message["headers"] = [*message.get("headers", []), *extra]
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
+
+
+app.add_middleware(SecurityHeaders)  # added last, so it is outermost and also covers 413s
+
 BYOK = Annotated[LLMConfig, Depends(byok)]
 
 
@@ -587,18 +632,130 @@ def cover_letter(body: CoverLetterRequest, cfg: BYOK):
 
 
 # ---------------------------------------------------------------------------
-# Frontend (production build)
+# Pro waitlist
 # ---------------------------------------------------------------------------
 
-if DIST_DIR.is_dir():
-    if (DIST_DIR / "assets").is_dir():
-        app.mount("/assets", StaticFiles(directory=DIST_DIR / "assets"), name="assets")
+EMAIL_RE = re.compile(r"^[^@\s<>\"',;\x00-\x1f]+@[^@\s<>\"',;\x00-\x1f]+\.[^@\s.<>\"',;\x00-\x1f]{2,}$")
+RATE_LIMIT, RATE_WINDOW, RATE_MAX_IPS = 5, 600, 10_000
+_rate_hits: dict[str, list[float]] = {}
 
-    @app.get("/{path:path}", include_in_schema=False)
-    def spa(path: str):
-        if path.startswith("api/"):
-            raise HTTPException(404, "Not found.")
-        candidate = (DIST_DIR / path).resolve()
-        if path and candidate.is_file() and candidate.is_relative_to(DIST_DIR.resolve()):
-            return FileResponse(candidate)
-        return FileResponse(DIST_DIR / "index.html")
+
+def _email(value: str) -> str:
+    value = value.strip().lower()
+    if len(value) > 254 or not EMAIL_RE.match(value):
+        raise ValueError("Enter a valid email address.")
+    return value
+
+
+class WaitlistRequest(BaseModel):
+    email: Annotated[str, AfterValidator(_email)]
+    plan: Literal["pro", "teams"] = "pro"
+    source: Annotated[str, Field(max_length=64), AfterValidator(lambda s: s.strip() or None)] | None = None
+    website: str = Field("", max_length=256)  # honeypot: humans never see or fill it
+
+
+def client_ip(request: Request) -> str:
+    if os.getenv("JIVIKA_TRUST_PROXY") == "1" and (forwarded := request.headers.get("x-forwarded-for")):
+        # ponytail: rightmost entry assumes exactly one trusted proxy hop
+        return forwarded.split(",")[-1].strip()
+    return request.client.host if request.client else "unknown"
+
+
+async def rate_limit(request: Request):
+    """5 requests per IP per 10 minutes, in memory. Async, so it runs on the event loop without a lock."""
+    # ponytail: per-process memory; use a shared store if running several workers
+    ip, now = client_ip(request), time.monotonic()
+    recent = [t for t in _rate_hits.pop(ip, []) if now - t < RATE_WINDOW]
+    if len(recent) >= RATE_LIMIT:
+        _rate_hits[ip] = recent
+        raise HTTPException(429, "Too many requests. Please try again later.")
+    _rate_hits[ip] = [*recent, now]  # re-inserted last, so dict order is least recently seen first
+    while len(_rate_hits) > RATE_MAX_IPS:
+        del _rate_hits[next(iter(_rate_hits))]
+
+
+def db() -> sqlite3.Connection:
+    path = Path(os.getenv("JIVIKA_DB_PATH", "./data/jivika.db"))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS waitlist (id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, "
+        "plan TEXT NOT NULL, source TEXT, created_at TEXT NOT NULL)"
+    )
+    return conn
+
+
+@app.post("/api/waitlist", dependencies=[Depends(rate_limit)])
+def join_waitlist(body: WaitlistRequest):
+    if body.website.strip():
+        return {"ok": True}
+    created = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with closing(db()) as conn, conn:
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO waitlist (email, plan, source, created_at) VALUES (?, ?, ?, ?)",
+            (body.email, body.plan, body.source, created),
+        )
+    return {"ok": True, "already": True} if cur.rowcount == 0 else {"ok": True}
+
+
+def _csv_cell(value) -> str:
+    text = "" if value is None else str(value)
+    return "'" + text if text[:1] in ("=", "+", "-", "@", "\t", "\r") else text
+
+
+@app.get("/api/admin/waitlist.csv", include_in_schema=False)
+def export_waitlist(authorization: Annotated[str, Header()] = ""):
+    token = os.getenv("JIVIKA_ADMIN_TOKEN", "")
+    if not token:
+        raise HTTPException(404, "Not found.")
+    if not hmac.compare_digest(authorization.encode(), f"Bearer {token}".encode()):
+        raise HTTPException(401, "Unauthorized.", headers={"WWW-Authenticate": "Bearer"})
+    with closing(db()) as conn:
+        rows = conn.execute("SELECT id, email, plan, source, created_at FROM waitlist ORDER BY id").fetchall()
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(["id", "email", "plan", "source", "created_at"])
+    writer.writerows([_csv_cell(v) for v in row] for row in rows)
+    return Response(
+        out.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="waitlist.csv"', "Cache-Control": "no-store"},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Site and app (production build in frontend/dist)
+# ---------------------------------------------------------------------------
+
+
+@app.api_route("/api/{rest:path}", methods=["POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)
+def api_not_found(rest: str):
+    raise HTTPException(404, "Not found.")
+
+
+def _not_found():
+    page = DIST_DIR / "404.html"
+    if page.is_file():
+        return FileResponse(page, status_code=404)
+    return JSONResponse({"detail": "Not found."}, 404)
+
+
+@app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
+def site(path: str, request: Request):
+    if path == "api" or path.startswith("api/"):
+        raise HTTPException(404, "Not found.")
+    root = DIST_DIR.resolve()
+    target = (root / path).resolve()
+    if not target.is_relative_to(root) or path == "404.html":
+        return _not_found()
+    if target.is_file():
+        cache = "public, max-age=31536000, immutable" if path.startswith("assets/") else "no-cache"
+        return FileResponse(target, headers={"Cache-Control": cache})
+    if path == "app" or path.startswith("app/"):  # the React app uses hash routes
+        target = root / "app"
+    if (target / "index.html").is_file():
+        if path and not path.endswith("/") and target != root / "app":
+            query = f"?{request.url.query}" if request.url.query else ""
+            return RedirectResponse(f"/{path.strip('/')}/{query}", 308)
+        return FileResponse(target / "index.html", headers={"Cache-Control": "no-cache"})
+    return _not_found()
