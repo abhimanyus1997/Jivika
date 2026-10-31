@@ -38,3 +38,6 @@ Thumbs.db
 
 .vercel
 .env.local
+
+# Jivika Clipper build output (the zip is copied to frontend/public/downloads/)
+extension/dist/

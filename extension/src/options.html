@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Jivika Clipper options</title><link rel="stylesheet" href="style.css"></head>
+<body style="min-width: 340px">
+<main class="wrap">
+  <form id="form">
+    <label for="appUrl">Jivika app URL</label>
+    <input id="appUrl" type="url" required spellcheck="false" placeholder="https://jivika.abhimanyu.fyi/app/">
+    <p class="hint">Clipped jobs open here. Use an https address, or http://localhost for local development.</p>
+    <div class="grid"><button class="primary" type="submit">Save</button></div>
+    <p id="status" class="hint" role="status"></p>
+    <button type="button" id="reset">Reset to default</button>
+  </form>
+</main>
+<script src="clip.js"></script>
+<script src="options.js"></script>
+</body>
+</html>

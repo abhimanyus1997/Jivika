@@ -1,0 +1,31 @@
+/* Jivika design tokens (frontend/src/index.css): warm neutrals, evergreen brand. */
+:root {
+  --canvas: #f7f7f5; --surface: #fff; --line: #e6e5e1; --ink: #1c1b19; --muted: #6b6963;
+  --brand: #1f7a4d; --brand-600: #17633e; --brand-50: #eef6f1; --danger: #b42318; --danger-bg: #fef3f2;
+  color-scheme: light dark;
+  font: 13px/1.45 'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --canvas: #121211; --surface: #1a1a18; --line: #2e2d2a; --ink: #ecebe7; --muted: #a3a19a; --brand-50: #13261c; --danger: #f97066; --danger-bg: #2a1513; }
+}
+body { margin: 0; background: var(--canvas); color: var(--ink); }
+.wrap { padding: 14px; }
+.head { display: flex; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 12px; }
+.head img { width: 20px; height: 20px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
+.title { font-weight: 600; overflow-wrap: anywhere; }
+.meta { color: var(--muted); margin-top: 2px; overflow-wrap: anywhere; }
+.badge { display: inline-block; margin-top: 6px; padding: 1px 8px; border-radius: 999px; background: var(--brand-50); color: var(--brand); font-size: 11px; font-weight: 500; }
+.error { color: var(--danger); background: var(--danger-bg); border-color: transparent; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+button { font: inherit; cursor: pointer; border-radius: 8px; padding: 7px 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+button:hover:not(:disabled) { border-color: var(--brand); }
+button.primary { grid-column: 1 / -1; background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; }
+button.primary:hover:not(:disabled) { background: var(--brand-600); }
+button:disabled { opacity: .5; cursor: default; }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.foot { display: flex; justify-content: space-between; margin-top: 12px; color: var(--muted); font-size: 12px; }
+a { color: var(--brand); }
+label { display: block; font-weight: 500; margin-bottom: 4px; }
+input { box-sizing: border-box; width: 100%; font: inherit; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.hint { color: var(--muted); font-size: 12px; margin: 6px 0 10px; }

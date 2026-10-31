@@ -5,6 +5,7 @@
     "dev": "npm --prefix frontend run dev",
     "api": "uv run uvicorn main:app --reload",
     "build": "npm --prefix frontend run build",
+    "build:extension": "node extension/build.mjs",
     "start": "uv run uvicorn main:app"
   }
 }
