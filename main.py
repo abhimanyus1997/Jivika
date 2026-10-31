@@ -5,8 +5,10 @@ caller's provider, key and (optional) model in headers and is forwarded to an
 OpenAI-compatible endpoint. Without a key, an optional owner-supplied Groq key
 (demo mode) serves a limited number of requests. Server-side state is the Pro
 waitlist and demo counters (SQLite or Upstash Redis, else memory) plus short-lived
-job search caches. Providers, schemas and prompts live in jivika/schemas.py, job
-search in jivika/jobs.py.
+job search, model list and salary caches. Providers, schemas and prompts live in
+jivika/schemas.py, job search in jivika/jobs.py, job import from links in
+jivika/importer.py, ATS checks in jivika/ats.py, live model lists in jivika/models.py
+and market salary data in jivika/salary.py.
 """
 
 import csv
@@ -40,8 +42,13 @@ from pydantic import AfterValidator, BaseModel, Field, ValidationError
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
-from jivika import jobs
+from jivika import ats, importer, jobs, salary
+from jivika import models as model_lists
+from jivika.ats import STOPWORDS, tokens as _tokens  # noqa: F401  (keyword coverage shares the ATS tokenizer)
 from jivika.schemas import (  # noqa: F401  (re-exported for tests and callers)
+    ATSInsights,
+    ATSRequest,
+    ATSResult,
     BASE_RULES,
     BulletRewrite,
     CVReview,
@@ -57,6 +64,9 @@ from jivika.schemas import (  # noqa: F401  (re-exported for tests and callers)
     InterviewQuestion,
     InterviewQuestions,
     InterviewQuestionsRequest,
+    JobFields,
+    JobImport,
+    JobImportRequest,
     LinkedInRequest,
     LinkedInReview,
     MatchAnalysis,
@@ -67,7 +77,10 @@ from jivika.schemas import (  # noqa: F401  (re-exported for tests and callers)
     Ping,
     Profile,
     ProfileRequest,
+    ROADMAP_SH,
     RequiredText,
+    ResumeMeta,
+    Roadmap,
     Score,
     SectionScore,
     SkillToBuild,
@@ -124,10 +137,29 @@ def byok(
     # Header values are forwarded to the provider and must be printable ASCII.
     if not (key.isascii() and key.isprintable()):
         raise HTTPException(401, "The API key format is invalid.")
-    model = x_llm_model.strip() or PROVIDERS[provider]["default_model"]
+    # No model chosen: the live list's recommendation for this key if it was listed recently, else the static default.
+    model = x_llm_model.strip() or model_lists.cached_recommended(provider, key) or PROVIDERS[provider]["default_model"]
     if not (model.isascii() and model.isprintable()):
         raise HTTPException(400, "The model name is invalid.")
     return LLMConfig(provider=provider, key=key, model=model)
+
+
+def optional_llm(
+    request: Request,
+    response: Response,
+    x_llm_provider: Annotated[str, Header()] = "",
+    x_llm_key: Annotated[str, Header()] = "",
+    x_llm_model: Annotated[str, Header()] = "",
+) -> LLMConfig | None:
+    """Like byok, but None (instead of 401) when there is neither a user key nor demo mode."""
+    if not x_llm_key.strip() and not demo_key():
+        return None
+    try:
+        return byok(request, response, x_llm_provider, x_llm_key, x_llm_model)
+    except HTTPException as exc:
+        if exc.status_code == 400:  # unknown or blank provider: fall back to the no-model result
+            return None
+        raise
 
 
 def _is_auth_error(exc: openai.APIError) -> bool:
@@ -214,7 +246,12 @@ def demo_key() -> str:
 
 
 def demo_model() -> str:
-    return os.getenv("JIVIKA_DEMO_MODEL", "").strip() or PROVIDERS[DEMO_PROVIDER]["default_model"]
+    """JIVIKA_DEMO_MODEL, else the recommended model from Groq's live list (cached an hour), else the static default."""
+    if model := os.getenv("JIVIKA_DEMO_MODEL", "").strip():
+        return model
+    if key := demo_key():
+        return model_lists.list_models(DEMO_PROVIDER, key)["recommended"]
+    return PROVIDERS[DEMO_PROVIDER]["default_model"]
 
 
 def _env_int(name: str, default: int) -> int:
@@ -290,23 +327,6 @@ def demo_remaining(ip: str) -> int | None:
 # ---------------------------------------------------------------------------
 # Keyword coverage (deterministic, no LLM)
 # ---------------------------------------------------------------------------
-
-STOPWORDS = set(
-    """
-    the and for with you your our are will that this from have has can all any not but
-    who what when where why how into about across within over under per via etc also
-    their they them his her its was were been being able must should would could may
-    more most other such than then there these those use using used work working role
-    team teams job position candidate candidates company we us experience years year
-    including include includes strong excellent good great ability skills skill knowledge
-    understanding preferred required requirements responsibilities plus well new one two
-    """.split()
-)
-
-
-def _tokens(text: str) -> set[str]:
-    return {t for t in re.findall(r"[a-z0-9]+", text.lower()) if len(t) >= 3 and t not in STOPWORDS}
-
 
 def keyword_coverage(resume: str, job_description: str, required_skills: list[str]) -> int:
     # Simple bag-of-words overlap, no stemming; swap in a lemmatizer if plurals skew scores
@@ -429,6 +449,7 @@ class SecurityHeaders:
 app.add_middleware(SecurityHeaders)  # added last, so it is outermost and also covers 413s and base-path redirects
 
 BYOK = Annotated[LLMConfig, Depends(byok)]
+OptionalLLM = Annotated[LLMConfig | None, Depends(optional_llm)]
 
 
 @app.get("/api/health")
@@ -478,6 +499,7 @@ def verify(
 
 @app.post("/api/resume/parse")
 async def parse_resume(file: UploadFile = File(...)):
+    """Text plus layout metadata for the ATS checker (see jivika/ats.py for the heuristics)."""
     # Some browsers send PDFs as octet-stream or untyped; the magic-byte check decides.
     content_type = (file.content_type or "").lower()
     if content_type not in ("", "application/octet-stream") and not content_type.endswith("/pdf"):
@@ -488,21 +510,22 @@ async def parse_resume(file: UploadFile = File(...)):
     if not data.startswith(b"%PDF"):
         raise HTTPException(400, "The file is not a valid PDF.")
     # PDF parsing is CPU-bound; keep it off the event loop.
-    text, pages = await run_in_threadpool(_extract_pdf_text, data)
+    text, meta = await run_in_threadpool(_extract_pdf_text, data)
     if not text:
         raise HTTPException(422, "No text found in the PDF. Scanned documents are not supported.")
     text = text[:MAX_TEXT_CHARS]
-    return {"text": text, "pages": pages, "characters": len(text)}
+    name = re.split(r"[\\/]", file.filename or "")[-1].strip()[:255]
+    meta = ResumeMeta(**meta, file_name=name or None).model_dump()
+    return {"text": text, "pages": meta["pages"], "characters": len(text), "meta": meta}
 
 
-def _extract_pdf_text(data: bytes) -> tuple[str, int]:
+def _extract_pdf_text(data: bytes) -> tuple[str, dict]:
     try:
         reader = PdfReader(io.BytesIO(data))
         if reader.is_encrypted:
             raise HTTPException(400, "Password-protected PDFs are not supported.")
-        text = "\n".join((page.extract_text() or "") for page in reader.pages).strip()
-        return text, len(reader.pages)
-    except (PdfReadError, ValueError, KeyError, TypeError):
+        return ats.pdf_text_and_meta(reader)
+    except (PdfReadError, ValueError, KeyError, TypeError, AttributeError):
         raise HTTPException(400, "The PDF could not be read.") from None
 
 
@@ -779,6 +802,112 @@ def jobs_detail(source: Annotated[str, Query(max_length=20)], id: Annotated[str,
         raise HTTPException(422, "Invalid job id.") from None
     except jobs.SourceError as exc:
         raise HTTPException(502, str(exc)) from None
+
+
+_import_hits: dict[str, list[float]] = {}
+_salary_hits: dict[str, list[float]] = {}
+_models_hits: dict[str, list[float]] = {}
+_ats_hits: dict[str, list[float]] = {}
+
+
+async def import_enabled():
+    if os.getenv("JIVIKA_URL_IMPORT", "1").strip() == "0":
+        raise HTTPException(404, "Not found.")
+
+
+async def import_rate_limit(request: Request):
+    _limit(_import_hits, client_ip(request), 20, "Too many imports. Please wait a few minutes and try again.")
+
+
+@app.post("/api/jobs/import", response_model=JobImport, dependencies=[Depends(import_enabled), Depends(import_rate_limit)])
+def jobs_import(body: JobImportRequest, cfg: OptionalLLM):
+    """Job details from a link. Plain-text pages are structured by the model when a key (or demo mode) is available."""
+    try:
+        job, needs_structuring = importer.import_job(body.url)
+    except importer.ImportFailed as exc:
+        raise HTTPException(exc.status, str(exc)) from None
+    if needs_structuring and cfg is not None:
+        try:
+            fields = ask(cfg, "job_import", JobFields, page_title=job["title"], page_text=job["description"][:12_000])
+            job.update({k: v for k, v in fields.model_dump().items() if v.strip()})
+        except HTTPException as exc:
+            log.info("Job import structuring skipped: %s", exc.status_code)  # the raw text is still useful
+    return job
+
+
+async def ats_rate_limit(request: Request):
+    _limit(_ats_hits, client_ip(request), 30, "Too many ATS checks. Please wait a few minutes and try again.")
+
+
+@app.post("/api/ats/check", response_model=ATSResult, dependencies=[Depends(ats_rate_limit)])
+def ats_check(body: ATSRequest, cfg: OptionalLLM):
+    """Deterministic checks and score (jivika/ats.py); the model adds skills, title match, notes and the summary."""
+    meta = body.meta.model_dump() if body.meta else None
+    checks = ats.deterministic_checks(body.resume, meta)
+    insights, note = None, None
+    if cfg is None:
+        note = "Add an API key in Settings for AI skill extraction and content notes. These results use the built-in checks only."
+    else:
+        try:
+            insights = ask(cfg, "ats", ATSInsights, job_description=body.job_description, resume=body.resume)
+        except HTTPException as exc:
+            note = f"The AI analysis was unavailable ({exc.detail}). These results use the built-in checks only."
+    keywords = None
+    if body.job_description:
+        keywords = ats.keyword_report(body.resume, body.job_description, insights)
+        checks += ats.keyword_checks(keywords)
+    score, categories = ats.score(checks, bool(body.job_description))
+    passed = sum(1 for c in checks if c["status"] == "pass")
+    summary = (insights.summary if insights else "") or f"{passed} of {len(checks)} checks passed."
+    return {
+        "score": score,
+        "grade": ats.grade(score),
+        "summary": summary,
+        "checks": [{k: v for k, v in c.items() if not k.startswith("_")} for c in checks],
+        "keywords": keywords,
+        "fixes": ats.fixes(checks, insights.content_notes if insights else []),
+        "categories": categories,
+        "note": note,
+    }
+
+
+async def salary_rate_limit(request: Request):
+    _limit(_salary_hits, client_ip(request), 30, "Too many salary lookups. Please wait a few minutes and try again.")
+
+
+@app.get("/api/salary", dependencies=[Depends(salary_rate_limit)])
+def salary_lookup(
+    title: Annotated[str, Query(max_length=100)],
+    location: Annotated[str, Query(max_length=80)] = "",
+    company: Annotated[str, Query(max_length=80)] = "",
+    currency: Literal["INR", "USD", "GBP", "EUR"] = "INR",
+):
+    if not title.strip():
+        raise HTTPException(422, "Enter a job title.")
+    return salary.lookup(title, location, company, currency)
+
+
+async def models_rate_limit(request: Request):
+    _limit(_models_hits, client_ip(request), 30, "Too many model list requests. Please wait a few minutes and try again.")
+
+
+@app.get("/api/providers/{provider_id}/models", dependencies=[Depends(models_rate_limit)])
+def provider_models(provider_id: str, response: Response, x_llm_key: Annotated[str, Header()] = ""):
+    """Live chat models for a provider and key. OpenRouter lists without a key; in demo mode Groq uses the demo key."""
+    provider = provider_id.strip().lower()
+    if provider not in PROVIDERS:
+        raise HTTPException(404, "Unknown provider.")
+    key = x_llm_key.strip()
+    if key and not (key.isascii() and key.isprintable()):
+        raise HTTPException(401, "The API key format is invalid.")
+    demo = False
+    if not key and provider == DEMO_PROVIDER and demo_key():
+        key, demo = demo_key(), True
+    elif not key and provider != "openrouter":
+        raise HTTPException(401, "Enter an API key to load the model list.")
+    response.headers["Cache-Control"] = "private, no-store"
+    result = model_lists.list_models(provider, key)
+    return {**result, "demo": True} if demo else result
 
 
 # ---------------------------------------------------------------------------
