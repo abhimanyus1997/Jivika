@@ -21,7 +21,7 @@
 
 </div>
 
-Jivika (Sanskrit for *livelihood*) searches live job listings, imports job posts from a link, matches your resume against real job descriptions, checks how applicant tracking systems read your resume, reviews your CV and LinkedIn profile, maps a career path with a learning roadmap and market salary data, and helps you prepare for interviews and write cover letters. Try it instantly with the free demo model, then bring your own key. There is no account, and your data stays in your browser.
+Jivika (Sanskrit for *livelihood*) searches live job listings, imports job posts from a link, matches your resume against real job descriptions, checks how applicant tracking systems read your resume, reviews your CV and LinkedIn profile, maps a career path with a learning roadmap, checked learning resources and market salary data, and helps you prepare for interviews (including a coding playground that runs in your browser) and write cover letters you can export as a PDF. Try it instantly with the free demo model, then bring your own key. There is no account, and your data stays in your browser.
 
 ### Works with
 
@@ -46,13 +46,13 @@ Jivika (Sanskrit for *livelihood*) searches live job listings, imports job posts
 | Dashboard | Career, skills, CV, LinkedIn and ATS scores with history, application trends, a career goals timeline with roadmap progress, top job matches and a Get started checklist |
 | Job search | Live listings from job boards and company career pages, with source status chips, a client-side Quick fit score against your resume, and one-click Match or Track |
 | Job import | An "Import from link" field above every job description box: LinkedIn and Naukri links by job id, other career pages through schema.org JobPosting data or the page text |
-| Job match | Match score (model judgement blended with deterministic keyword coverage), matched and missing skills, your experience against the role's requirement, strengths, gaps and a step-by-step transition plan |
+| Job match | Match score (model judgement blended with deterministic keyword coverage), matched and missing skills, your experience against the role's requirement, strengths, gaps and a step-by-step transition plan with checked learning resources for each step |
 | ATS checker | Deterministic checks for parsing, sections, contact details, formatting and content, plus keyword coverage against a job description; a score and grade, category bars, a checklist and prioritised fixes. Works without a model key |
 | CV review | ATS-style score, per-section feedback and rewritten bullet points |
 | LinkedIn | Headline suggestions, an About rewrite and keyword recommendations |
-| Career path | Current role, next target and long-term potential with estimated salary ranges (INR, USD, GBP, EUR), market salary data from live sources, and an interactive learning roadmap with links to [roadmap.sh](https://roadmap.sh) |
-| Interview prep | Tailored questions from a job description, with feedback on your answers |
-| Cover letter | Tone-aware letters you can edit, copy or download |
+| Career path | Current role, next target and long-term potential with estimated salary ranges (INR, USD, GBP, EUR), market salary data from live sources, and an interactive learning roadmap with links to [roadmap.sh](https://roadmap.sh); roadmap items and skills to build list checked courses, videos, discussions, articles and docs |
+| Interview prep | **Questions:** tailored questions from a job description, with feedback on your answers. **Coding:** practice problems for the role (algorithms for software roles, SQL and Python data problems for data roles) in a CodeMirror editor. Python, JavaScript and SQL run in your browser against the tests, with hints, a solution, practice links and an AI code review |
+| Cover letter | Tone-aware letters on an A4 preview with Classic, Modern and Compact templates. Edit every field in a side panel, pick the date, add a typed or drawn signature, then download a PDF, copy the text or save a .txt file |
 | Applications | Track applications and their status; feeds the dashboard trends |
 
 Also included:
@@ -60,7 +60,9 @@ Also included:
 - **Light, dark and system themes** for the app and the website, kept in sync across tabs.
 - **Live model lists** in Settings: a searchable list of the provider's current chat models with a recommended pick, context length and prices where the provider reports them, or a custom model id.
 - **Nine providers**, including Qwen (Alibaba Cloud). Qwen models are also available through Groq and OpenRouter.
-- A **command palette** (Ctrl K) that jumps to any page or action, and a Profile page that parses your resume PDF into a structured profile (with experience in years and months) used by every tool.
+- A **command palette** (Ctrl K) that jumps to any page or action, and a Profile page that parses your resume PDF into a structured profile (with experience in years and months, email, phone and LinkedIn) used by every tool.
+- **Checked learning resources** with no API keys: the model only suggests what to search for, and the server finds real links on YouTube, DuckDuckGo, Bing, Reddit and roadmap.sh, checks that each one opens, and labels where it was found.
+- **Optional Docling parsing** for layout-aware resume reading. It adds DOCX and image (OCR) uploads and more accurate column and table checks in the ATS checker.
 
 ### Screenshots
 
@@ -73,18 +75,22 @@ Screenshots follow your GitHub theme. They show seeded demo data for a fictional
   </tr>
   <tr>
     <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/job-match-dark.png"><img src="frontend/public/img/job-match.png" alt="Job match"></picture><br><p align="center">Job match</p></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/job-match-plan-dark.png"><img src="frontend/public/img/job-match-plan.png" alt="Job match transition plan with checked learning resources"></picture><br><p align="center">Transition plan with resources</p></td>
+  </tr>
+  <tr>
     <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/ats-checker-dark.png"><img src="frontend/public/img/ats-checker.png" alt="ATS checker"></picture><br><p align="center">ATS checker</p></td>
-  </tr>
-  <tr>
     <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/cv-review-dark.png"><img src="frontend/public/img/cv-review.png" alt="CV review"></picture><br><p align="center">CV review</p></td>
+  </tr>
+  <tr>
     <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/linkedin-dark.png"><img src="frontend/public/img/linkedin.png" alt="LinkedIn optimizer"></picture><br><p align="center">LinkedIn</p></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/career-path-dark.png"><img src="frontend/public/img/career-path.png" alt="Career path roadmap with checked learning resources"></picture><br><p align="center">Career path and roadmap</p></td>
   </tr>
   <tr>
-    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/career-path-dark.png"><img src="frontend/public/img/career-path.png" alt="Career path with a learning roadmap"></picture><br><p align="center">Career path and roadmap</p></td>
     <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/interview-dark.png"><img src="frontend/public/img/interview.png" alt="Interview prep"></picture><br><p align="center">Interview prep</p></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/interview-coding-dark.png"><img src="frontend/public/img/interview-coding.png" alt="Coding playground with a SQL problem, the editor and matching result rows"></picture><br><p align="center">Coding playground</p></td>
   </tr>
   <tr>
-    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/cover-letter-dark.png"><img src="frontend/public/img/cover-letter.png" alt="Cover letter"></picture><br><p align="center">Cover letter</p></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/cover-letter-dark.png"><img src="frontend/public/img/cover-letter.png" alt="Cover letter on the Classic template"></picture><br><p align="center">Cover letter</p></td>
     <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/applications-dark.png"><img src="frontend/public/img/applications.png" alt="Applications"></picture><br><p align="center">Applications</p></td>
   </tr>
   <tr>
@@ -125,6 +131,24 @@ Search live listings, compare Quick fit scores, and send a role to the applicati
 </details>
 
 <details>
+<summary><strong>Solve a coding problem in the playground</strong></summary>
+
+Open a generated SQL problem, reveal a hint, write the query, then Run and Submit. The query runs in a Web Worker in your browser and the result rows are compared with the expected rows. ([MP4](docs/media/coding.mp4))
+
+<img src="docs/media/coding.gif" alt="Opening a SQL problem, writing a query and getting matching rows on Run and Submit" width="100%">
+
+</details>
+
+<details>
+<summary><strong>Format a cover letter and export it</strong></summary>
+
+Switch between the Classic, Modern and Compact templates, add a typed or drawn signature, then download the letter as an A4 PDF. ([MP4](docs/media/cover-letter.mp4))
+
+<img src="docs/media/cover-letter.gif" alt="Switching cover letter templates, adding a typed and a drawn signature, and choosing Download PDF" width="100%">
+
+</details>
+
+<details>
 <summary><strong>Switch between light and dark</strong></summary>
 
 The theme control in the top bar switches the whole workspace, including charts. ([MP4](docs/media/theme.mp4))
@@ -160,8 +184,12 @@ flowchart LR
 - Job search fetches all enabled sources concurrently (8 second timeout and a size cap per source), strips HTML, normalises, dedupes by title and company, and sorts by recency. Responses are cached for 10 minutes.
 - Job import fetches arbitrary links only through a guarded fetcher: http(s) on ports 80 and 443, every resolved address must be public, the connection goes to the vetted address, at most 3 redirects (each re-checked), an 8 second timeout, a 3 MB cap and an allow-list of content types.
 - The ATS checker's checks and score are computed in Python from the resume text and PDF layout details; the model only adds skill extraction, a title-match judgement and notes, and the result still returns if the model call fails.
+- Learning resources never come from the model. Match and career path results include short search phrases (`resource_queries`), and `POST /api/resources/resolve` turns them into links without an LLM. It queries keyless sources (YouTube search with oEmbed checks, DuckDuckGo with Bing as a fallback, Reddit search, roadmap.sh), keeps only allow-listed domains for each kind of resource, and opens every link through the guarded fetcher (6 second timeout, 1 MB cap, HTML only). If a site blocks automated checks, its link is kept only when it came from a search result on an allow-listed domain, and it is marked unverified. Results are cached for 24 hours, and each request has a 20 second budget.
+- Coding problems are generated by the model and validated on the server (tests must be valid JSON; malformed problems are dropped), but code never runs on the server. The browser runs each attempt in a new Web Worker that is terminated after the run or after 5 seconds: Python through Pyodide, JavaScript through `new Function`, and SQL through sql.js (SQLite). The runtimes are self-hosted in the build, and Python loads only when first used. The reference solution is checked silently when a problem opens; tests it fails are flagged and not scored.
+- Resume uploads go through `jivika/parsing.py`: pypdf by default, or [Docling](https://github.com/docling-project/docling) when it is installed or a docling-serve URL is set. `GET /api/parser` tells the app which parser is active and which file types it accepts.
 - Model lists come from each provider's live models endpoint, filtered to chat models and cached for an hour per provider and key hash (raw keys are never stored). The recommended model is used when no model is set.
 - In production FastAPI also serves the built frontend from `frontend/dist` and adds security headers (CSP, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, optional HSTS) to every response. API docs are at `/api/docs`.
+- The CSP is `script-src 'self'` everywhere except where the coding playground needs more. Pages under `/app/` add `'wasm-unsafe-eval'` (Pyodide and sql.js compile WebAssembly) and `worker-src 'self' blob:`. A dedicated worker follows the CSP of its own script response, so only the built worker bundles (`/assets/*worker*.js`) also get `'unsafe-eval'`, which the JavaScript runner needs for `new Function`. The app pages themselves cannot use eval, and the workers have no DOM or storage access.
 
 ### URL structure
 
@@ -179,14 +207,14 @@ Paths without a trailing slash (`/pricing`) redirect to the canonical form (`/pr
 ## Privacy model
 
 - Your API key is kept in the browser (session storage by default, or local storage if you choose "Remember key on this device"). It is sent per request in a header and is never logged, stored or returned by the server.
-- Your resume, analyses, applications and last job search are stored only in your browser's local storage. "Clear all local data" in Settings removes everything.
+- Your resume, analyses, applications, coding progress, drawn signature and last job search are stored only in your browser's local storage. Code you write in the coding playground runs in your browser and is sent to the server only when you ask for an AI review. "Clear all local data" in Settings removes everything.
 - The demo key is a server-side secret. It is never sent to the browser; `GET /api/demo` reports only whether demo mode is on, the model and the limits.
 - The only server-side data is the Pro waitlist (an email address, plan and source, stored in SQLite or Upstash Redis) and short-lived counters for rate limits and demo quotas.
 
 ## Tech stack
 
-- **Backend:** Python 3.12, FastAPI, Pydantic v2, OpenAI SDK, pypdf, python-dotenv. Job sources use only the standard library (`urllib`, `html.parser`).
-- **Frontend:** React 19, TypeScript, Vite (multi-page build: static marketing pages plus the app), Tailwind CSS v4, Recharts, lucide-react, Geist fonts.
+- **Backend:** Python 3.12, FastAPI, Pydantic v2, OpenAI SDK, pypdf, python-dotenv, and optionally Docling. Job and learning resource sources use only the standard library (`urllib`, `html.parser`).
+- **Frontend:** React 19, TypeScript, Vite (multi-page build: static marketing pages plus the app), Tailwind CSS v4, Recharts, lucide-react, CodeMirror 6, Pyodide, sql.js, and self-hosted Geist, Lora, Josefin Sans and Great Vibes fonts (Fontsource).
 - **Storage:** browser localStorage for user data; SQLite or Upstash Redis for the waitlist and shared counters.
 - **Tooling:** uv, pytest, oxlint.
 - **Hosting:** Vercel (one Python function serving the API and the built site) or Docker.
@@ -291,6 +319,25 @@ Counters use Upstash Redis (`INCR` + `EXPIRE`) when `KV_REST_API_URL`/`KV_REST_A
 
 Research sources use no login, cookies, proxies or captcha solving. If a source blocks the request, it is reported as unavailable rather than retried. Only fixed URL templates are used, so user input never selects a host.
 
+### Learning resources
+
+`POST /api/resources/resolve` takes up to 20 `{key, query, kind}` items and returns up to `max_per_item` (1 to 4, default 3) links per key, plus the status of each source. Each client IP can make 30 lookups per 10 minutes.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `JIVIKA_RESOURCE_SOURCES` | `youtube,ddg,bing,reddit,roadmap` | Keyless sources to use. `youtube`, `ddg` (DuckDuckGo) and `bing` are research sources that read public search pages; `bing` is used when DuckDuckGo fails or returns nothing. `reddit` uses Reddit's public search, and `roadmap` maps queries to allow-listed roadmap.sh guides |
+
+Search pages rate limit by IP (DuckDuckGo answers only a few queries a minute), so some steps can come back with fewer links. The app then says so instead of retrying. No login, cookies, proxies or captcha solving are used.
+
+### Resume parsing
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `JIVIKA_PARSER` | `auto` | `auto` uses Docling when it is installed or `JIVIKA_DOCLING_URL` is set, and pypdf otherwise. `pypdf` forces the basic PDF text path; `docling` requires Docling |
+| `JIVIKA_DOCLING_URL` | unset | Base URL of a [docling-serve](https://github.com/docling-project/docling-serve) instance. Files are posted to its `/v1/convert/file` endpoint instead of a local Docling install |
+
+Docling is an optional extra because it is large (it installs PyTorch). Install it with `uv sync --extra docling` locally, or with `docker build --build-arg WITH_DOCLING=1 .`. With Docling, uploads also accept DOCX, PNG and JPG (OCR), and the layout it reports (tables, pictures, columns, headers and footers, section headings) feeds the ATS checker. Without it, those file types return 415 with "This file type needs the Docling parser. Upload a PDF instead."
+
 ## Deployment
 
 ### Vercel
@@ -372,6 +419,9 @@ docker exec jivika python -c "import sqlite3; c = sqlite3.connect('/data/jivika.
 │   ├── importer.py       Job import from links, with the SSRF-guarded fetcher
 │   ├── ats.py            ATS checker: deterministic checks, PDF layout metadata and scoring
 │   ├── salary.py         Market salary sources (Adzuna, live postings, opt-in Levels.fyi)
+│   ├── resources.py      Learning resource resolver: keyless sources, allow-lists, link checks, cache
+│   ├── coding.py         Coding problem validation and default languages per role
+│   ├── parsing.py        Resume parsing with pypdf, or Docling (local or docling-serve)
 │   └── models.py         Live model lists and the recommended-model heuristic
 ├── tests/                pytest suite (network blocked; model and fetch calls are faked)
 ├── docs/media/           Walkthrough clips (GIF and MP4) used in this README
@@ -383,7 +433,8 @@ docker exec jivika python -c "import sqlite3; c = sqlite3.connect('/data/jivika.
 │   ├── src/
 │   │   ├── App.tsx       App shell, navigation and command palette
 │   │   ├── pages/        Dashboard, JobSearch, JobMatch, Ats, CvReview, LinkedIn, CareerPath, ...
-│   │   ├── components/   UI kit, charts, resume upload, command palette
+│   │   ├── components/   UI kit, charts, resume upload, command palette, learning resources, coding playground
+│   │   ├── workers/      Web Workers that run Python (Pyodide), JavaScript and SQL (sql.js) for the playground
 │   │   ├── lib/          API client and local storage
 │   │   ├── assets/providers/  Provider icons for the app
 │   │   └── site/         Script and styles for the marketing pages
@@ -412,8 +463,9 @@ npm run build                 # type-checks and builds the frontend
 
 - **Job listings** come from third-party job boards and company career pages and are shown as-is, with links to the original posting. Jivika does not verify them. The optional research sources fetch publicly available listings on demand, may be unavailable at any time, and can be disabled with `JIVIKA_JOB_SOURCES`. Respect each source's terms when enabling them.
 - **Market salary data** is shown in the currency each source reports, with its sample size and date; nothing is converted. Levels.fyi is linked for reference and only fetched when the research source is enabled.
+- **Learning resources** link to third-party sites found through public search pages; their content belongs to the respective publishers. Jivika shows where each link was found and when it was checked, and does not copy their content. The research sources can be turned off with `JIVIKA_RESOURCE_SOURCES`.
 - **Roadmap links** point to [roadmap.sh](https://roadmap.sh), an independent community project. Jivika's roadmap content is generated for your profile and is not copied from roadmap.sh.
-- **Model output** is generated by third-party AI models and can be wrong or incomplete. Scores, salary estimates and suggestions are guidance, not advice; review anything before you send it to an employer.
+- **Model output** is generated by third-party AI models and can be wrong or incomplete, including coding problems and their tests. Scores, salary estimates and suggestions are guidance, not advice; review anything before you send it to an employer.
 
 ## Trademarks
 
