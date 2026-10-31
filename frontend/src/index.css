@@ -1,23 +1,128 @@
 @import 'tailwindcss';
 
 @theme {
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --color-ink: #0b1220;
-  --color-ink-soft: #141d30;
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Warm neutrals */
+  --color-canvas: #f7f7f5;
+  --color-surface: #ffffff;
+  --color-subtle: #f1f1ee;
+  --color-line: #e6e5e1;
+  --color-line-strong: #d6d4ce;
+  --color-ink: #1c1b19;
+  --color-muted: #6b6963;
+  --color-faint: #9c9a93;
+
+  /* Brand: evergreen */
+  --color-brand-50: #eef6f1;
+  --color-brand-100: #d5eadd;
+  --color-brand-200: #aed6be;
+  --color-brand-500: #1f7a4d;
+  --color-brand-600: #17633e;
+  --color-brand-700: #124f32;
+  --color-brand-900: #0b2e1e;
+
+  /* Accent: marigold */
+  --color-accent-50: #fdf6e7;
+  --color-accent-500: #d98e04;
+  --color-accent-100: #f5e2b8;
+  --color-accent-200: #ebc77a;
+  --color-accent-700: #9a6403;
+
+  /* Status */
+  --color-warning: #9a6403;
+  --color-warning-bg: #fdf6e7;
+  --color-danger: #b42318;
+  --color-danger-bg: #fef3f2;
+  --color-danger-line: #fecdca;
+  --color-info: #3b5ba9;
+  --color-info-bg: #eff3fb;
+  --color-info-line: #d6dff3;
+  --color-info-line-strong: #c3d0ee;
+  --color-danger-hover: #912018;
+
+  /* Chart series (validated: evergreen | marigold | rose) */
+  --color-series-1: #1f7a4d;
+  --color-series-2: #d98e04;
+  --color-series-3: #c4314b;
+  --color-series-neutral: #a8a59d;
+
+  --shadow-card: 0 1px 2px rgba(28, 27, 25, 0.04);
+  --shadow-pop: 0 12px 32px -8px rgba(28, 27, 25, 0.18), 0 2px 6px rgba(28, 27, 25, 0.06);
 }
 
 @layer base {
   html {
-    font-size: 14px;
     scrollbar-gutter: stable;
   }
   body {
-    @apply min-h-screen bg-linear-to-br from-indigo-50 to-emerald-50 bg-fixed text-slate-800 antialiased;
+    @apply min-h-screen bg-canvas font-sans text-sm leading-6 text-ink antialiased;
+  }
+  ::selection {
+    @apply bg-brand-100 text-brand-900;
   }
   :focus-visible {
-    @apply outline-2 outline-offset-2 outline-indigo-500;
+    @apply outline-2 outline-offset-2 outline-brand-500;
   }
   summary {
     cursor: pointer;
+  }
+  dialog::backdrop {
+    background: rgba(28, 27, 25, 0.32);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* Typography roles */
+  .t-page-title {
+    @apply text-[22px] leading-7 font-semibold tracking-[-0.02em] text-ink;
+  }
+  .t-title {
+    @apply text-sm leading-5 font-semibold text-ink;
+  }
+  .t-label {
+    @apply text-[12.5px] leading-5 font-medium text-muted;
+  }
+  .t-overline {
+    @apply text-[11px] leading-4 font-medium tracking-[0.06em] text-faint uppercase;
+  }
+  .t-metric {
+    @apply font-mono text-[28px] leading-8 font-semibold tracking-[-0.02em] text-ink tabular-nums;
+  }
+  .t-num {
+    @apply font-mono tabular-nums;
+  }
+
+  /* Data table: wrap in <div class="table-wrap"> and use <table class="data-table"> */
+  .table-wrap {
+    @apply relative overflow-x-auto lg:max-h-[calc(100vh-220px)] lg:overflow-y-auto rounded-xl border border-line bg-surface;
+  }
+  .data-table {
+    @apply w-full border-collapse text-left text-sm;
+  }
+  .data-table thead th {
+    @apply sticky top-0 z-10 h-9 border-b border-line bg-subtle px-4 text-[11px] font-medium tracking-[0.06em] whitespace-nowrap text-faint uppercase;
+  }
+  .data-table tbody td {
+    @apply h-11 border-b border-line px-4 align-middle text-ink;
+  }
+  .data-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+  .data-table tbody tr {
+    @apply transition-colors duration-150 hover:bg-subtle/60;
+  }
+  .data-table .num {
+    @apply text-right font-mono tabular-nums;
   }
 }
