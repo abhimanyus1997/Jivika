@@ -2,6 +2,7 @@ import { BookmarkPlus, Briefcase, Check, ListPlus, MapPin, Target } from 'lucide
 import { useState } from 'react'
 import { JobImport } from '../components/JobImport'
 import { MarketData } from '../components/MarketData'
+import { ResourceFooter, ResourceList, useResources } from '../components/ResourceList'
 import { ResumeSource } from '../components/Resume'
 import {
   ActionHint,
@@ -64,6 +65,10 @@ function MatchResults({ result: r, jd }: { result: MatchResult; jd: string }) {
   const [, setApplications] = useApplications()
   const [profile] = useProfile()
   const yours = profileExperience(profile)
+  const resources = useResources(
+    'match',
+    Object.fromEntries(r.transition_plan.map((s, i) => [`plan-${i}`, s.resource_queries])),
+  )
   const savedId = matches.find((m) => m.job_description === jd && m.result.job_title === r.job_title)?.id
 
   function save() {
@@ -180,27 +185,31 @@ function MatchResults({ result: r, jd }: { result: MatchResult; jd: string }) {
         )}
         {tab === 'plan' &&
           (r.transition_plan.length ? (
-            <ol className="ml-3 border-l border-line">
-              {r.transition_plan.map((s, i) => (
-                <li key={i} className="relative pb-5 pl-6 last:pb-0">
-                  <span
-                    className="t-num absolute top-0 -left-3 flex size-6 items-center justify-center rounded-full border border-line-strong bg-surface text-[11px] font-medium text-ink"
-                    aria-hidden="true"
-                  >
-                    {i + 1}
-                  </span>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="t-title">{s.step}</span>
-                    {s.timeframe && (
-                      <Badge tone="info" mono>
-                        {s.timeframe}
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="mt-1 text-[13px] leading-5 text-muted">{s.detail}</p>
-                </li>
-              ))}
-            </ol>
+            <div className="space-y-5">
+              <ol className="ml-3 border-l border-line">
+                {r.transition_plan.map((s, i) => (
+                  <li key={i} className="relative pb-5 pl-6 last:pb-0">
+                    <span
+                      className="t-num absolute top-0 -left-3 flex size-6 items-center justify-center rounded-full border border-line-strong bg-surface text-[11px] font-medium text-ink"
+                      aria-hidden="true"
+                    >
+                      {i + 1}
+                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="t-title">{s.step}</span>
+                      {s.timeframe && (
+                        <Badge tone="info" mono>
+                          {s.timeframe}
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="mt-1 text-[13px] leading-5 text-muted">{s.detail}</p>
+                    <ResourceList state={resources} id={`plan-${i}`} />
+                  </li>
+                ))}
+              </ol>
+              <ResourceFooter state={resources} />
+            </div>
           ) : (
             <p className="text-[13px] text-muted">No transition steps were suggested for this role.</p>
           ))}

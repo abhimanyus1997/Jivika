@@ -1,5 +1,6 @@
 import { ArrowUpRight, BookOpen, Route } from 'lucide-react'
 import { MarketData } from '../components/MarketData'
+import { ResourceFooter, ResourceList, useResources } from '../components/ResourceList'
 import { ResumeSource } from '../components/Resume'
 import { RoadmapView } from '../components/RoadmapView'
 import {
@@ -147,6 +148,11 @@ export default function CareerPathPage() {
 
 function Results({ path, location, currency }: { path: CareerPath; location: string; currency: Currency }) {
   const band = scoreBand(path.career_score)
+  // One resolve call for the roadmap items and the skills to build.
+  const resources = useResources('career', {
+    ...Object.fromEntries((path.roadmap?.stages ?? []).flatMap((s) => s.items).map((it) => [`roadmap-${it.id}`, it.resource_queries])),
+    ...Object.fromEntries(path.skills_to_build.map((s, i) => [`skill-${i}`, s.resource_queries])),
+  })
   return (
     <>
       <Card>
@@ -168,7 +174,7 @@ function Results({ path, location, currency }: { path: CareerPath; location: str
         <CareerTimeline path={path} extra={(title) => <MarketData title={title} location={location} currency={currency} />} />
       </Card>
 
-      {path.roadmap && <RoadmapView roadmap={path.roadmap} />}
+      {path.roadmap && <RoadmapView roadmap={path.roadmap} resources={resources} />}
 
       <Card title="Skills to build" description="What closes the gap to your next role." padding={false}>
         {path.skills_to_build.length ? (
@@ -185,12 +191,18 @@ function Results({ path, location, currency }: { path: CareerPath; location: str
                       {s.resource}
                     </p>
                   )}
+                  <ResourceList state={resources} id={`skill-${i}`} />
                 </div>
               </li>
             ))}
           </ul>
         ) : (
           <p className="px-5 pb-5 text-[13px] text-muted">None noted.</p>
+        )}
+        {path.skills_to_build.some((s) => s.resource_queries?.length) && (
+          <div className="px-5 pb-4">
+            <ResourceFooter state={resources} />
+          </div>
         )}
       </Card>
     </>

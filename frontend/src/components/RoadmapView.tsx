@@ -2,6 +2,7 @@ import { ExternalLink, FlaskConical, Timer } from 'lucide-react'
 import type { Roadmap, RoadmapStatus } from '../lib/api'
 import { ROADMAP_ATTRIBUTION } from '../lib/roadmap'
 import { roadmapProgress, useRoadmapDone } from '../lib/store'
+import { ResourceFooter, ResourceList, type ResourcesState } from './ResourceList'
 import { Badge, ButtonLink, Card, type BadgeTone } from './ui'
 
 const STATUS: Record<RoadmapStatus, { label: string; tone: BadgeTone }> = {
@@ -19,7 +20,7 @@ function Bar({ pct, label }: { pct: number; label: string }) {
 }
 
 /** Interactive vertical roadmap: stages, item cards, done checkboxes and progress (stored in localStorage). */
-export function RoadmapView({ roadmap }: { roadmap: Roadmap }) {
+export function RoadmapView({ roadmap, resources }: { roadmap: Roadmap; resources?: ResourcesState }) {
   const [done, setDone] = useRoadmapDone()
   const all = roadmap.stages.flatMap((s) => s.items)
   const overall = roadmapProgress(all, done)
@@ -123,6 +124,7 @@ export function RoadmapView({ roadmap }: { roadmap: Roadmap }) {
                                 )}
                               </div>
                             )}
+                            {resources && <ResourceList state={resources} id={`roadmap-${item.id}`} />}
                           </div>
                         </div>
                       </li>
@@ -133,6 +135,7 @@ export function RoadmapView({ roadmap }: { roadmap: Roadmap }) {
             )
           })}
         </ol>
+        {resources && <ResourceFooter state={resources} prefix="roadmap-" />}
         <p className="border-t border-line pt-3 text-xs text-faint">{ROADMAP_ATTRIBUTION}</p>
       </div>
     </Card>
