@@ -1,5 +1,7 @@
 import { BookmarkPlus, Briefcase, Check, ListPlus, MapPin, Target } from 'lucide-react'
 import { useState } from 'react'
+import { JobImport } from '../components/JobImport'
+import { MarketData } from '../components/MarketData'
 import { ResumeSource } from '../components/Resume'
 import {
   ActionHint,
@@ -11,6 +13,7 @@ import {
   ErrorMessage,
   Field,
   KeyNotice,
+  Note,
   PageHeader,
   ProgressBar,
   ScoreRing,
@@ -20,8 +23,8 @@ import {
   textareaCls,
   toast,
 } from '../components/ui'
-import { api, useAction, useAiReady, type MatchResult } from '../lib/api'
-import { newId, today, useApplications, useJobDescription, useLastMatch, useLastMatchJd, useMatches, useResume } from '../lib/store'
+import { api, profileExperience, useAction, useAiReady, type MatchResult } from '../lib/api'
+import { newId, today, useApplications, useJobDescription, useLastMatch, useLastMatchJd, useMatches, useProfile, useResume } from '../lib/store'
 
 type Tab = 'skills' | 'insights' | 'plan'
 
@@ -59,6 +62,8 @@ function MatchResults({ result: r, jd }: { result: MatchResult; jd: string }) {
   const [tab, setTab] = useState<Tab>('skills')
   const [matches, setMatches] = useMatches()
   const [, setApplications] = useApplications()
+  const [profile] = useProfile()
+  const yours = profileExperience(profile)
   const savedId = matches.find((m) => m.job_description === jd && m.result.job_title === r.job_title)?.id
 
   function save() {
@@ -101,6 +106,25 @@ function MatchResults({ result: r, jd }: { result: MatchResult; jd: string }) {
                 <Badge variant="outline">Salary not stated</Badge>
               )}
             </div>
+            {(r.experience_required || yours) && (
+              <dl className="mt-3 grid max-w-md grid-cols-2 gap-3 text-[13px]">
+                <div>
+                  <dt className="t-overline">Role asks for</dt>
+                  <dd className="text-ink">{r.experience_required || 'Not stated'}</dd>
+                </div>
+                <div>
+                  <dt className="t-overline">You have</dt>
+                  <dd className="text-ink">
+                    {yours || (
+                      <a href="#profile" className="text-brand-600 hover:underline">
+                        Add to profile
+                      </a>
+                    )}
+                  </dd>
+                </div>
+              </dl>
+            )}
+            {!r.salary_range && r.job_title && <MarketData title={r.job_title} location={r.location} company={r.company} />}
           </div>
           <div className="flex w-full flex-wrap gap-2 sm:w-auto">
             <Button variant="secondary" icon={savedId ? Check : BookmarkPlus} disabled={!!savedId} onClick={save}>
@@ -220,6 +244,8 @@ export default function JobMatch() {
   const key = useAiReady()
   const match = useAction(api.match)
   const jdShort = jd.trim().length < 30
+  // Results from before the job description was edited, imported or replaced from Job search.
+  const stale = !!result && !!resultJd.trim() && jd.trim() !== resultJd.trim()
 
   async function analyze() {
     if (!resume?.text) return
@@ -239,6 +265,7 @@ export default function JobMatch() {
           <Card title="Inputs" description="Your saved resume and the job description.">
             <div className="space-y-4">
               <ResumeSource />
+              <JobImport onImport={(text) => setJd(text)} />
               <Field label="Job description">
                 <textarea
                   className={`${textareaCls} h-56`}
@@ -261,7 +288,12 @@ export default function JobMatch() {
           {match.loading ? (
             <ResultsSkeleton />
           ) : result ? (
-            <MatchResults result={result} jd={resultJd} />
+            <div className="space-y-4">
+              {stale && <Note tone="warning">These results are for a different job description. Run job match to update them.</Note>}
+              <div className={stale ? 'opacity-60' : ''}>
+                <MatchResults result={result} jd={resultJd} />
+              </div>
+            </div>
           ) : (
             <Card>
               <EmptyState

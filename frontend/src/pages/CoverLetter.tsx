@@ -1,4 +1,5 @@
 import { Download, Mail } from 'lucide-react'
+import { JobImport } from '../components/JobImport'
 import { ResumeSource } from '../components/Resume'
 import {
   ActionHint,
@@ -61,6 +62,7 @@ export default function CoverLetter() {
           <Card title="Inputs" description="The letter only uses facts from your resume.">
             <div className="space-y-4">
               <ResumeSource />
+              <JobImport onImport={(text) => setJd(text)} />
               <Field label="Job description">
                 <textarea
                   className={`${textareaCls} min-h-40`}

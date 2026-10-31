@@ -1,5 +1,6 @@
 import { ChevronDown, MessageSquareText, MessagesSquare } from 'lucide-react'
 import { useState } from 'react'
+import { JobImport } from '../components/JobImport'
 import { ResumeSource } from '../components/Resume'
 import {
   ActionHint,
@@ -147,6 +148,7 @@ export default function Interview() {
           <Card title="Setup" description="Questions are based on your resume and the job description.">
             <div className="space-y-4">
               <ResumeSource />
+              <JobImport onImport={(text) => setJd(text)} />
               <Field label="Job description">
                 <textarea
                   className={`${textareaCls} min-h-40`}

@@ -365,7 +365,26 @@ export default function JobSearch() {
         </Card>
       ) : jobs.length === 0 ? (
         <Card>
-          <EmptyState icon={<SearchX />} title="No listings found" text="Try broader keywords, another location, or a different work mode." />
+          <EmptyState
+            icon={<SearchX />}
+            title="No listings found"
+            text="Try broader keywords, another location, or a different work mode."
+            action={
+              form.location.trim() ? (
+                <Button
+                  variant="secondary"
+                  icon={Search}
+                  onClick={() => {
+                    const next = { ...form, location: '' }
+                    setForm(next)
+                    void search(next)
+                  }}
+                >
+                  Search without location
+                </Button>
+              ) : undefined
+            }
+          />
         </Card>
       ) : (
         <Card
