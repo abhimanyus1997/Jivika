@@ -19,7 +19,9 @@ COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /uvx /bin/
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy PYTHONUNBUFFERED=1 PATH="/app/.venv/bin:$PATH"
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+# WITH_DOCLING=1 adds layout-aware parsing (DOCX, image OCR); it makes the image much larger.
+ARG WITH_DOCLING=0
+RUN uv sync --frozen --no-dev --no-install-project $([ "$WITH_DOCLING" = "1" ] && echo "--extra docling")
 COPY main.py ./
 COPY jivika/ ./jivika/
 COPY --from=frontend /src/frontend/dist ./frontend/dist
