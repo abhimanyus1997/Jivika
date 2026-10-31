@@ -23,6 +23,11 @@ log = logging.getLogger("jivika.parsing")
 DOCLING_NEEDED = "This file type needs the Docling parser. Upload a PDF instead."
 DOCLING_TIMEOUT = 120
 DOCLING_MAX_RESPONSE = 20 * 1024 * 1024
+# Local Docling limits, so a huge document cannot tie up a worker for minutes or use gigabytes of memory.
+DOCLING_MAX_PAGES = 10
+MAX_FILE_BYTES = int(float(os.getenv("JIVIKA_MAX_UPLOAD_MB", "10")) * 1024 * 1024)
+MAX_IMAGE_PIXELS = 40_000_000
+TOO_LARGE_IMAGE = "The image is too large. Upload a smaller scan or a PDF."
 MIME = {"pdf": "application/pdf", "png": "image/png", "jpg": "image/jpeg",
         "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
 HEADING_LABELS = ("title", "section_header")
@@ -78,6 +83,8 @@ def parse(data: bytes, filename: str, content_type: str) -> dict:
         raise ParseError("The file is not a valid PDF.")
     if kind != "pdf" and not docling:
         raise ParseError(DOCLING_NEEDED, 415)
+    if kind in ("png", "jpg"):
+        check_image(data)
     if docling:
         try:
             text, doc = _docling(data, filename or f"resume.{kind}", kind)
@@ -92,6 +99,24 @@ def parse(data: bytes, filename: str, content_type: str) -> dict:
                 raise ParseError("The file could not be read.") from None
     text, meta = pdf_text(data)
     return _result(text, {**meta, "layout_source": "pypdf"}, "pypdf")
+
+
+def check_image(data: bytes):
+    """413 for images over MAX_IMAGE_PIXELS (decompression bombs), read from the header only. Skipped without Pillow."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return
+    Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            width, height = image.size
+    except Image.DecompressionBombError:
+        raise ParseError(TOO_LARGE_IMAGE, 413) from None
+    except Exception:  # noqa: BLE001  (unreadable images are reported by the converter)
+        return
+    if width * height > MAX_IMAGE_PIXELS:
+        raise ParseError(TOO_LARGE_IMAGE, 413)
 
 
 def _result(text: str, meta: dict, parser: str) -> dict:
@@ -125,7 +150,9 @@ def _docling(data: bytes, filename: str, kind: str) -> tuple[str, dict]:
 
     if _converter is None:
         _converter = DocumentConverter()  # loads layout models once per process
-    document = _converter.convert(DocumentStream(name=filename, stream=io.BytesIO(data))).document
+    # First use downloads Docling's layout and OCR models (prefetch with: docling-tools models download).
+    document = _converter.convert(DocumentStream(name=filename, stream=io.BytesIO(data)),
+                                  max_num_pages=DOCLING_MAX_PAGES, max_file_size=MAX_FILE_BYTES).document
     text = document.export_to_text() if hasattr(document, "export_to_text") else document.export_to_markdown()
     return text, document.export_to_dict()
 
