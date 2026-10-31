@@ -2,10 +2,12 @@ import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import type {
   AtsResult,
   CareerPath,
+  CoverLetterSender,
   CoverLetterTone,
   CVReview,
   InterviewFeedback,
   InterviewQuestion,
+  LetterParts,
   LinkedInReview,
   MatchResult,
   Profile,
@@ -129,6 +131,8 @@ export interface StoredResume {
   fileName: string
   /** Layout details from the PDF, for the ATS checker. Absent for pasted text. */
   meta?: ResumeMeta
+  /** Which server parser read the file. Absent for pasted text and older uploads. */
+  parser?: 'docling' | 'pypdf'
 }
 
 export const useResume = () => useStored<StoredResume | null>('resume', null)
@@ -217,8 +221,28 @@ export interface InterviewSession {
 export const useInterview = () =>
   useStored<InterviewSession>('interview', { questions: [], answers: {}, feedback: {} })
 
-export const useCoverLetter = () =>
-  useStored<{ tone: CoverLetterTone; text: string }>('coverLetter', { tone: 'professional', text: '' })
+export type LetterTemplate = 'classic' | 'modern' | 'compact'
+export type SignatureMode = 'none' | 'typed' | 'drawn'
+
+export interface CoverLetterState {
+  tone: CoverLetterTone
+  /** Plain letter as last generated. Letters saved before templates only have this. */
+  text: string
+  parts?: LetterParts
+  template?: LetterTemplate
+  /** yyyy-mm-dd; empty means today. */
+  date?: string
+  signature?: SignatureMode
+  /** Set once the user edits their details; until then they come from the profile. */
+  sender?: CoverLetterSender
+  /** Optional recipient details sent with the request. */
+  recipient?: { name: string; title: string; company: string }
+}
+
+export const useCoverLetter = () => useStored<CoverLetterState>('coverLetter', { tone: 'professional', text: '' })
+
+/** Drawn signature as a PNG data URL. */
+export const useSignature = () => useStored<string>('signature', '')
 
 /* ---------- Application tracker ---------- */
 

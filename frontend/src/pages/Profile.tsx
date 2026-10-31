@@ -28,6 +28,9 @@ const EMPTY: Profile = {
   location: '',
   skills: [],
   summary: '',
+  phone: '',
+  email: '',
+  linkedin: '',
 }
 
 /** Form text for years / months: blank when never set. */
@@ -259,6 +262,17 @@ export default function ProfilePage() {
               <Field label="Location">
                 <input className={inputCls} value={draft.location} onChange={(e) => set('location', e.target.value)} />
               </Field>
+              <Field label="Email">
+                <input inputMode="email" autoComplete="email" className={inputCls} value={draft.email ?? ''} onChange={(e) => set('email', e.target.value)} />
+              </Field>
+              <Field label="Phone">
+                <input type="tel" autoComplete="tel" className={inputCls} value={draft.phone ?? ''} onChange={(e) => set('phone', e.target.value)} />
+              </Field>
+              <div className="sm:col-span-2">
+                <Field label="LinkedIn" hint="Profile URL, e.g. linkedin.com/in/your-name.">
+                  <input inputMode="url" className={inputCls} value={draft.linkedin ?? ''} onChange={(e) => set('linkedin', e.target.value)} />
+                </Field>
+              </div>
               <div className="sm:col-span-2">
                 <Field label="Headline">
                   <input className={inputCls} value={draft.headline} onChange={(e) => set('headline', e.target.value)} />

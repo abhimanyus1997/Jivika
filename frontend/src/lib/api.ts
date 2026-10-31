@@ -107,6 +107,7 @@ export interface ResumeMeta {
   suspected_columns: boolean
   suspected_tables: boolean
   file_name?: string | null
+  layout_source?: string
 }
 
 export interface ParsedResume {
@@ -114,6 +115,13 @@ export interface ParsedResume {
   pages: number
   characters: number
   meta?: ResumeMeta
+  /** Absent on servers from before Docling support. */
+  parser?: 'docling' | 'pypdf'
+}
+
+/** Which resume formats the server can read: Docling adds DOCX and images (OCR). */
+export interface ParserInfo {
+  docling: boolean
 }
 
 export interface Profile {
@@ -129,12 +137,44 @@ export interface Profile {
   location: string
   skills: string[]
   summary: string
+  /** Contact details, used in cover letters. Missing on profiles saved before they existed. */
+  phone?: string
+  email?: string
+  linkedin?: string
+}
+
+/* ---------- Learning resources (links come from search and are checked server-side, never from the model) ---------- */
+
+export type ResourceKind = 'course' | 'video' | 'discussion' | 'article' | 'docs' | 'practice' | 'roadmap'
+
+export interface ResourceQuery {
+  query: string
+  kind: ResourceKind
+}
+
+export interface Resource {
+  title: string
+  url: string
+  kind: ResourceKind
+  provider: string
+  domain: string
+  author?: string | null
+  found_via: string
+  verified: boolean
+  checked_at: string
+  note?: string | null
+}
+
+export interface ResolvedResources {
+  results: Record<string, Resource[]>
+  sources: { id: string; name: string; ok: boolean; research: boolean; error?: string | null }[]
 }
 
 export interface TransitionStep {
   step: string
   detail: string
   timeframe: string
+  resource_queries?: ResourceQuery[]
 }
 
 export interface MatchResult {
@@ -182,6 +222,7 @@ export interface RoadmapItem {
   project: string
   estimate: string
   roadmap_sh_url?: string | null
+  resource_queries?: ResourceQuery[]
 }
 
 export interface Roadmap {
@@ -194,7 +235,7 @@ export interface CareerPath {
   current: { title: string; salary_range: string }
   next: { title: string; salary_range: string; timeframe: string }
   future: { title: string; salary_range: string; timeframe: string }
-  skills_to_build: { skill: string; why: string; resource: string }[]
+  skills_to_build: { skill: string; why: string; resource: string; resource_queries?: ResourceQuery[] }[]
   career_score: number
   rationale: string
   /** Missing on paths saved before roadmaps existed. */
@@ -280,7 +321,84 @@ export interface InterviewFeedback {
   improved_answer: string
 }
 
+/* ---------- Coding practice (problems and tests from the model; code runs only in browser workers) ---------- */
+
+export type CodingLanguage = 'python' | 'javascript' | 'sql'
+
+export interface CodingProblem {
+  id: string
+  title: string
+  difficulty: 'easy' | 'medium' | 'hard'
+  topic: string
+  statement: string
+  examples: { input: string; output: string; explanation?: string }[]
+  constraints: string[]
+  hints: string[]
+  languages: CodingLanguage[]
+  function_name: string
+  function_names: { python: string; javascript: string }
+  starter: Partial<Record<CodingLanguage, string | null>>
+  /** args: JSON array of positional arguments; expected: JSON value. Empty for SQL problems. */
+  tests: { args: string; expected: string }[]
+  sql: { setup: string; expected_rows: string; order_matters: boolean } | null
+  solution: { language: CodingLanguage; code: string }
+  practice_queries: ResourceQuery[]
+}
+
+export interface CodingResultsSummary {
+  passed: number
+  total: number
+  failures: { args: string; expected: string; actual: string }[]
+}
+
+export interface CodingReview {
+  score: number
+  verdict: string
+  correctness: string
+  complexity: { time: string; space: string }
+  edge_cases: string[]
+  code_quality: string[]
+  improved_code: string
+}
+
 export type CoverLetterTone = 'professional' | 'enthusiastic' | 'concise'
+
+export interface CoverLetterSender {
+  name: string
+  title: string
+  phone: string
+  email: string
+  location: string
+  linkedin: string
+}
+
+export interface CoverLetterRequest {
+  resume: string
+  job_description: string
+  tone: CoverLetterTone
+  sender?: CoverLetterSender
+  recipient_name?: string
+  recipient_title?: string
+  company?: string
+}
+
+/** Structured letter for the templates. Unknown recipient details are empty, never invented. */
+export interface LetterParts {
+  recipient_name: string
+  recipient_title: string
+  company: string
+  recipient_contact: string
+  job_reference: string
+  salutation: string
+  paragraphs: string[]
+  sign_off: string
+}
+
+export interface CoverLetterResult {
+  cover_letter: string
+  /** Absent on servers from before templates. */
+  letter?: LetterParts
+}
 
 export const CURRENCIES = ['INR', 'USD', 'GBP', 'EUR'] as const
 export type Currency = (typeof CURRENCIES)[number]
@@ -429,8 +547,19 @@ export const api = {
       ai: true,
       body: { question, answer, job_description: job_description || undefined },
     }),
-  coverLetter: (resume: string, job_description: string, tone: CoverLetterTone) =>
-    request<{ cover_letter: string }>('/cover-letter', { ai: true, body: { resume, job_description, tone } }),
+  codingProblems: (body: { resume: string; job_description: string; count: number; languages: CodingLanguage[] }) =>
+    request<{ problems: CodingProblem[] }>('/interview/coding', { ai: true, body }),
+  codingReview: (body: { title: string; statement: string; language: CodingLanguage; code: string; results: CodingResultsSummary }) =>
+    request<CodingReview>('/interview/coding/review', { ai: true, body }),
+  coverLetter: (body: CoverLetterRequest) => request<CoverLetterResult>('/cover-letter', { ai: true, body }),
+  resolveResources: (items: ({ key: string } & ResourceQuery)[], max_per_item = 3) =>
+    request<ResolvedResources>('/resources/resolve', { body: { items, max_per_item } }),
+  /** Docling availability. Older servers lack /parser, so that reads as PDF-only. */
+  parser: () =>
+    request<Partial<ParserInfo> & { parser?: string }>('/parser').then(
+      (r): ParserInfo => ({ docling: r.docling === true || r.parser === 'docling' }),
+      (): ParserInfo => ({ docling: false }),
+    ),
   importJob: (url: string) => request<ImportedJob>('/jobs/import', { ai: 'optional', body: { url } }),
   atsCheck: (resume: string, job_description: string, meta?: ResumeMeta) =>
     request<AtsResult>('/ats/check', { ai: 'optional', body: { resume, job_description, meta } }),

@@ -1,10 +1,27 @@
 import { FileText, Upload } from 'lucide-react'
-import { useRef, useState, type ReactNode } from 'react'
-import { api, useAction } from '../lib/api'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { api, useAction, type ParserInfo } from '../lib/api'
 import { useResume } from '../lib/store'
 import { ErrorMessage } from './ui'
 
 const MAX_MB = 10 // client-side ceiling; the server enforces its own (lower on Vercel) limit and explains it
+const DOCLING_EXT = ['.pdf', '.docx', '.png', '.jpg', '.jpeg']
+const DOCLING_ACCEPT = `application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,${DOCLING_EXT.join(',')}`
+
+// Asked once per page load; servers without Docling (or without /api/parser) read PDFs only.
+let parserInfo: Promise<ParserInfo> | null = null
+function useParserInfo() {
+  const [info, setInfo] = useState<ParserInfo>({ docling: false })
+  useEffect(() => {
+    let live = true
+    parserInfo ??= api.parser()
+    parserInfo.then((i) => live && setInfo(i))
+    return () => {
+      live = false
+    }
+  }, [])
+  return info
+}
 
 /** Drag-and-drop PDF upload. The parsed text is saved as the shared resume. */
 export function ResumeDropzone({ compact = false }: { compact?: boolean }) {
@@ -12,11 +29,14 @@ export function ResumeDropzone({ compact = false }: { compact?: boolean }) {
   const [dragging, setDragging] = useState(false)
   const input = useRef<HTMLInputElement>(null)
   const { run, loading, error, setError } = useAction(api.parseResume)
+  const { docling } = useParserInfo()
 
   async function handle(file: File | undefined) {
     if (!file) return
-    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-      setError('Please upload a PDF file.')
+    const name = file.name.toLowerCase()
+    const ok = docling ? DOCLING_EXT.some((x) => name.endsWith(x)) : file.type === 'application/pdf' || name.endsWith('.pdf')
+    if (!ok) {
+      setError(docling ? 'Please upload a PDF, DOCX, PNG or JPG file.' : 'Please upload a PDF file.')
       return
     }
     if (file.size > MAX_MB * 1024 * 1024) {
@@ -55,19 +75,21 @@ export function ResumeDropzone({ compact = false }: { compact?: boolean }) {
             'Reading your resume...'
           ) : (
             <>
-              Drop your resume PDF or <span className="text-brand-600 underline underline-offset-2">browse</span>
+              Drop your resume {docling ? 'file' : 'PDF'} or <span className="text-brand-600 underline underline-offset-2">browse</span>
             </>
           )}
         </span>
-        <span className="text-xs text-faint">PDF only. Text is extracted on the server and not stored.</span>
+        <span className="text-xs text-faint">
+          {docling ? 'PDF, DOCX, PNG or JPG.' : 'PDF only.'} Text is extracted on the server and not stored.
+        </span>
       </button>
       <input
         ref={input}
         type="file"
-        accept="application/pdf,.pdf"
+        accept={docling ? DOCLING_ACCEPT : 'application/pdf,.pdf'}
         className="sr-only"
         tabIndex={-1}
-        aria-label="Upload resume PDF"
+        aria-label={docling ? 'Upload resume file' : 'Upload resume PDF'}
         onChange={(e) => {
           void handle(e.target.files?.[0])
           e.target.value = ''
@@ -119,6 +141,11 @@ export function ResumeFileRow({ children }: { children?: ReactNode }) {
           {resume.pages > 0 && `${resume.pages} ${resume.pages === 1 ? 'page' : 'pages'} · `}
           {resume.characters.toLocaleString()} characters
         </span>
+        {resume.parser && (
+          <span className={`block text-xs ${resume.parser === 'docling' ? 'text-brand-600' : 'text-faint'}`}>
+            {resume.parser === 'docling' ? 'Parsed with Docling (layout-aware)' : 'Basic text extraction'}
+          </span>
+        )}
       </span>
       {children}
     </div>

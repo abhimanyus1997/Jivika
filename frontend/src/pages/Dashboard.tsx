@@ -1,6 +1,7 @@
 import { ArrowRight, BarChart3, Check, Compass, Plus, ShieldCheck, Sparkles, Star } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { ApplicationTrends, MiniBars, weeklyTrends } from '../components/charts'
+import { codingStats, useCoding } from '../components/coding/store'
 import { Badge, ButtonLink, Card, CareerTimeline, EmptyState, Note, PageHeader, Segmented, StatCell, scoreBand } from '../components/ui'
 import {
   useApiKey,
@@ -15,6 +16,7 @@ import {
   useResume,
   useRoadmapDone,
   useStored,
+  write,
   type Point,
 } from '../lib/store'
 import { useDemoActive } from '../lib/api'
@@ -122,6 +124,8 @@ function KpiStrip() {
   const [done] = useRoadmapDone()
   const items = careerPath?.roadmap?.stages.flatMap((s) => s.items) ?? []
   const roadmap = items.length ? `Roadmap ${roadmapProgress(items, done).pct}% complete` : undefined
+  const [codingSession] = useCoding()
+  const coding = codingStats(codingSession)
   const cells = [
     { label: 'Career score', points: history.career, href: '#career', empty: 'Map your career path', note: roadmap },
     { label: 'Skills', points: history.skills, href: '#profile', empty: 'Upload your resume' },
@@ -148,6 +152,21 @@ function KpiStrip() {
           />
         ))}
       </div>
+      {coding.total > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-line px-5 py-2.5 text-[13px]">
+          <span className="text-muted">
+            <span className="font-medium text-ink">Coding practice</span>{' '}
+            <span className="tabular-nums">
+              {coding.solved} solved / {coding.attempted} attempted
+            </span>{' '}
+            of {coding.total} problems
+          </span>
+          <a href="#interview" onClick={() => write('interview.tab', 'coding')} className="inline-flex items-center gap-1 font-medium text-brand-600 hover:underline">
+            Practise
+            <ArrowRight className="size-3.5" aria-hidden="true" />
+          </a>
+        </div>
+      )}
     </Card>
   )
 }
