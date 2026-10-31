@@ -3,7 +3,7 @@
 The server never stores API keys or resume data. Every AI request carries the
 caller's provider, key and (optional) model in headers and is forwarded to an
 OpenAI-compatible endpoint. The only server-side state is the Pro waitlist
-(email, plan, source) in SQLite.
+(email, plan, source) in SQLite, or in Upstash Redis when its REST credentials are set.
 """
 
 import csv
@@ -17,6 +17,8 @@ import os
 import re
 import sqlite3
 import time
+import http.client
+import urllib.request
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
@@ -42,6 +44,11 @@ MAX_TEXT_CHARS = 30_000
 MAX_UPLOAD_BYTES = int(float(os.getenv("JIVIKA_MAX_UPLOAD_MB", "10")) * 1024 * 1024)
 MAX_BODY_OVERHEAD = 64 * 1024  # multipart framing on top of the file itself
 DIST_DIR = Path(__file__).parent / "frontend" / "dist"
+
+
+def upload_too_large() -> str:
+    return f"The PDF is larger than {MAX_UPLOAD_BYTES / (1024 * 1024):g} MB."
+
 
 PROVIDERS = {
     "gemini": {
@@ -351,7 +358,7 @@ def _is_auth_error(exc: openai.APIError) -> bool:
 def complete_json(provider: str, key: str, model: str, system: str, user: str, schema_model):
     """Call the provider once (plus one retry on invalid output) and return a validated model."""
     name = PROVIDERS[provider]["name"]
-    client = OpenAI(api_key=key, base_url=PROVIDERS[provider]["base_url"], timeout=90, max_retries=1)
+    client = OpenAI(api_key=key, base_url=PROVIDERS[provider]["base_url"], timeout=60, max_retries=1)  # worst case ~240 s with the JSON retry, under Vercel's 300 s
     schema = json.dumps(schema_model.model_json_schema())
     messages = [
         {
@@ -448,7 +455,7 @@ class BodySizeLimit:
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
         limit = MAX_UPLOAD_BYTES + MAX_BODY_OVERHEAD
-        detail = "The request is too large."
+        detail = upload_too_large() if scope["path"].endswith("/api/resume/parse") else "The request is too large."
         length = dict(scope["headers"]).get(b"content-length", b"")
         if length.isdigit() and int(length) > limit:
             return await JSONResponse({"detail": detail}, 413)(scope, receive, send)
@@ -467,6 +474,37 @@ class BodySizeLimit:
 
 
 app.add_middleware(BodySizeLimit)
+
+
+def base_path() -> str:
+    """JIVIKA_BASE_PATH, e.g. '/jivika', normalised to a leading slash and no trailing slash ('' at root)."""
+    value = os.getenv("JIVIKA_BASE_PATH", "").strip("/")
+    return f"/{value}" if value else ""
+
+
+class BasePath:
+    """Serve the whole app under JIVIKA_BASE_PATH. Requests outside it redirect into it, so '/' and '/jivika' go to '/jivika/'."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        base = base_path()
+        if not base or scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        path = scope["path"]
+        if path == base:
+            # Served, not redirected: a proxy rewrite may drop the trailing slash, and a 308 back would loop.
+            path = scope["path"] = base + "/"
+        if path.startswith(base + "/"):
+            # Routing strips root_path from path, so every route and redirect stays prefix-relative.
+            return await self.app({**scope, "root_path": scope.get("root_path", "") + base}, receive, send)
+        target = base + "/" if path in ("/", base) else base + path
+        query = scope.get("query_string", b"").decode("latin-1")
+        await RedirectResponse(f"{target}?{query}" if query else target, 308)(scope, receive, send)
+
+
+app.add_middleware(BasePath)
 
 SECURITY_HEADERS = [
     (b"x-content-type-options", b"nosniff"),
@@ -492,7 +530,7 @@ class SecurityHeaders:
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
         extra = list(SECURITY_HEADERS)
-        if not scope["path"].startswith("/api/docs"):
+        if not scope["path"].removeprefix(base_path()).startswith("/api/docs"):
             extra.append(CSP)
         if os.getenv("JIVIKA_HSTS") == "1":
             extra.append(HSTS)
@@ -505,7 +543,7 @@ class SecurityHeaders:
         await self.app(scope, receive, send_with_headers)
 
 
-app.add_middleware(SecurityHeaders)  # added last, so it is outermost and also covers 413s
+app.add_middleware(SecurityHeaders)  # added last, so it is outermost and also covers 413s and base-path redirects
 
 BYOK = Annotated[LLMConfig, Depends(byok)]
 
@@ -537,7 +575,7 @@ async def parse_resume(file: UploadFile = File(...)):
         raise HTTPException(415, "Please upload a PDF file.")
     data = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(413, f"The PDF exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit.")
+        raise HTTPException(413, upload_too_large())
     if not data.startswith(b"%PDF"):
         raise HTTPException(400, "The file is not a valid PDF.")
     # PDF parsing is CPU-bound; keep it off the event loop.
@@ -636,7 +674,7 @@ def cover_letter(body: CoverLetterRequest, cfg: BYOK):
 # ---------------------------------------------------------------------------
 
 EMAIL_RE = re.compile(r"^[^@\s<>\"',;\x00-\x1f]+@[^@\s<>\"',;\x00-\x1f]+\.[^@\s.<>\"',;\x00-\x1f]{2,}$")
-RATE_LIMIT, RATE_WINDOW, RATE_MAX_IPS = 5, 600, 10_000
+RATE_LIMIT, RATE_WINDOW, RATE_MAX_IPS = int(os.getenv("JIVIKA_RATE_LIMIT", "5")), 600, 10_000
 _rate_hits: dict[str, list[float]] = {}
 
 
@@ -655,14 +693,19 @@ class WaitlistRequest(BaseModel):
 
 
 def client_ip(request: Request) -> str:
-    if os.getenv("JIVIKA_TRUST_PROXY") == "1" and (forwarded := request.headers.get("x-forwarded-for")):
-        # ponytail: rightmost entry assumes exactly one trusted proxy hop
-        return forwarded.split(",")[-1].strip()
+    if os.getenv("JIVIKA_TRUST_PROXY") == "1":
+        # Vercel sets these itself and does not pass client-supplied values through. Elsewhere they could be
+        # spoofed through a generic proxy, so they are only read on Vercel.
+        if os.getenv("VERCEL") == "1" and (ip := request.headers.get("x-vercel-forwarded-for") or request.headers.get("x-real-ip")):
+            return ip.split(",")[0].strip()
+        if forwarded := request.headers.get("x-forwarded-for"):
+            # ponytail: rightmost entry assumes exactly one trusted proxy hop (Vercel overwrites it to a single IP)
+            return forwarded.split(",")[-1].strip()
     return request.client.host if request.client else "unknown"
 
 
 async def rate_limit(request: Request):
-    """5 requests per IP per 10 minutes, in memory. Async, so it runs on the event loop without a lock."""
+    """RATE_LIMIT (default 5) requests per IP per 10 minutes, in memory. Async, so it runs on the event loop without a lock."""
     # ponytail: per-process memory; use a shared store if running several workers
     ip, now = client_ip(request), time.monotonic()
     recent = [t for t in _rate_hits.pop(ip, []) if now - t < RATE_WINDOW]
@@ -672,6 +715,61 @@ async def rate_limit(request: Request):
     _rate_hits[ip] = [*recent, now]  # re-inserted last, so dict order is least recently seen first
     while len(_rate_hits) > RATE_MAX_IPS:
         del _rate_hits[next(iter(_rate_hits))]
+
+
+WAITLIST_UNAVAILABLE = "The waitlist is temporarily unavailable."
+REDIS_KEY = "jivika:waitlist"
+
+
+def redis_config() -> tuple[str, str] | None:
+    """Upstash REST credentials, under the Vercel Marketplace (KV_*) or Upstash (UPSTASH_REDIS_*) names."""
+    url = os.getenv("KV_REST_API_URL") or os.getenv("UPSTASH_REDIS_REST_URL")
+    token = os.getenv("KV_REST_API_TOKEN") or os.getenv("UPSTASH_REDIS_REST_TOKEN")
+    return (url.rstrip("/"), token) if url and token else None
+
+
+def redis_http(url: str, token: str, command: list[str]):
+    """POST one command to the Upstash REST API and return its JSON reply. The only network call to Redis."""
+    req = urllib.request.Request(
+        url, data=json.dumps(command).encode(), headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(req, timeout=5) as response:
+        return json.load(response)
+
+
+def redis(*command: str):
+    url, token = redis_config()
+    try:
+        reply = redis_http(url, token, list(command))
+    except (OSError, ValueError, http.client.HTTPException) as exc:  # URLError, HTTPError, timeouts, bad JSON, truncated replies
+        log.warning("Waitlist store error: %s", type(exc).__name__)  # never the URL or token
+        raise HTTPException(503, WAITLIST_UNAVAILABLE) from None
+    if not isinstance(reply, dict) or "error" in reply:
+        log.warning("Waitlist store rejected %s", command[0])
+        raise HTTPException(503, WAITLIST_UNAVAILABLE)
+    return reply.get("result")
+
+
+def _entry(value) -> dict:
+    """One waitlist hash value; malformed (e.g. hand-edited) values export with empty fields."""
+    try:
+        entry = json.loads(value)
+    except (TypeError, ValueError):
+        return {}
+    return entry if isinstance(entry, dict) else {}
+
+
+def use_redis() -> bool:
+    """Redis when configured. On Vercel without it, refuse: the filesystem there is ephemeral."""
+    if redis_config():
+        return True
+    if os.getenv("VERCEL") == "1":
+        raise HTTPException(503, WAITLIST_UNAVAILABLE)
+    return False
+
+
+if os.getenv("VERCEL") == "1" and not redis_config():
+    log.warning("No Upstash Redis configured: the waitlist is disabled on Vercel. Set KV_REST_API_URL and KV_REST_API_TOKEN.")
 
 
 def db() -> sqlite3.Connection:
@@ -690,6 +788,10 @@ def join_waitlist(body: WaitlistRequest):
     if body.website.strip():
         return {"ok": True}
     created = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    if use_redis():
+        entry = json.dumps({"plan": body.plan, "source": body.source, "created_at": created})
+        added = redis("HSETNX", REDIS_KEY, body.email, entry)  # atomic: 0 when the email is already there
+        return {"ok": True} if added == 1 else {"ok": True, "already": True}
     with closing(db()) as conn, conn:
         cur = conn.execute(
             "INSERT OR IGNORE INTO waitlist (email, plan, source, created_at) VALUES (?, ?, ?, ?)",
@@ -710,8 +812,13 @@ def export_waitlist(authorization: Annotated[str, Header()] = ""):
         raise HTTPException(404, "Not found.")
     if not hmac.compare_digest(authorization.encode(), f"Bearer {token}".encode()):
         raise HTTPException(401, "Unauthorized.", headers={"WWW-Authenticate": "Bearer"})
-    with closing(db()) as conn:
-        rows = conn.execute("SELECT id, email, plan, source, created_at FROM waitlist ORDER BY id").fetchall()
+    if use_redis():
+        flat = redis("HGETALL", REDIS_KEY) or []
+        entries = sorted(((_entry(v), k) for k, v in zip(flat[::2], flat[1::2])), key=lambda e: e[0].get("created_at") or "")
+        rows = [(i, email, e.get("plan"), e.get("source"), e.get("created_at")) for i, (e, email) in enumerate(entries, 1)]
+    else:
+        with closing(db()) as conn:
+            rows = conn.execute("SELECT id, email, plan, source, created_at FROM waitlist ORDER BY id").fetchall()
     out = io.StringIO()
     writer = csv.writer(out)
     writer.writerow(["id", "email", "plan", "source", "created_at"])
@@ -756,6 +863,6 @@ def site(path: str, request: Request):
     if (target / "index.html").is_file():
         if path and not path.endswith("/") and target != root / "app":
             query = f"?{request.url.query}" if request.url.query else ""
-            return RedirectResponse(f"/{path.strip('/')}/{query}", 308)
+            return RedirectResponse(f"{request.scope.get('root_path', '')}/{path.strip('/')}/{query}", 308)
         return FileResponse(target / "index.html", headers={"Cache-Control": "no-cache"})
     return _not_found()

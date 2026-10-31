@@ -114,6 +114,8 @@ def test_oversized_body_rejected_before_read(monkeypatch):
     monkeypatch.setattr(main, "MAX_UPLOAD_BYTES", 100)
     monkeypatch.setattr(main, "MAX_BODY_OVERHEAD", 0)
     r = client.post("/api/resume/parse", files={"file": ("cv.pdf", b"%PDF" + b"0" * 500, "application/pdf")})
+    assert r.status_code == 413 and r.json()["detail"].startswith("The PDF is larger than")
+    r = client.post("/api/analyze", content=b"{" + b" " * 500 + b"}", headers={"Content-Type": "application/json"})
     assert r.status_code == 413 and r.json()["detail"] == "The request is too large."
 
 
