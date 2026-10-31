@@ -64,8 +64,9 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 _OPENER = urllib.request.build_opener(_NoRedirect)
 
 
-def fetch(url: str, headers: dict | None = None, cap: int = MAX_BYTES) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json, text/html;q=0.9", **(headers or {})})
+def fetch(url: str, headers: dict | None = None, cap: int = MAX_BYTES, data: bytes | None = None) -> bytes:
+    """GET (or POST when data is given) a fixed URL, without following redirects."""
+    req = urllib.request.Request(url, data=data, headers={"User-Agent": USER_AGENT, "Accept": "application/json, text/html;q=0.9", **(headers or {})})
     deadline = time.monotonic() + TIMEOUT  # the socket timeout is per read; this bounds the whole download
     chunks, size = [], 0
     try:

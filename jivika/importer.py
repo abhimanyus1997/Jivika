@@ -32,9 +32,10 @@ NAT64 = ipaddress.ip_network("64:ff9b::/96")
 class ImportFailed(Exception):
     """Shown to users. status is the HTTP status the API answers with."""
 
-    def __init__(self, message: str, status: int = 502):
+    def __init__(self, message: str, status: int = 502, upstream: int | None = None):
         super().__init__(message)
         self.status = status
+        self.upstream = upstream  # the page's own HTTP status, when it answered with an error
 
 
 # ---------------------------------------------------------------------------
@@ -149,9 +150,12 @@ def _request(parts, port: int, addresses: list[str], timeout: float):
     return response
 
 
-def safe_fetch(url: str) -> tuple[str, str, str]:
-    """(final url, content type, text) of a public web page."""
-    deadline = time.monotonic() + TIMEOUT
+def safe_fetch(url: str, *, timeout: float | None = None, max_bytes: int | None = None, content_types=CONTENT_TYPES,
+               truncate: bool = False) -> tuple[str, str, str]:
+    """(final url, content type, text) of a public web page; timeout and max_bytes default to TIMEOUT and
+    MAX_BYTES. truncate=True stops reading at max_bytes instead of failing (enough for a <title> check)."""
+    max_bytes = MAX_BYTES if max_bytes is None else max_bytes
+    deadline = time.monotonic() + (TIMEOUT if timeout is None else timeout)
     for _ in range(MAX_REDIRECTS + 1):
         parts, port, addresses = vet(url)
         remaining = deadline - time.monotonic()
@@ -167,22 +171,25 @@ def safe_fetch(url: str) -> tuple[str, str, str]:
                     url = urllib.parse.urljoin(url, location.strip())
                     continue
                 if response.status in (401, 403, 406, 429, 999):
-                    raise ImportFailed(BLOCKED)
+                    raise ImportFailed(BLOCKED, upstream=response.status)
                 if response.status >= 400:
-                    raise ImportFailed(f"The page returned HTTP {response.status}.")
+                    raise ImportFailed(f"The page returned HTTP {response.status}.", upstream=response.status)
                 content_type = (response.getheader("Content-Type") or "").lower()
                 mime = content_type.split(";", 1)[0].strip()
-                if mime not in CONTENT_TYPES:
+                if mime not in content_types:
                     raise ImportFailed("That link is not a web page.", 415)
                 chunks, size = [], 0
                 while chunk := response.read1(65536):  # one recv per call, so the deadline is checked often
                     size += len(chunk)
-                    if size > MAX_BYTES:
+                    if size > max_bytes:
+                        if truncate:
+                            chunks.append(chunk[: max_bytes - size + len(chunk)])
+                            break
                         raise ImportFailed("The page is too large to import.", 413)
                     if time.monotonic() > deadline:
                         raise ImportFailed("The page took too long to respond.", 504)
                     chunks.append(chunk)
-                if time.monotonic() > deadline:  # the watchdog cut the connection short
+                if time.monotonic() > deadline and size <= max_bytes:  # the watchdog cut the connection short
                     raise ImportFailed("The page took too long to respond.", 504)
             finally:
                 if watchdog := getattr(response, "watchdog", None):
