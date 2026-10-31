@@ -24,7 +24,8 @@ import threading
 import time
 import urllib.parse
 from collections import OrderedDict
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed, wait
+from concurrent.futures import TimeoutError as FuturesTimeout
 from datetime import datetime, timezone
 
 from jivika import importer, jobs
@@ -42,7 +43,10 @@ SOURCES = {  # id: (name, research)
     "roadmap": ("roadmap.sh", False),
 }
 FOUND_VIA = {"youtube": "YouTube search", "ddg": "DuckDuckGo", "bing": "Bing", "reddit": "Reddit search", "roadmap": "roadmap.sh"}
-WORKERS = 6  # network calls in flight per request
+WORKERS = 16  # network calls in flight across all requests (one shared pool)
+MAX_CONCURRENT, BUSY_WAIT = 4, 1.0  # uncached resolves at once; later ones wait this long, then get busy: true
+POOL = ThreadPoolExecutor(max_workers=WORKERS, thread_name_prefix="resources")
+_slots = threading.BoundedSemaphore(MAX_CONCURRENT)
 BUDGET = 20.0  # seconds per request; whatever is ready by then is returned
 VERIFY_TIMEOUT, VERIFY_BYTES = 6, 1024 * 1024
 CANDIDATES = 6  # links checked per item
@@ -138,9 +142,10 @@ def allowed(url: str, kind: str) -> str | None:
     """The matching allow-list entry's domain for a https/http URL, else None."""
     try:
         parts = urllib.parse.urlsplit(url)
+        port = parts.port  # ValueError for out-of-range or non-numeric ports
     except ValueError:
         return None
-    if parts.scheme not in ("http", "https") or not parts.hostname or parts.username or parts.port not in (None, 80, 443):
+    if parts.scheme not in ("http", "https") or not parts.hostname or parts.username or port not in (None, 80, 443):
         return None
     host = _bare(parts.hostname)
     pattern = next((p for d, p in CONTENT_PATHS.items() if host == d or host.endswith("." + d)), None)
@@ -150,14 +155,18 @@ def allowed(url: str, kind: str) -> str | None:
 
 
 def provider(url: str) -> str:
-    host = _bare(urllib.parse.urlsplit(url).hostname or "")
-    if any(_on(host, urllib.parse.urlsplit(url).path, d) for d in OFFICIAL_DOCS):
+    try:
+        parts = urllib.parse.urlsplit(url)
+    except ValueError:
+        return ""
+    host = _bare(parts.hostname or "")
+    if any(_on(host, parts.path, d) for d in OFFICIAL_DOCS):
         return "Official docs"
     return next((name for d, name in sorted(PROVIDERS.items(), key=lambda kv: -len(kv[0])) if host == d or host.endswith("." + d)), host)
 
 
 def clean(url: str) -> tuple[str, str]:
-    """(https URL without tracking parameters or fragment, canonical key for dedupe)."""
+    """(https URL without tracking parameters or fragment, canonical key for dedupe). ValueError for malformed URLs."""
     parts = urllib.parse.urlsplit(url.strip())
     query = [(k, v) for k, v in urllib.parse.parse_qsl(parts.query, keep_blank_values=False) if not _TRACKING.match(k)]
     host = (parts.hostname or "").lower()
@@ -280,36 +289,47 @@ def parse_ddg(markup: str) -> list[dict]:
 
 DDG_ENDPOINTS = ("https://html.duckduckgo.com/html/", "https://lite.duckduckgo.com/lite/")
 DDG_INTERVAL, DDG_COOLDOWN = 1.5, 20  # DuckDuckGo answers a few quick queries per IP, then shows a challenge
+DDG_MAX_WAIT = 2.0  # a query that would wait longer for its slot fails fast, so the chain moves on to Bing
+DDG_RATE_LIMITED = "Rate limited by the source. Try again shortly."
 _ddg_lock = threading.Lock()
 _ddg_state = {"next": 0.0, "cool_until": 0.0, **{url: 0.0 for url in DDG_ENDPOINTS}}
 
 
+def _ddg_slot(endpoint: str) -> float | None:
+    """Reserve the next request slot (DDG_INTERVAL apart, process-wide); seconds to wait, None if the endpoint is
+    cooling down. The lock covers only this bookkeeping, never the network call or the wait."""
+    with _ddg_lock:
+        now = time.monotonic()
+        if now < _ddg_state["cool_until"] or now < _ddg_state[endpoint]:
+            return None
+        slot = max(now, _ddg_state["next"])
+        if slot - now > DDG_MAX_WAIT:
+            raise jobs.SourceError(DDG_RATE_LIMITED)
+        _ddg_state["next"] = slot + DDG_INTERVAL
+        return slot - now
+
+
 def ddg(query: str, kind: str) -> list[dict]:
-    """One query at a time per process, spaced out. An endpoint that shows a challenge page is skipped for
-    DDG_COOLDOWN seconds and the other one (html, then lite) is tried."""
+    """Queries are spaced DDG_INTERVAL apart. An endpoint that shows a challenge page is skipped for DDG_COOLDOWN
+    seconds and the other one (html, then lite) is tried."""
     # ponytail: per-process throttle; instances behind one IP do not share it
     form = urllib.parse.urlencode({"q": _web_query(query, kind), "kl": "wt-wt"}).encode()
     headers = {"Accept": "text/html", "Accept-Language": "en", "Content-Type": "application/x-www-form-urlencoded"}
     errors = []
-    with _ddg_lock:
-        if time.monotonic() < _ddg_state["cool_until"]:
-            raise jobs.SourceError("Rate limited by the source. Try again shortly.")
-        for endpoint in DDG_ENDPOINTS:
-            if time.monotonic() < _ddg_state[endpoint]:
-                continue
-            if (pause := _ddg_state["next"] - time.monotonic()) > 0:
-                time.sleep(pause)
-            try:
-                found = parse_ddg(jobs.fetch(endpoint, headers, data=form).decode("utf-8", "replace"))
-            except jobs.SourceError as exc:
-                errors.append(exc)
-                if "Blocked" in str(exc):
+    for endpoint in DDG_ENDPOINTS:
+        if (pause := _ddg_slot(endpoint)) is None:
+            continue
+        time.sleep(pause)
+        try:
+            found = parse_ddg(jobs.fetch(endpoint, headers, data=form).decode("utf-8", "replace"))
+        except jobs.SourceError as exc:
+            errors.append(exc)
+            if "Blocked" in str(exc):
+                with _ddg_lock:
                     _ddg_state[endpoint] = time.monotonic() + DDG_COOLDOWN
-                continue
-            finally:
-                _ddg_state["next"] = time.monotonic() + DDG_INTERVAL
-            return [{**c, "kind": kind, "_source": "ddg"} for c in found]
-    raise errors[0] if errors else jobs.SourceError("Rate limited by the source. Try again shortly.")
+            continue
+        return [{**c, "kind": kind, "_source": "ddg"} for c in found]
+    raise errors[0] if errors else jobs.SourceError(DDG_RATE_LIMITED)
 
 
 def parse_bing(xml: str) -> list[dict]:
@@ -321,16 +341,51 @@ def parse_bing(xml: str) -> list[dict]:
     return out
 
 
+def _bing(q: str) -> list[dict]:
+    url = "https://www.bing.com/search?" + urllib.parse.urlencode({"format": "rss", "q": q, "setlang": "en"})
+    return parse_bing(jobs.fetch(url, {"Accept": "application/rss+xml, text/xml"}).decode("utf-8", "replace"))
+
+
+# Parts of official-docs domains too generic to tie a query to a site.
+_DOC_NOISE = {"docs", "doc", "com", "org", "io", "dev", "net", "www", "learn", "cloud", "developer", "help", "support",
+              "documentation", "apache", "aws", "amazon", "google", "microsoft", "github", "oracle", "mozilla"}
+
+
+def _site_filters(query: str, kind: str) -> tuple[str, ...]:
+    """Single-site Bing queries to try when the combined query finds nothing on the allow-list. Docs use the official
+    docs sites named in the query (pandas -> pandas.pydata.org)."""
+    if kind != "docs":
+        return SITE_FILTERS.get(kind, ())[:2]
+    words = tokens(query)
+    return tuple(d for d in OFFICIAL_DOCS if set(re.split(r"[./-]", d)) - _DOC_NOISE & words)[:2]
+
+
 def bing(query: str, kind: str) -> list[dict]:
-    url = "https://www.bing.com/search?" + urllib.parse.urlencode({"format": "rss", "q": _web_query(query, kind), "setlang": "en"})
-    xml = jobs.fetch(url, {"Accept": "application/rss+xml, text/xml"}).decode("utf-8", "replace")
-    return [{**c, "kind": kind, "_source": "bing"} for c in parse_bing(xml)]
+    """The combined site-filtered query, then up to two single-site queries if it found nothing usable."""
+    found = _bing(_web_query(query, kind))
+    allow_kind = "docs" if kind == "roadmap" else kind
+    for site in _site_filters(query, kind):
+        if any(allowed(c["url"], allow_kind) for c in found):
+            break
+        try:
+            found += _bing(f"{query} site:{site}")
+        except jobs.SourceError:
+            break  # the first query already answered; keep what it found
+    return [{**c, "kind": kind, "_source": "bing"} for c in found]
 
 
 def reddit(query: str, kind: str) -> list[dict]:
     q = " ".join(_SEARCH_NOISE.sub(" ", query).split()) or query
-    url = "https://www.reddit.com/search.json?" + urllib.parse.urlencode({"q": q, "sort": "relevance", "t": "all", "limit": 10, "type": "link"})
-    data = jobs.fetch_json(url, {"User-Agent": REDDIT_UA, "Accept": "application/json"})
+    params = urllib.parse.urlencode({"q": q, "sort": "relevance", "t": "all", "limit": 10, "type": "link"})
+    # www.reddit.com blocks some server IPs that old.reddit.com still answers.
+    for host in ("www.reddit.com", "old.reddit.com"):
+        try:
+            data = jobs.fetch_json(f"https://{host}/search.json?{params}", {"User-Agent": REDDIT_UA, "Accept": "application/json"})
+            break
+        except jobs.SourceError as exc:
+            failure = exc
+    else:
+        raise failure
     terms = tokens(q)
     out = []
     for child in (data.get("data", {}).get("children", []) if isinstance(data, dict) else []):
@@ -384,7 +439,9 @@ def verify(candidate: dict) -> dict | None:
         final, _, markup = importer.safe_fetch(url, timeout=VERIFY_TIMEOUT, max_bytes=VERIFY_BYTES,
                                                content_types=("text/html", "application/xhtml+xml"), truncate=True)
     except importer.ImportFailed as exc:
-        if exc.upstream in BLOCKED_STATUS and _plausible(url):
+        # Kept unverified only when the refusing address itself is on the allow-list, so an open redirect to
+        # another site answering 403 is dropped rather than shown as a search result.
+        if exc.upstream in BLOCKED_STATUS and _plausible(url) and allowed(exc.url or url, allow_kind):
             return _finish({**base, "verified": False, "note": UNVERIFIED_NOTE})
         return None
     if not allowed(final, allow_kind):  # redirected off the allow-list (or to a login page elsewhere)
@@ -433,25 +490,27 @@ def rank(resources: list[dict]) -> list[dict]:
 # Resolve
 # ---------------------------------------------------------------------------
 
-_cache: OrderedDict = OrderedDict()
+_cache: OrderedDict = OrderedDict()  # (query, kind) -> finished resources
+_search_cache: OrderedDict = OrderedDict()  # (source, query, kind) -> raw search results, so repeats skip the source
 _cache_lock = threading.Lock()
+SEARCH_CACHE_MAX = 2000
 
 
-def _cache_get(key):
+def _cache_get(key, cache: OrderedDict = _cache):
     with _cache_lock:
-        hit = _cache.get(key)
+        hit = cache.get(key)
         if hit and time.monotonic() - hit[0] < CACHE_TTL:
-            _cache.move_to_end(key)
+            cache.move_to_end(key)
             return hit[1]
     return None
 
 
-def _cache_put(key, value):
+def _cache_put(key, value, cache: OrderedDict = _cache, limit: int = CACHE_MAX):
     with _cache_lock:
-        _cache[key] = (time.monotonic(), value)
-        _cache.move_to_end(key)
-        while len(_cache) > CACHE_MAX:
-            _cache.popitem(last=False)
+        cache[key] = (time.monotonic(), value)
+        cache.move_to_end(key)
+        while len(cache) > limit:
+            cache.popitem(last=False)
 
 
 class _Report:
@@ -476,8 +535,13 @@ class _Report:
 
 
 def _call(source: str, query: str, kind: str, report: _Report) -> list[dict] | None:
+    """A source's results (cached CACHE_TTL per source, query and kind), or None when it failed."""
+    key = (source, query.lower(), kind)
+    if (hit := _cache_get(key, _search_cache)) is not None:
+        return [dict(c) for c in hit]
     try:
         found = SEARCH[source](query, kind)
+        _cache_put(key, found, _search_cache, SEARCH_CACHE_MAX)
     except jobs.SourceError as exc:
         report.record(source, str(exc))
         return None
@@ -529,40 +593,89 @@ def _chain(chain: list[str], query: str, kind: str, report: _Report) -> tuple[li
     return [], answered
 
 
-def _resolve_one(query: str, kind: str, enabled: list[str], pool: ThreadPoolExecutor, report: _Report, deadline: float, partial: dict,
-                 key: tuple[str, str]):
-    """Search, verify and rank one (query, kind); publishes progress in partial[key]. Caches when complete."""
-    chains = [pool.submit(_chain, chain, query, kind, report) for chain in _searches(kind, enabled)]
-    done, _ = wait(chains, timeout=max(0, deadline - time.monotonic()))
-    candidates, seen, complete = [], set(), len(done) == len(chains)
-    for future in chains:  # source order, so the ranking is stable
-        if future in done:
+def _candidates(futures: list[Future]) -> tuple[list[dict], bool]:
+    """Deduplicated candidates from an item's finished chains (source order, so ranking is stable), and whether
+    every chain finished with a source answering."""
+    candidates, seen, complete = [], set(), True
+    for future in futures:
+        if not future.done() or future.cancelled():
+            complete = False
+            continue
+        try:
             found, ok = future.result()
-            complete &= ok
-            for c in found:
-                if (k := clean(c["url"])[1]) not in seen:
-                    seen.add(k)
-                    candidates.append(c)
-    checks = [pool.submit(verify, c) for c in candidates[:CANDIDATES]]
-    results: dict = {}
-    pending = set(checks)
-    while pending and (left := deadline - time.monotonic()) > 0:
-        finished, pending = wait(pending, timeout=left, return_when=FIRST_COMPLETED)
-        for future in finished:
+        except Exception:
+            log.exception("Resource search failed")
+            found, ok = [], False
+        complete &= ok
+        for c in found:
             try:
-                results[future] = future.result()
-            except Exception:
-                log.exception("Resource check failed")
-                results[future] = None
-        partial[key] = rank([results[f] for f in checks if results.get(f)])[:MAX_KEEP]
-    final = rank([results[f] for f in checks if results.get(f)])[:MAX_KEEP]
-    partial[key] = final
-    if complete and not pending:  # a failed or late source is retried on the next request
-        _cache_put(key, final)
+                k = clean(c["url"])[1]
+            except ValueError:
+                continue
+            if k not in seen:
+                seen.add(k)
+                candidates.append(c)
+    return candidates, complete
+
+
+def _check_result(future: Future) -> dict | None:
+    if not future.done() or future.cancelled():
+        return None
+    try:
+        return future.result()
+    except Exception:
+        log.exception("Resource check failed")
+        return None
+
+
+def _resolve_many(todo: list[tuple[str, str]], queries: dict, enabled: list[str], report: _Report, deadline: float, partial: dict):
+    """Search every item's chains on the shared pool; as soon as an item's chains are done, check its candidates.
+    Whatever is finished at the deadline is returned; queued work is cancelled. Complete items are cached."""
+    chains = {ck: [POOL.submit(_chain, chain, queries[ck], ck[1], report) for chain in _searches(ck[1], enabled)] for ck in todo}
+    owner = {f: ck for ck, futures in chains.items() for f in futures}
+    left = {ck: len(futures) for ck, futures in chains.items()}
+    checks: dict = {}
+    complete: dict = {}
+
+    def start(ck):
+        candidates, complete[ck] = _candidates(chains[ck])
+        checks[ck] = [POOL.submit(verify, c) for c in candidates[:CANDIDATES]]
+
+    for ck in todo:
+        if not left[ck]:
+            start(ck)
+    try:
+        for future in as_completed(owner, timeout=max(0, deadline - time.monotonic())):
+            ck = owner[future]
+            left[ck] -= 1
+            if not left[ck]:
+                start(ck)
+    except FuturesTimeout:
+        pass
+    pending = [f for futures in checks.values() for f in futures]
+    wait(pending, timeout=max(0, deadline - time.monotonic()))
+    for future in [*owner, *pending]:
+        future.cancel()  # not started yet: dropped; running ones finish in the background, unreported
+    for ck in todo:
+        futures = checks.get(ck, [])
+        final = rank([r for r in map(_check_result, futures) if r])[:MAX_KEEP]
+        partial[ck] = final
+        if ck in checks and complete[ck] and all(f.done() and not f.cancelled() for f in futures):
+            _cache_put(ck, final)  # a failed or late source is retried on the next request
+
+
+def _pick(resources: list[dict], n: int) -> list[dict]:
+    """The first n, keeping a roadmap.sh guide in view when one was found."""
+    out = [dict(r) for r in resources[:n]]
+    roadmap_hit = next((r for r in resources if r["kind"] == "roadmap"), None)
+    if roadmap_hit and n and not any(r["kind"] == "roadmap" for r in out):
+        out = out[: n - 1] + [dict(roadmap_hit)]
+    return out
 
 
 def resolve(items: list[dict], max_per_item: int = 3) -> dict:
-    """{results: {item key: [Resource]}, sources: [...]} for items [{key, query, kind}]."""
+    """{results: {item key: [Resource]}, sources: [...], busy?: true} for items [{key, query, kind}]. busy means the
+    server was already resolving MAX_CONCURRENT requests; cached items are still returned."""
     enabled = enabled_sources()
     report = _Report()
     deadline = time.monotonic() + BUDGET
@@ -579,15 +692,17 @@ def resolve(items: list[dict], max_per_item: int = 3) -> dict:
             partial[ck] = hit
         elif ck[0]:
             todo.append(ck)
+    busy = False
     if todo:
-        pool = ThreadPoolExecutor(max_workers=WORKERS)
-        coordinators = ThreadPoolExecutor(max_workers=len(todo))  # these only wait on the network pool
-        futures = [coordinators.submit(_resolve_one, queries[ck], ck[1], enabled, pool, report, deadline, partial, ck) for ck in todo]
-        wait(futures, timeout=max(0, deadline - time.monotonic()) + 0.5)
-        coordinators.shutdown(wait=False, cancel_futures=True)
-        pool.shutdown(wait=False, cancel_futures=True)  # stragglers finish in the background, unreported
-    results = {}
-    for ck, keys in wanted.items():
-        for k in keys:
-            results[k] = [dict(r) for r in partial.get(ck, [])][:max_per_item]
-    return {"results": results, "sources": report.sources(enabled)}
+        if _slots.acquire(timeout=BUSY_WAIT):
+            try:
+                _resolve_many(todo, queries, enabled, report, deadline, partial)
+            finally:
+                _slots.release()
+        else:
+            busy = True
+    results = {k: _pick(partial.get(ck, []), max_per_item) for ck, keys in wanted.items() for k in keys}
+    out = {"results": results, "sources": report.sources(enabled)}
+    if busy:
+        out["busy"] = True
+    return out

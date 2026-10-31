@@ -312,7 +312,7 @@ def test_import_text_page_is_structured_by_the_model(web, monkeypatch):
     pages["https://careers.example.org/be"] = FakeResponse(200, TEXT_PAGE.encode())
     calls = []
 
-    def fake(provider, key, model, system, user, schema_model):
+    def fake(provider, key, model, system, user, schema_model, **_):
         calls.append(user)
         return schema_model.model_validate({"title": "Backend Engineer", "company": "Globex", "experience_required": "3+ years"})
 
@@ -327,7 +327,7 @@ def test_import_model_failure_still_returns_text(web, monkeypatch):
     dns, pages, seen = web
     pages["https://careers.example.org/be"] = FakeResponse(200, TEXT_PAGE.encode())
 
-    def broken(*args):
+    def broken(*args, **_):
         raise main.HTTPException(502, "The model provider returned an error.")
 
     monkeypatch.setattr(main, "complete_json", broken)

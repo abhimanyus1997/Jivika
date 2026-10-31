@@ -176,7 +176,7 @@ def test_model_urls_are_discarded_from_queries():
 
 
 def test_match_and_career_path_carry_resource_queries(monkeypatch):
-    def fake(provider, key, model, system, user, schema_model):
+    def fake(provider, key, model, system, user, schema_model, **_):
         assert "never output URLs" in system
         if schema_model.__name__ == "MatchAnalysis":
             return schema_model.model_validate({"match_score": 50, "transition_plan": [
@@ -411,3 +411,91 @@ def test_ddg_lite_fallback(net):
     page("https://pandas.pydata.org/docs/user_guide/groupby.html", title="Group by: split-apply-combine - pandas documentation")
     links = resolve(("a", "pandas groupby", "docs"))["results"]["a"]
     assert [(r["provider"], r["found_via"]) for r in links] == [("Official docs", "DuckDuckGo")]
+
+
+# --- round 7: robustness and coverage -------------------------------------------------------
+
+
+def test_bad_ports_and_urls_are_rejected_not_raised():
+    assert resources.allowed("https://www.udemy.com:99999/course/x", "course") is None
+    assert resources.allowed("https://www.udemy.com:abc/course/x", "course") is None
+    assert resources.provider("https://[bad/x") == ""
+
+
+def test_blocked_redirect_target_off_the_allow_list_is_dropped(net):
+    routes, calls, page, seen = net
+    routes[("html.duckduckgo.com", "/html/")] = ddg_page(("https://medium.com/@a/spark-tips", "Spark tips"))
+    page("https://medium.com/@a/spark-tips", status=302, headers={"Location": "https://evil.example/spark"})
+    page("https://evil.example/spark", status=403)
+    assert resolve(("a", "spark tips", "article"))["results"]["a"] == []
+    page("https://medium.com/@a/spark-tips", status=403)  # the allow-listed page itself refuses: kept, unverified
+    resources._cache.clear()
+    [link] = resolve(("a", "spark tips", "article"))["results"]["a"]
+    assert link["verified"] is False
+
+
+def test_ddg_waits_outside_the_lock_and_fails_fast_when_backed_up(net, monkeypatch):
+    routes, calls, page, seen = net
+    monkeypatch.setattr(resources, "DDG_INTERVAL", 5)
+    routes[("html.duckduckgo.com", "/html/")] = lambda url, data: (resources._ddg_lock.locked() and pytest.fail("lock held"), ddg_page())[1]
+    assert resources.ddg("a", "course") == []
+    started = time.monotonic()
+    with pytest.raises(jobs.SourceError):  # the next slot is 5 s away, over DDG_MAX_WAIT
+        resources.ddg("b", "course")
+    assert time.monotonic() - started < 0.5
+
+
+def test_search_results_are_cached_per_source(net):
+    routes, calls, page, seen = net
+    routes[("www.youtube.com", "/results")] = yt_page(video("aaaaaaaaaaa", "A", "C"))
+    routes[("www.youtube.com", "/oembed")] = oembed_ok()
+    resolve(("x", "SAS STAT", "video"))
+    resources._cache.clear()  # finished results gone, raw search results kept
+    resolve(("x", "SAS STAT", "video"))
+    assert len([c for c in calls if c[1] == "/results"]) == 1
+
+
+def test_bing_tries_single_site_queries_and_docs_sites(net):
+    routes, calls, page, seen = net
+    queries = []
+
+    def bing(url, data):
+        q = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)["q"][0]
+        queries.append(q)
+        if q.endswith("site:pandas.pydata.org"):
+            return bing_rss(("https://pandas.pydata.org/docs/user_guide/groupby.html", "pandas groupby guide"))
+        return bing_rss(("https://unrelated.example/pandas-groupby", "pandas groupby"))
+
+    routes[("www.bing.com", "/search")] = bing
+    found = resources.bing("pandas groupby", "docs")
+    assert queries == ["pandas groupby official documentation", "pandas groupby site:pandas.pydata.org"]
+    assert found[-1]["url"] == "https://pandas.pydata.org/docs/user_guide/groupby.html"
+    queries.clear()
+    resources.bing("spark course", "course")
+    assert queries[1:] == ["spark course site:udemy.com", "spark course site:coursera.org"]
+
+
+def test_reddit_falls_back_to_old_reddit(net):
+    routes, calls, page, seen = net
+    routes[("old.reddit.com", "/search.json")] = reddit_json(
+        {"title": "Spark tuning tips", "permalink": "/r/dataengineering/comments/a1/spark/", "score": 50, "subreddit": "dataengineering"})
+    [post] = resources.reddit("spark tuning", "discussion")
+    assert post["url"] == "https://www.reddit.com/r/dataengineering/comments/a1/spark/"
+    assert [c[0] for c in calls] == ["www.reddit.com", "old.reddit.com"]
+
+
+def test_roadmap_stays_in_view_with_few_slots():
+    links = [{"kind": "course", "url": f"u{i}"} for i in range(3)] + [{"kind": "roadmap", "url": "r"}]
+    assert [r["url"] for r in resources._pick(links, 2)] == ["u0", "r"]
+    assert [r["url"] for r in resources._pick(links[:2], 2)] == ["u0", "u1"]
+
+
+def test_busy_when_too_many_resolves_run(net, monkeypatch):
+    monkeypatch.setattr(resources, "BUSY_WAIT", 0.05)
+    held = [resources._slots.acquire() for _ in range(resources.MAX_CONCURRENT)]
+    try:
+        out = resolve(("a", "SQL", "docs"))
+    finally:
+        for _ in held:
+            resources._slots.release()
+    assert out["busy"] is True and out["results"] == {"a": []}

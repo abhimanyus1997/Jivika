@@ -32,10 +32,11 @@ NAT64 = ipaddress.ip_network("64:ff9b::/96")
 class ImportFailed(Exception):
     """Shown to users. status is the HTTP status the API answers with."""
 
-    def __init__(self, message: str, status: int = 502, upstream: int | None = None):
+    def __init__(self, message: str, status: int = 502, upstream: int | None = None, url: str | None = None):
         super().__init__(message)
         self.status = status
         self.upstream = upstream  # the page's own HTTP status, when it answered with an error
+        self.url = url  # the address (redirect hop) that answered with it
 
 
 # ---------------------------------------------------------------------------
@@ -171,9 +172,9 @@ def safe_fetch(url: str, *, timeout: float | None = None, max_bytes: int | None 
                     url = urllib.parse.urljoin(url, location.strip())
                     continue
                 if response.status in (401, 403, 406, 429, 999):
-                    raise ImportFailed(BLOCKED, upstream=response.status)
+                    raise ImportFailed(BLOCKED, upstream=response.status, url=url)
                 if response.status >= 400:
-                    raise ImportFailed(f"The page returned HTTP {response.status}.", upstream=response.status)
+                    raise ImportFailed(f"The page returned HTTP {response.status}.", upstream=response.status, url=url)
                 content_type = (response.getheader("Content-Type") or "").lower()
                 mime = content_type.split(";", 1)[0].strip()
                 if mime not in content_types:
