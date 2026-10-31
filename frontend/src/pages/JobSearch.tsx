@@ -46,19 +46,16 @@ function tokens(text: string): string[] {
   return (text.toLowerCase().match(/[a-z0-9][a-z0-9+#.]*[a-z0-9+#]|[a-z0-9]/g) ?? []).filter((t) => t.length > 1 && !STOP.has(t))
 }
 
-/** Share of the job's distinct keywords (title counted three times) that appear in the resume. */
+/**
+ * 60% title-word overlap with the resume, 40% for resume keywords found in the listing text (full marks at 15),
+ * so a long posting is not diluted and a title-only listing is not inflated.
+ */
 function quickFit(resumeWords: Set<string>, job: Job): number | null {
   if (!resumeWords.size) return null
-  const weights = new Map<string, number>()
-  for (const t of tokens(`${job.snippet} ${job.description ?? ''}`)) weights.set(t, 1)
-  for (const t of tokens(job.title)) weights.set(t, 3)
-  let total = 0
-  let hit = 0
-  for (const [t, w] of weights) {
-    total += w
-    if (resumeWords.has(t)) hit += w
-  }
-  return total ? Math.round((hit / total) * 100) : 0
+  const title = new Set(tokens(job.title))
+  const titleHits = [...title].filter((t) => resumeWords.has(t)).length
+  const descHits = new Set(tokens(`${job.snippet} ${job.description ?? ''}`).filter((t) => resumeWords.has(t))).size
+  return Math.round(100 * (0.6 * (title.size ? titleHits / title.size : 0) + 0.4 * Math.min(1, descHits / 15)))
 }
 
 /* ---------- Formatting ---------- */
@@ -210,7 +207,7 @@ export default function JobSearch() {
   const [resume] = useResume()
   const [, setJd] = useJobDescription()
   const [saved, setSaved] = useStored<SearchParams | null>('jobSearch', null)
-  const [form, setForm] = useState<SearchParams>(() => saved ?? { q: profile?.current_role ?? '', location: profile?.location ?? '', remote: 'any', excluded: [] })
+  const [form, setForm] = useState<SearchParams>(() => saved ?? { q: (profile?.current_role ?? '').split(/,| at | @ /i)[0].trim(), location: profile?.location ?? '', remote: 'any', excluded: [] })
   const [result, setResult] = useState(lastResult)
   const [loading, setLoading] = useState<'search' | 'more' | null>(null)
   const [error, setError] = useState('')
@@ -224,6 +221,12 @@ export default function JobSearch() {
     if (!q) return
     const sources = [...knownEnabled].filter((id) => !params.excluded.includes(id))
     const key = JSON.stringify([q, params.location.trim(), params.remote, params.excluded])
+    if (params.excluded.length && knownEnabled.size && !sources.length) {
+      lastResult = null
+      setResult(null)
+      setError('Turn on at least one source.')
+      return
+    }
     setLoading(page === 1 ? 'search' : 'more')
     setError('')
     try {
@@ -231,7 +234,8 @@ export default function JobSearch() {
       data.sources.forEach((s) => s.enabled && knownEnabled.add(s.id))
       const prev = page > 1 && result?.key === key ? result.data.jobs : []
       const seen = new Set(prev.map((j) => j.id))
-      const jobs = [...prev, ...data.jobs.filter((j) => !seen.has(j.id))]
+      // Also filtered here: before the first response knownEnabled is empty, so the server searches every source.
+      const jobs = [...prev, ...data.jobs.filter((j) => !seen.has(j.id) && !params.excluded.includes(j.source))]
       lastResult = { key, page: page > 1 && jobs.length === prev.length ? MAX_PAGE : page, data: { ...data, jobs } }
       setResult(lastResult)
       setSaved({ ...params, q })
