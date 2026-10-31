@@ -13,14 +13,14 @@ export interface Provider {
 
 /** Used until /api/providers responds, and if it cannot be reached. */
 export const FALLBACK_PROVIDERS: Provider[] = [
-  { id: 'gemini', name: 'Google Gemini', default_model: 'gemini-2.5-flash', key_url: 'https://aistudio.google.com/apikey' },
-  { id: 'openai', name: 'OpenAI', default_model: 'gpt-4.1-mini', key_url: 'https://platform.openai.com/api-keys' },
-  { id: 'anthropic', name: 'Anthropic Claude', default_model: 'claude-haiku-4-5', key_url: 'https://console.anthropic.com/settings/keys' },
-  { id: 'groq', name: 'Groq', default_model: 'llama-3.3-70b-versatile', key_url: 'https://console.groq.com/keys' },
-  { id: 'mistral', name: 'Mistral AI', default_model: 'mistral-small-latest', key_url: 'https://console.mistral.ai/api-keys' },
-  { id: 'deepseek', name: 'DeepSeek', default_model: 'deepseek-chat', key_url: 'https://platform.deepseek.com/api_keys' },
-  { id: 'xai', name: 'xAI Grok', default_model: 'grok-3-mini', key_url: 'https://console.x.ai' },
-  { id: 'openrouter', name: 'OpenRouter', default_model: 'openai/gpt-4.1-mini', key_url: 'https://openrouter.ai/keys' },
+  { id: 'gemini', name: 'Google Gemini', default_model: 'gemini-3.8-flash', key_url: 'https://aistudio.google.com/apikey', json_mode: true },
+  { id: 'openai', name: 'OpenAI', default_model: 'gpt-6-luna', key_url: 'https://platform.openai.com/api-keys', json_mode: true },
+  { id: 'anthropic', name: 'Anthropic Claude', default_model: 'claude-haiku-5-5', key_url: 'https://platform.claude.com/settings/keys', json_mode: false },
+  { id: 'groq', name: 'Groq', default_model: 'openai/gpt-oss-120b', key_url: 'https://console.groq.com/keys', json_mode: true },
+  { id: 'mistral', name: 'Mistral AI', default_model: 'mistral-small-latest', key_url: 'https://console.mistral.ai/api-keys', json_mode: true },
+  { id: 'deepseek', name: 'DeepSeek', default_model: 'deepseek-flash', key_url: 'https://platform.deepseek.com/api_keys', json_mode: true },
+  { id: 'xai', name: 'xAI Grok', default_model: 'grok-4.20-0309-non-reasoning', key_url: 'https://console.x.ai', json_mode: true },
+  { id: 'openrouter', name: 'OpenRouter', default_model: 'openai/gpt-6-luna', key_url: 'https://openrouter.ai/keys', json_mode: true },
 ]
 
 export interface DemoStatus {
@@ -274,7 +274,7 @@ export const api = {
   },
   jobDetail: (source: string, id: string) =>
     request<{ description: string; url: string }>(`/jobs/detail?${new URLSearchParams({ source, id })}`),
-  verify: () => request<{ ok: boolean; model: string }>('/providers/verify', { ai: true }),
+  verify: () => request<{ ok: boolean; model: string; demo?: boolean; provider?: string; remaining_hourly?: number | null }>('/providers/verify', { ai: true }),
   parseResume: (file: File) => {
     const form = new FormData()
     form.append('file', file)

@@ -37,7 +37,7 @@ function GetStarted() {
 
   const steps = [
     demo
-      ? { title: 'Connect a model key', text: 'Using demo. Add your own key for unlimited use.', done: true, optional: true, href: '#settings', cta: 'Add your key' }
+      ? { title: 'Connect a model key', text: 'Add your own key for unlimited use.', done: true, optional: true, href: '#settings', cta: 'Add your key' }
       : { title: 'Connect a model key', text: 'Add your own provider key in Settings.', done: !!key, href: '#settings', cta: 'Open settings' },
     { title: 'Upload your resume', text: 'Jivika extracts your profile and skills.', done: !!resume, href: '#profile', cta: 'Upload resume' },
     { title: 'Run your first job match', text: 'Compare your resume with a job description.', done: matches.length > 0 || !!lastMatch, href: '#match', cta: 'Run job match' },
@@ -104,7 +104,9 @@ function GetStarted() {
       {!noteDismissed && (
         <div className="border-t border-line px-5 py-3">
           <Note icon={ShieldCheck} onDismiss={() => setNoteDismissed(true)}>
-            Your key and data stay in this browser. The server forwards each request to your provider and keeps nothing.
+            {demo
+              ? 'Your data stays in this browser. Requests go to the shared demo model (Groq) until you add your own key.'
+              : 'Your key and data stay in this browser. The server forwards each request to your provider and keeps nothing.'}
           </Note>
         </div>
       )}
@@ -172,7 +174,7 @@ function TrendsCard() {
         <div className="space-y-4">
           <div className="flex items-baseline gap-3">
             <span className="t-metric">{windowTotal}</span>
-            <span className="text-[13px] text-muted">applications</span>
+            <span className="text-[13px] text-muted">{windowTotal === 1 ? 'application' : 'applications'}</span>
             {change !== 0 ? (
               <Badge tone={change > 0 ? 'brand' : 'neutral'} mono>
                 {change > 0 ? '+' : '-'}

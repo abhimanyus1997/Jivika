@@ -378,3 +378,15 @@ def test_vercel_client_ip_headers(monkeypatch):
     burst({"X-Vercel-Forwarded-For": "4.4.4.4", "X-Forwarded-For": "9.9.9.9"})
     burst({"X-Real-IP": "5.5.5.5"})
     assert main._rate_hits.keys() == {"4.4.4.4", "5.5.5.5"}
+
+
+def test_frontend_fallback_providers_match_server():
+    import re
+    from pathlib import Path
+
+    from jivika.schemas import PROVIDERS
+
+    src = (Path(__file__).parent.parent / "frontend/src/lib/api.ts").read_text(encoding="utf-8")
+    block = src.split("FALLBACK_PROVIDERS")[1].split("]\n")[0]
+    found = dict(re.findall(r"id: '([^']+)'.*?default_model: '([^']+)'", block))
+    assert found == {pid: p["default_model"] for pid, p in PROVIDERS.items()}

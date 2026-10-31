@@ -33,11 +33,6 @@ export default function Settings() {
     api.providers().then(setProviders, () => undefined)
   }, [])
 
-  // Prefill the model with the provider default the first time Settings opens.
-  useEffect(() => {
-    if (!settings.model) setSettings((s) => ({ ...s, model: provider.default_model }))
-  }, [])
-
   // Persist the key as it is typed, in the storage the user chose.
   useEffect(() => saveKey(key.trim(), settings.remember), [key, settings.remember])
 
@@ -49,6 +44,7 @@ export default function Settings() {
   async function runVerify() {
     resetVerification()
     const r = await verify.run()
+    if (r?.demo) return
     if (r?.ok) setVerified(r.model)
     setKeyVerified(!!r?.ok)
   }
