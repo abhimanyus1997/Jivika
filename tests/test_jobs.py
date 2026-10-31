@@ -75,7 +75,7 @@ NAUKRI = {"jobDetails": [{
     "jobId": "301025", "title": "Data Analyst", "companyName": "Delta", "jdURL": "/job-listings-data-analyst-delta-301025",
     "placeholders": [{"type": "location", "label": "Noida"}, {"type": "salary", "label": "Not disclosed"}],
     "jobDescription": "<p>Reports</p>", "createdDate": 1793400000000, "tagsAndSkills": "sql,excel",
-}, {"jobId": "9", "title": "Offsite", "companyName": "Evil", "jdURL": "https://evil.example/job"}]}
+}, {"jobId": "9", "title": "Offsite", "companyName": "Evil", "jdURL": "https://evil.example/job"}, {"jobId": "10", "title": "Lookalike", "companyName": "Evil", "jdURL": "https://evilnaukri.com/job"}]}
 
 ROUTES = {
     "remotive.com/api/remote-jobs": REMOTIVE,
@@ -245,12 +245,12 @@ def test_fetch_maps_errors_without_leaking_urls(monkeypatch):
         raise urllib.error.HTTPError(req.full_url, 999, "no", {}, io.BytesIO())
 
     monkeypatch.setattr(jobs, "fetch", REAL_FETCH)
-    monkeypatch.setattr(urllib.request, "urlopen", blocked)
+    monkeypatch.setattr(jobs._OPENER, "open", blocked)
     with pytest.raises(jobs.SourceError) as exc:
         jobs.fetch("https://api.example/?app_key=secret")
     assert "secret" not in str(exc.value) and "Blocked" in str(exc.value)
 
-    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout: io.BytesIO(b"x" * 11))
+    monkeypatch.setattr(jobs._OPENER, "open", lambda req, timeout: io.BytesIO(b"x" * 11))
     with pytest.raises(jobs.SourceError, match="too large"):
         jobs.fetch("https://api.example/", cap=10)
     seen = {}
@@ -259,7 +259,7 @@ def test_fetch_maps_errors_without_leaking_urls(monkeypatch):
         seen.update(timeout=timeout, ua=req.get_header("User-agent"))
         return io.BytesIO(b"{}")
 
-    monkeypatch.setattr(urllib.request, "urlopen", ok)
+    monkeypatch.setattr(jobs._OPENER, "open", ok)
     assert jobs.fetch_json("https://api.example/") == {}
     assert seen["timeout"] == 8 and "Jivika" in seen["ua"]
 
@@ -365,3 +365,38 @@ def test_detail_endpoint(net, monkeypatch):
     net[1]["jobPosting"] = "Blocked or rate limited by the source."
     r = client.get("/api/jobs/detail", params={"source": "linkedin", "id": "4446724293"})
     assert r.status_code == 502 and r.json()["detail"] == "Blocked or rate limited by the source."
+
+
+def test_fetch_refuses_redirects(monkeypatch):
+    import http.server
+    import threading
+
+    class Redirect(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(302)
+            self.send_header("Location", "http://169.254.169.254/latest/meta-data/")
+            self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Redirect)
+    threading.Thread(target=server.handle_request, daemon=True).start()
+    monkeypatch.setattr(jobs, "fetch", REAL_FETCH)
+    try:
+        with pytest.raises(jobs.SourceError, match="HTTP 302"):
+            jobs.fetch(f"http://127.0.0.1:{server.server_port}/")
+    finally:
+        server.server_close()
+
+
+@pytest.mark.parametrize("have, wanted, ok", [
+    ("Bangalore, India", "Bengaluru", True),
+    ("Hybrid in Bangalore, India", "Bengaluru, India", True),
+    ("Bengaluru", "Bengaluru, India", True),
+    ("Gurgaon", "Gurugram", True),
+    ("Berlin", "Bengaluru", False),
+    ("Pune", "India", True),
+])
+def test_location_aliases(have, wanted, ok):
+    assert jobs.location_ok({"location": have}, wanted) is ok

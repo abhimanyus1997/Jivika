@@ -17,6 +17,7 @@ import urllib.parse
 import urllib.request
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 
@@ -26,7 +27,7 @@ TIMEOUT = 8
 MAX_BYTES = 2 * 1024 * 1024
 FEED_MAX_BYTES = 4 * 1024 * 1024  # the Arbeitnow feed alone is about 3 MB
 PER_PAGE = 20  # page size for sources whose whole feed is filtered here
-SEARCH_TTL, SEARCH_MAX = 600, 200
+SEARCH_TTL, SEARCH_MAX = 600, 50  # an entry can hold ~1 MB of descriptions
 BOARD_TTL, FEED_TTL = 1800, 900
 USER_AGENT = "Mozilla/5.0 (compatible; Jivika/1.0; +https://abhimanyu.fyi/jivika)"
 
@@ -53,17 +54,36 @@ class SourceError(Exception):
 # ---------------------------------------------------------------------------
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Redirects could point a fixed URL at any host (SSRF), so a 3xx is reported as an HTTP error instead."""
+
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
 def fetch(url: str, headers: dict | None = None, cap: int = MAX_BYTES) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json, text/html;q=0.9", **(headers or {})})
+    deadline = time.monotonic() + TIMEOUT  # the socket timeout is per read; this bounds the whole download
+    chunks, size = [], 0
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
-            body = response.read(cap + 1)
+        with _OPENER.open(req, timeout=TIMEOUT) as response:
+            while chunk := response.read(65536):
+                size += len(chunk)
+                if size > cap:
+                    break
+                if time.monotonic() > deadline:
+                    raise SourceError("The source took too long to respond.")
+                chunks.append(chunk)
+        body = b"".join(chunks)
     except urllib.error.HTTPError as exc:
         blocked = exc.code in (403, 406, 429, 999)
         raise SourceError("Blocked or rate limited by the source." if blocked else f"The source returned HTTP {exc.code}.") from None
     except (OSError, http.client.HTTPException, ValueError):
         raise SourceError("Unavailable right now.") from None
-    if len(body) > cap:
+    if size > cap:
         raise SourceError("The source response was too large.")
     return body
 
@@ -195,15 +215,25 @@ def _terms(text: str) -> list[str]:
     return re.findall(r"[a-z0-9+#]+", text.lower())
 
 
+CITY_ALIASES = {"bangalore": "bengaluru", "gurgaon": "gurugram", "bombay": "mumbai", "madras": "chennai", "new delhi": "delhi", "calcutta": "kolkata"}
+
+
+def _aliased(text: str) -> str:
+    for old, new in CITY_ALIASES.items():
+        text = text.replace(old, new)
+    return text
+
+
 def location_ok(item: dict, location: str) -> bool:
-    wanted = location.strip().lower()
-    if not wanted:
+    """Any comma-separated part of the wanted location matches ("Bengaluru, India" matches "Bangalore")."""
+    parts = [_aliased(p.strip()) for p in location.lower().split(",") if p.strip()]
+    if not parts:
         return True
-    have = item["location"].lower()
-    if wanted in have or any(word in have for word in ANYWHERE):
+    have = _aliased(item["location"].lower())
+    if any(word in have for word in ANYWHERE):
         return True
-    # ponytail: only India gets city aliases (the default audience); add a country table if needed
-    return wanted == "india" and any(city in have for city in INDIA_CITIES)
+    # ponytail: only India gets a city list (the default audience); add a country table if needed
+    return any(part in have or (part == "india" and any(city in have for city in INDIA_CITIES)) for part in parts)
 
 
 def matches(item: dict, q: str, location: str) -> bool:
@@ -489,7 +519,8 @@ def naukri(q, location, remote, page):
     for j in data.get("jobDetails") or []:
         places = {p.get("type"): p.get("label") for p in j.get("placeholders") or [] if isinstance(p, dict)}
         url = urllib.parse.urljoin("https://www.naukri.com/", str(j.get("jdURL") or ""))
-        if not (urllib.parse.urlsplit(url).hostname or "").endswith("naukri.com"):
+        host = urllib.parse.urlsplit(url).hostname or ""
+        if host != "naukri.com" and not host.endswith(".naukri.com"):
             continue
         salary = places.get("salary") or ""
         item = job("naukri", j.get("jobId"), j.get("title"), j.get("companyName"), url, location=places.get("location"),
@@ -556,8 +587,15 @@ def search(q: str, location: str = "", remote: str = "any", sources: str = "", p
             _searches.move_to_end(key)
             return hit[1]
 
-    with ThreadPoolExecutor(max_workers=max(1, len(requested))) as pool:
-        outcomes = dict(zip(requested, pool.map(lambda s: _run(s, q, location, remote, page), requested)))
+    pool = ThreadPoolExecutor(max_workers=max(1, len(requested)))
+    futures = {s: pool.submit(_run, s, q, location, remote, page) for s in requested}
+    outcomes, deadline = {}, time.monotonic() + TIMEOUT + 4
+    for sid, future in futures.items():
+        try:
+            outcomes[sid] = future.result(timeout=max(0, deadline - time.monotonic()))
+        except FutureTimeout:
+            outcomes[sid] = (None, "The source took too long to respond.")
+    pool.shutdown(wait=False, cancel_futures=True)  # a slow source finishes in the background, unreported
 
     jobs, seen, report = [], set(), []
     for sid, (name, _, research, _) in SOURCES.items():
