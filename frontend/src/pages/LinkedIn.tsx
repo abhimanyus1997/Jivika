@@ -18,14 +18,14 @@ import {
   SkeletonCard,
   textareaCls,
 } from '../components/ui'
-import { api, useAction, type LinkedInReview } from '../lib/api'
-import { pushHistory, useApiKey, useLinkedInReview, useProfile, useStored } from '../lib/store'
+import { api, useAction, useAiReady, type LinkedInReview } from '../lib/api'
+import { pushHistory, useLinkedInReview, useProfile, useStored } from '../lib/store'
 
 export default function LinkedIn() {
   const [profile] = useProfile()
   const [form, setForm] = useStored('linkedinInput', { headline: profile?.headline ?? '', about: '', experience: '' })
   const [review, setReview] = useLinkedInReview()
-  const key = useApiKey()
+  const key = useAiReady()
   const action = useAction(api.linkedin)
   const empty = !form.headline.trim() && !form.about.trim()
 

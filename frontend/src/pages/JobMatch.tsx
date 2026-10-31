@@ -20,8 +20,8 @@ import {
   textareaCls,
   toast,
 } from '../components/ui'
-import { api, useAction, type MatchResult } from '../lib/api'
-import { newId, today, useApiKey, useApplications, useJobDescription, useLastMatch, useLastMatchJd, useMatches, useResume } from '../lib/store'
+import { api, useAction, useAiReady, type MatchResult } from '../lib/api'
+import { newId, today, useApplications, useJobDescription, useLastMatch, useLastMatchJd, useMatches, useResume } from '../lib/store'
 
 type Tab = 'skills' | 'insights' | 'plan'
 
@@ -217,7 +217,7 @@ export default function JobMatch() {
   const [jd, setJd] = useJobDescription()
   const [result, setResult] = useLastMatch()
   const [resultJd, setResultJd] = useLastMatchJd()
-  const key = useApiKey()
+  const key = useAiReady()
   const match = useAction(api.match)
   const jdShort = jd.trim().length < 30
 

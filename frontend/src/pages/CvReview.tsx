@@ -18,15 +18,15 @@ import {
   scoreBand,
   SkeletonCard,
 } from '../components/ui'
-import { api, useAction, type CVReview } from '../lib/api'
-import { pushHistory, useApiKey, useCvReview, useProfile, useResume } from '../lib/store'
+import { api, useAction, useAiReady, type CVReview } from '../lib/api'
+import { pushHistory, useCvReview, useProfile, useResume } from '../lib/store'
 
 export default function CvReview() {
   const [resume] = useResume()
   const [profile] = useProfile()
   const [review, setReview] = useCvReview()
   const [target, setTarget] = useState(profile?.current_role ?? '')
-  const key = useApiKey()
+  const key = useAiReady()
   const action = useAction(api.cvReview)
 
   async function run() {

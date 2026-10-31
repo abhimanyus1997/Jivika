@@ -16,8 +16,8 @@ import {
   textareaCls,
   toast,
 } from '../components/ui'
-import { api, useAction, type CoverLetterTone } from '../lib/api'
-import { useApiKey, useCoverLetter, useJobDescription, useResume } from '../lib/store'
+import { api, useAction, useAiReady, type CoverLetterTone } from '../lib/api'
+import { useCoverLetter, useJobDescription, useResume } from '../lib/store'
 
 const TONES: { value: CoverLetterTone; label: string }[] = [
   { value: 'professional', label: 'Professional' },
@@ -39,7 +39,7 @@ export default function CoverLetter() {
   const [resume] = useResume()
   const [jd, setJd] = useJobDescription()
   const [letter, setLetter] = useCoverLetter()
-  const key = useApiKey()
+  const key = useAiReady()
   const action = useAction(api.coverLetter)
   const words = letter.text.trim() ? letter.text.trim().split(/\s+/).length : 0
 

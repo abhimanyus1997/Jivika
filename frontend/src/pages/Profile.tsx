@@ -15,8 +15,8 @@ import {
   textareaCls,
   toast,
 } from '../components/ui'
-import { api, useAction, type Profile } from '../lib/api'
-import { pushHistory, useApiKey, useProfile, useResume } from '../lib/store'
+import { api, useAction, useAiReady, type Profile } from '../lib/api'
+import { pushHistory, useProfile, useResume } from '../lib/store'
 
 const EMPTY: Profile = { name: '', headline: '', current_role: '', years_experience: 0, location: '', skills: [], summary: '' }
 
@@ -65,7 +65,7 @@ function ProfileSummary({ profile }: { profile: Profile | null }) {
 export default function ProfilePage() {
   const [resume, setResume] = useResume()
   const [profile, setProfile] = useProfile()
-  const key = useApiKey()
+  const key = useAiReady()
   const [draft, setDraft] = useState<Profile>(profile ?? EMPTY)
   const [yearsText, setYearsText] = useState(yearsOf(profile))
   const [skillInput, setSkillInput] = useState('')

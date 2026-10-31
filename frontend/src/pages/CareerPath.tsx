@@ -16,8 +16,8 @@ import {
   scoreBand,
   SkeletonCard,
 } from '../components/ui'
-import { api, CURRENCIES, useAction, type CareerPath, type Currency } from '../lib/api'
-import { pushHistory, useApiKey, useCareerPath, useProfile, useResume, useStored } from '../lib/store'
+import { api, CURRENCIES, useAction, useAiReady, type CareerPath, type Currency } from '../lib/api'
+import { pushHistory, useCareerPath, useProfile, useResume, useStored } from '../lib/store'
 
 export default function CareerPathPage() {
   const [resume] = useResume()
@@ -29,7 +29,7 @@ export default function CareerPathPage() {
     location: profile?.location ?? '',
     currency: 'INR' as Currency,
   })
-  const key = useApiKey()
+  const key = useAiReady()
   const action = useAction(api.careerPath)
 
   async function run() {

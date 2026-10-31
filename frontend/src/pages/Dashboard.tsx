@@ -15,6 +15,7 @@ import {
   useStored,
   type Point,
 } from '../lib/store'
+import { useDemoActive } from '../lib/api'
 
 function greeting(name?: string) {
   const first = name?.trim().split(/\s+/)[0]
@@ -27,6 +28,7 @@ const delta = (points: Point[]) => (points.length > 1 ? points[points.length - 1
 
 function GetStarted() {
   const key = useApiKey()
+  const demo = useDemoActive()
   const [resume] = useResume()
   const [matches] = useMatches()
   const [lastMatch] = useLastMatch()
@@ -34,7 +36,9 @@ function GetStarted() {
   const [noteDismissed, setNoteDismissed] = useStored('bannerDismissed', false)
 
   const steps = [
-    { title: 'Connect a model key', text: 'Add your own provider key in Settings.', done: !!key, href: '#settings', cta: 'Open settings' },
+    demo
+      ? { title: 'Connect a model key', text: 'Using demo. Add your own key for unlimited use.', done: true, optional: true, href: '#settings', cta: 'Add your key' }
+      : { title: 'Connect a model key', text: 'Add your own provider key in Settings.', done: !!key, href: '#settings', cta: 'Open settings' },
     { title: 'Upload your resume', text: 'Jivika extracts your profile and skills.', done: !!resume, href: '#profile', cta: 'Upload resume' },
     { title: 'Run your first job match', text: 'Compare your resume with a job description.', done: matches.length > 0 || !!lastMatch, href: '#match', cta: 'Run job match' },
     { title: 'Track an application', text: 'Log a job you applied to and follow its status.', done: applications.length > 0, href: '#applications?new', cta: 'Add application' },
@@ -84,12 +88,13 @@ function GetStarted() {
                   {i + 1}
                 </span>
               )}
-              <span className={`t-title ${s.done ? 'text-muted line-through decoration-line-strong' : ''}`}>{s.title}</span>
-              <span className="sr-only">{s.done ? '(done)' : '(to do)'}</span>
+              <span className={`t-title ${s.done && !s.optional ? 'text-muted line-through decoration-line-strong' : ''}`}>{s.title}</span>
+              <span className="sr-only">{s.optional ? '(using demo)' : s.done ? '(done)' : '(to do)'}</span>
+              {s.optional && <Badge tone="info">Using demo</Badge>}
             </div>
             <p className="text-[13px] leading-5 text-muted">{s.text}</p>
-            {!s.done && (
-              <ButtonLink href={s.href} size="sm" variant={i === next ? 'brand' : 'secondary'} className="self-start">
+            {(!s.done || s.optional) && (
+              <ButtonLink href={s.href} size="sm" variant={i === next && !s.optional ? 'brand' : 'secondary'} className="self-start">
                 {s.cta}
               </ButtonLink>
             )}

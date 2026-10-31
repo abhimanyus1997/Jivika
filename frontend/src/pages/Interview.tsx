@@ -20,14 +20,14 @@ import {
   textareaCls,
   type BadgeTone,
 } from '../components/ui'
-import { api, useAction, type InterviewQuestion, type QuestionType } from '../lib/api'
-import { useApiKey, useInterview, useJobDescription, useResume } from '../lib/store'
+import { api, useAction, useAiReady, type InterviewQuestion, type QuestionType } from '../lib/api'
+import { useInterview, useJobDescription, useResume } from '../lib/store'
 
 const TYPE_TONE: Record<QuestionType, BadgeTone> = { behavioral: 'info', technical: 'brand', situational: 'accent' }
 
 function QuestionCard({ index, q, jd }: { index: number; q: InterviewQuestion; jd: string }) {
   const [session, setSession] = useInterview()
-  const key = useApiKey()
+  const key = useAiReady()
   const action = useAction(api.feedback)
   const answer = session.answers[index] ?? ''
   const fb = session.feedback[index]
@@ -124,7 +124,7 @@ export default function Interview() {
   const [jd, setJd] = useJobDescription()
   const [session, setSession] = useInterview()
   const [count, setCount] = useState(8)
-  const key = useApiKey()
+  const key = useAiReady()
   const action = useAction(api.questions)
   const total = session.questions.length
   const reviewed = Object.keys(session.feedback).length

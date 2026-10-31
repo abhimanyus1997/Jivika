@@ -14,7 +14,7 @@ import {
   textareaCls,
   toast,
 } from '../components/ui'
-import { newId, STATUSES, today, useApplications, type Application, type Status } from '../lib/store'
+import { newId, read, STATUSES, today, useApplications, write, type Application, type Status } from '../lib/store'
 
 type Filter = 'all' | Status
 
@@ -39,7 +39,9 @@ export default function Applications() {
   useEffect(() => {
     const check = () => {
       if (location.hash.endsWith('?new')) {
-        setDraft(blank())
+        // Job search leaves a prefilled draft here before linking to #applications?new.
+        setDraft({ ...blank(), ...read<Partial<Application>>('applicationDraft', {}) })
+        write('applicationDraft', null)
         history.replaceState(null, '', '#applications')
       }
     }
