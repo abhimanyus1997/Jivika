@@ -17,11 +17,11 @@
 [![Tailwind CSS v4](https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4.svg?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![Deployed on Vercel](https://img.shields.io/badge/deployed_on-Vercel-000000.svg?logo=vercel&logoColor=white)](https://jivika.abhimanyu.fyi)
 
-<img src="frontend/public/img/dashboard.png" alt="Jivika dashboard" width="100%">
+<img src="docs/media/hero.gif" alt="Jivika dashboard, then a job match run showing the match score and missing skills" width="100%">
 
 </div>
 
-Jivika (Sanskrit for *livelihood*) searches live job listings, matches your resume against real job descriptions, reviews your CV and LinkedIn profile, maps a career path with estimated salaries, and helps you prepare for interviews and write cover letters. Try it instantly with the free demo model, then bring your own key. There is no account, and your data stays in your browser.
+Jivika (Sanskrit for *livelihood*) searches live job listings, imports job posts from a link, matches your resume against real job descriptions, checks how applicant tracking systems read your resume, reviews your CV and LinkedIn profile, maps a career path with a learning roadmap and market salary data, and helps you prepare for interviews and write cover letters. Try it instantly with the free demo model, then bring your own key. There is no account, and your data stays in your browser.
 
 ### Works with
 
@@ -35,6 +35,7 @@ Jivika (Sanskrit for *livelihood*) searches live job listings, matches your resu
     <td align="center"><img src="frontend/public/providers/deepseek.svg" height="28" alt=""><br>DeepSeek</td>
     <td align="center"><img src="frontend/public/providers/xai.svg" height="28" alt=""><br>xAI Grok</td>
     <td align="center"><img src="frontend/public/providers/openrouter.svg" height="28" alt=""><br>OpenRouter</td>
+    <td align="center"><img src="frontend/public/providers/qwen.svg" height="28" alt=""><br>Qwen</td>
   </tr>
 </table>
 
@@ -42,28 +43,104 @@ Jivika (Sanskrit for *livelihood*) searches live job listings, matches your resu
 
 | Tool | What it does |
 | --- | --- |
-| Dashboard | Career, skills, CV and LinkedIn scores with history, application trends, a career goals timeline, top job matches and a Get started checklist |
+| Dashboard | Career, skills, CV, LinkedIn and ATS scores with history, application trends, a career goals timeline with roadmap progress, top job matches and a Get started checklist |
 | Job search | Live listings from job boards and company career pages, with source status chips, a client-side Quick fit score against your resume, and one-click Match or Track |
-| Job match | Match score (model judgement blended with deterministic keyword coverage), matched and missing skills, strengths, gaps and a step-by-step transition plan |
+| Job import | An "Import from link" field above every job description box: LinkedIn and Naukri links by job id, other career pages through schema.org JobPosting data or the page text |
+| Job match | Match score (model judgement blended with deterministic keyword coverage), matched and missing skills, your experience against the role's requirement, strengths, gaps and a step-by-step transition plan |
+| ATS checker | Deterministic checks for parsing, sections, contact details, formatting and content, plus keyword coverage against a job description; a score and grade, category bars, a checklist and prioritised fixes. Works without a model key |
 | CV review | ATS-style score, per-section feedback and rewritten bullet points |
 | LinkedIn | Headline suggestions, an About rewrite and keyword recommendations |
-| Career path | Current role, next target and long-term potential with estimated salary ranges (INR, USD, GBP, EUR) and skills to build |
+| Career path | Current role, next target and long-term potential with estimated salary ranges (INR, USD, GBP, EUR), market salary data from live sources, and an interactive learning roadmap with links to [roadmap.sh](https://roadmap.sh) |
 | Interview prep | Tailored questions from a job description, with feedback on your answers |
 | Cover letter | Tone-aware letters you can edit, copy or download |
 | Applications | Track applications and their status; feeds the dashboard trends |
 
-A command palette jumps to any page or action, and the Profile page parses your resume PDF into a structured profile used by every tool.
+Also included:
+
+- **Light, dark and system themes** for the app and the website, kept in sync across tabs.
+- **Live model lists** in Settings: a searchable list of the provider's current chat models with a recommended pick, context length and prices where the provider reports them, or a custom model id.
+- **Nine providers**, including Qwen (Alibaba Cloud). Qwen models are also available through Groq and OpenRouter.
+- A **command palette** (Ctrl K) that jumps to any page or action, and a Profile page that parses your resume PDF into a structured profile (with experience in years and months) used by every tool.
+
+### Screenshots
+
+Screenshots follow your GitHub theme. They show seeded demo data for a fictional user.
 
 <table>
   <tr>
-    <td width="50%"><img src="frontend/public/img/job-match.png" alt="Job match"><br><p align="center">Job match</p></td>
-    <td width="50%"><img src="frontend/public/img/cv-review.png" alt="CV review"><br><p align="center">CV review</p></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/dashboard-dark.png"><img src="frontend/public/img/dashboard.png" alt="Dashboard"></picture><br><p align="center">Dashboard</p></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/job-search-dark.png"><img src="frontend/public/img/job-search.png" alt="Job search"></picture><br><p align="center">Job search</p></td>
   </tr>
   <tr>
-    <td width="50%"><img src="frontend/public/img/applications.png" alt="Applications"><br><p align="center">Applications</p></td>
-    <td width="50%"></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/job-match-dark.png"><img src="frontend/public/img/job-match.png" alt="Job match"></picture><br><p align="center">Job match</p></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/ats-checker-dark.png"><img src="frontend/public/img/ats-checker.png" alt="ATS checker"></picture><br><p align="center">ATS checker</p></td>
+  </tr>
+  <tr>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/cv-review-dark.png"><img src="frontend/public/img/cv-review.png" alt="CV review"></picture><br><p align="center">CV review</p></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/linkedin-dark.png"><img src="frontend/public/img/linkedin.png" alt="LinkedIn optimizer"></picture><br><p align="center">LinkedIn</p></td>
+  </tr>
+  <tr>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/career-path-dark.png"><img src="frontend/public/img/career-path.png" alt="Career path with a learning roadmap"></picture><br><p align="center">Career path and roadmap</p></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/interview-dark.png"><img src="frontend/public/img/interview.png" alt="Interview prep"></picture><br><p align="center">Interview prep</p></td>
+  </tr>
+  <tr>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/cover-letter-dark.png"><img src="frontend/public/img/cover-letter.png" alt="Cover letter"></picture><br><p align="center">Cover letter</p></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/applications-dark.png"><img src="frontend/public/img/applications.png" alt="Applications"></picture><br><p align="center">Applications</p></td>
+  </tr>
+  <tr>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/settings-dark.png"><img src="frontend/public/img/settings.png" alt="Settings"></picture><br><p align="center">Settings</p></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/landing-dark.png"><img src="frontend/public/img/landing.png" alt="Jivika website"></picture><br><p align="center">Website</p></td>
   </tr>
 </table>
+
+### Walkthroughs
+
+Short clips of the main flows. Each opens as a GIF; the MP4 links are smaller and sharper.
+
+<details>
+<summary><strong>Import a job link and run a match</strong></summary>
+
+Paste a careers page link, import the description, then see the match score, market salary data and missing skills. ([MP4](docs/media/import-match.mp4))
+
+<img src="docs/media/import-match.gif" alt="Importing a job from a link and running a job match" width="100%">
+
+</details>
+
+<details>
+<summary><strong>Check a resume with the ATS checker</strong></summary>
+
+Run the checker against a job description to get a score, category bars, fixes and the checklist. ([MP4](docs/media/ats.mp4))
+
+<img src="docs/media/ats.gif" alt="Running the ATS checker and scrolling through the results" width="100%">
+
+</details>
+
+<details>
+<summary><strong>Search jobs and track one</strong></summary>
+
+Search live listings, compare Quick fit scores, and send a role to the application tracker. ([MP4](docs/media/job-search.mp4))
+
+<img src="docs/media/job-search.gif" alt="Searching jobs and tracking a listing as an application" width="100%">
+
+</details>
+
+<details>
+<summary><strong>Switch between light and dark</strong></summary>
+
+The theme control in the top bar switches the whole workspace, including charts. ([MP4](docs/media/theme.mp4))
+
+<img src="docs/media/theme.gif" alt="Switching the dashboard between light and dark themes" width="100%">
+
+</details>
+
+<details>
+<summary><strong>Navigate with the command palette</strong></summary>
+
+Press Ctrl K, type a few letters and press Enter to jump to any page or action. ([MP4](docs/media/palette.mp4))
+
+<img src="docs/media/palette.gif" alt="Opening the command palette and jumping to the ATS checker and career path" width="100%">
+
+</details>
 
 ## How it works
 
@@ -81,6 +158,9 @@ flowchart LR
 - Every AI call goes through the server using the OpenAI SDK against each provider's OpenAI-compatible endpoint. The browser sends the provider, key and model per request in `X-LLM-Provider`, `X-LLM-Key` and `X-LLM-Model`.
 - Model responses are validated against Pydantic schemas, with scores clamped to 0 to 100. JSON mode (`response_format: json_object`) is only sent to providers that support it.
 - Job search fetches all enabled sources concurrently (8 second timeout and a size cap per source), strips HTML, normalises, dedupes by title and company, and sorts by recency. Responses are cached for 10 minutes.
+- Job import fetches arbitrary links only through a guarded fetcher: http(s) on ports 80 and 443, every resolved address must be public, the connection goes to the vetted address, at most 3 redirects (each re-checked), an 8 second timeout, a 3 MB cap and an allow-list of content types.
+- The ATS checker's checks and score are computed in Python from the resume text and PDF layout details; the model only adds skill extraction, a title-match judgement and notes, and the result still returns if the model call fails.
+- Model lists come from each provider's live models endpoint, filtered to chat models and cached for an hour per provider and key hash (raw keys are never stored). The recommended model is used when no model is set.
 - In production FastAPI also serves the built frontend from `frontend/dist` and adds security headers (CSP, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, optional HSTS) to every response. API docs are at `/api/docs`.
 
 ### URL structure
@@ -157,6 +237,8 @@ All settings are optional. See [.env.example](.env.example) for the full annotat
 | `JIVIKA_HSTS` | unset | Set to `1` when served over HTTPS to send `Strict-Transport-Security` |
 | `JIVIKA_CORS_ORIGINS` | unset | Comma-separated origins, only if the frontend is served from another origin |
 | `JIVIKA_MAX_UPLOAD_MB` | `10` | Maximum resume PDF size. Use `4` on Vercel |
+| `JIVIKA_URL_IMPORT` | `1` | Set to `0` to turn off job import from links (`POST /api/jobs/import` then returns 404). 20 imports per client IP per 10 minutes |
+| `JIVIKA_SALARY_SOURCES` | `adzuna,postings` | Market salary sources for `GET /api/salary`. `adzuna` needs the Adzuna keys below; `postings` aggregates salaries stated in live job listings; `levelsfyi` is an opt-in research source that reads public Levels.fyi pages |
 
 ### Build-time frontend values
 
@@ -180,7 +262,7 @@ When a demo key is configured, requests that carry no `X-LLM-Key` use Groq with 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `JIVIKA_DEMO_GROQ_KEY` | empty (demo off) | Owner-supplied Groq key. Server-side secret; set it in your host's environment settings, never in the frontend |
-| `JIVIKA_DEMO_MODEL` | `openai/gpt-oss-120b` | Groq model used for demo requests |
+| `JIVIKA_DEMO_MODEL` | recommended model from Groq's live list | Groq model used for demo requests. Falls back to `openai/gpt-oss-120b` when the list is unavailable |
 | `JIVIKA_DEMO_HOURLY_LIMIT` | `20` | Demo requests per client IP per clock hour |
 | `JIVIKA_DEMO_DAILY_LIMIT` | `500` | Demo requests for everyone per UTC day |
 
@@ -286,16 +368,21 @@ docker exec jivika python -c "import sqlite3; c = sqlite3.connect('/data/jivika.
 ├── main.py               FastAPI app: routes, BYOK and demo handling, rate limits, static site serving
 ├── jivika/
 │   ├── schemas.py        Providers, Pydantic schemas and prompts
-│   └── jobs.py           Job sources, parsers, filtering and caching
+│   ├── jobs.py           Job sources, parsers, filtering and caching
+│   ├── importer.py       Job import from links, with the SSRF-guarded fetcher
+│   ├── ats.py            ATS checker: deterministic checks, PDF layout metadata and scoring
+│   ├── salary.py         Market salary sources (Adzuna, live postings, opt-in Levels.fyi)
+│   └── models.py         Live model lists and the recommended-model heuristic
 ├── tests/                pytest suite (network blocked; model and fetch calls are faked)
+├── docs/media/           Walkthrough clips (GIF and MP4) used in this README
 ├── frontend/
 │   ├── index.html        Landing page; pricing/, faq/, about/, contact/, privacy/, terms/ alongside
 │   ├── app/index.html    React app entry
 │   ├── partials/         Shared HTML (header, footer, providers strip, pricing cards)
-│   ├── public/           favicon, screenshots (img/) and provider icons (providers/)
+│   ├── public/           favicon, theme.js, screenshots and the hero clip (img/), provider icons (providers/)
 │   ├── src/
 │   │   ├── App.tsx       App shell, navigation and command palette
-│   │   ├── pages/        Dashboard, JobSearch, JobMatch, CvReview, LinkedIn, CareerPath, ...
+│   │   ├── pages/        Dashboard, JobSearch, JobMatch, Ats, CvReview, LinkedIn, CareerPath, ...
 │   │   ├── components/   UI kit, charts, resume upload, command palette
 │   │   ├── lib/          API client and local storage
 │   │   ├── assets/providers/  Provider icons for the app
@@ -324,6 +411,8 @@ npm run build                 # type-checks and builds the frontend
 ## Responsible use
 
 - **Job listings** come from third-party job boards and company career pages and are shown as-is, with links to the original posting. Jivika does not verify them. The optional research sources fetch publicly available listings on demand, may be unavailable at any time, and can be disabled with `JIVIKA_JOB_SOURCES`. Respect each source's terms when enabling them.
+- **Market salary data** is shown in the currency each source reports, with its sample size and date; nothing is converted. Levels.fyi is linked for reference and only fetched when the research source is enabled.
+- **Roadmap links** point to [roadmap.sh](https://roadmap.sh), an independent community project. Jivika's roadmap content is generated for your profile and is not copied from roadmap.sh.
 - **Model output** is generated by third-party AI models and can be wrong or incomplete. Scores, salary estimates and suggestions are guidance, not advice; review anything before you send it to an employer.
 
 ## Trademarks
