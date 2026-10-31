@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronUp, CircleAlert, Check, Copy, KeyRound, LoaderCircle, Sparkles, UserRound, X, type LucideIcon } from 'lucide-react'
 import {
   useEffect,
+  useId,
   useRef,
   useState,
   useSyncExternalStore,
@@ -8,7 +9,7 @@ import {
   type ButtonHTMLAttributes,
   type ReactNode,
 } from 'react'
-import { isDemoLimit, useDemoActive, type CareerPath } from '../lib/api'
+import { isDemoLimit, isModelUnavailable, useDemoActive, type CareerPath } from '../lib/api'
 import { useApiKey, type Status } from '../lib/store'
 
 /* ---------- Provider marks ---------- */
@@ -79,12 +80,32 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
 
 /* ---------- Brand ---------- */
 
+const LOGO_TILE = 'M168 0H476Q512 0 512 36V344Q512 512 344 512H36Q0 512 0 476V168Q0 0 168 0Z'
+const LOGO_JI =
+  'M325 -85Q274 -85 230.5 -110.5Q187 -136 150.0 -179.5Q113 -223 81.5 -278.0Q50 -333 22 -393L63 -411Q115 -302 173.0 -234.0Q231 -166 298 -166Q339 -166 362.0 -189.5Q385 -213 385 -246Q385 -278 360.5 -308.5Q336 -339 287 -361L260 -419V-430H561L562 -545H6L-28 -610V-620H729L763 -555V-545H646L648 10H638L558 -42L560 -355H383Q423 -314 443.5 -280.0Q464 -246 464 -208Q464 -169 444.5 -141.5Q425 -114 393.5 -99.5Q362 -85 325 -85ZM915 15H905L825 -37L829 -545H741L707 -610V-620H836Q829 -687 806.0 -727.0Q783 -767 750.5 -785.0Q718 -803 683 -803Q637 -803 612.0 -778.5Q587 -754 587 -716Q587 -690 601 -659L571 -642Q546 -668 533.5 -697.5Q521 -727 521 -756Q521 -806 556.0 -843.0Q591 -880 656 -880Q713 -880 762.5 -848.5Q812 -817 848.5 -758.5Q885 -700 902 -620H996L1030 -555V-545H913Z'
+const LOGO_GLYPH = 'translate(37.58 441.65) scale(0.42)'
+
+/** The जी monogram mark (docs/brand/jivika-mark.svg). Ids come from useId so several logos can share a page. */
 export function Logo({ className = 'size-7' }: { className?: string }) {
+  const id = useId().replace(/[^a-zA-Z0-9_-]/g, '')
   return (
-    <svg viewBox="0 0 32 32" className={className} aria-hidden="true">
-      <rect width="32" height="32" rx="8" fill="#17633E" />
-      <path d="M20 13.5v5a4.5 4.5 0 0 1-9 0" fill="none" stroke="#fff" strokeWidth="2.75" strokeLinecap="round" />
-      <circle cx="20" cy="8.5" r="2.25" fill="#D98E04" />
+    <svg viewBox="0 0 512 512" className={className} aria-hidden="true">
+      <defs>
+        <clipPath id={`${id}t`}>
+          <path d={LOGO_TILE} />
+        </clipPath>
+        <mask id={`${id}m`}>
+          <rect width="512" height="512" fill="#fff" />
+          <circle cx="271.1" cy="140.9" r="37" />
+          <path transform={LOGO_GLYPH} d="M480 -600L560 -700L640 -720L600 -560Z" />
+        </mask>
+      </defs>
+      <path d={LOGO_TILE} fill="#1F7A4D" />
+      <rect x="0" y="178.7" width="512" height="36.5" fill="#fff" clipPath={`url(#${id}t)`} />
+      <g mask={`url(#${id}m)`}>
+        <path transform={LOGO_GLYPH} d={LOGO_JI} fill="#fff" stroke="#fff" strokeWidth="12" strokeLinejoin="round" />
+      </g>
+      <circle cx="271.1" cy="140.9" r="24.4" fill="#D98E04" />
     </svg>
   )
 }
@@ -625,15 +646,38 @@ export function ErrorMessage({ message }: { message: string }) {
       <CircleAlert className="mt-0.5 size-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <span>{message}</span>
-        {isDemoLimit(message) && (
+        {isDemoLimit(message) ? (
           <div className="mt-2">
             <ButtonLink href="#settings" size="sm" variant="secondary" icon={KeyRound}>
               Add your API key
             </ButtonLink>
           </div>
+        ) : (
+          isModelUnavailable(message) && (
+            <div className="mt-2">
+              <ButtonLink href="#settings?focus=model" size="sm" variant="secondary">
+                Choose another model
+              </ButtonLink>
+            </div>
+          )
         )}
       </div>
     </div>
+  )
+}
+
+/** Muted 'Answered by <model>' line; fallback is the model that was asked for first. */
+export function AnsweredBy({ model, fallbackFrom, reason }: { model: string; fallbackFrom?: string; reason?: string }) {
+  return (
+    <p className="text-xs text-faint">
+      Answered by <span className="font-mono text-muted">{model}</span>
+      {fallbackFrom && (
+        <>
+          {' '}
+          (fell back from <span className="font-mono">{fallbackFrom}</span>: {reason || 'quota exceeded'})
+        </>
+      )}
+    </p>
   )
 }
 
