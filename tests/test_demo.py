@@ -126,8 +126,8 @@ def test_demo_limits_use_redis_when_configured(demo, calls, fake_redis, monkeypa
     assert client.post("/api/match", json=JOB).status_code == 200
     assert client.post("/api/match", json=JOB).status_code == 429
     assert main._demo_counts == {}
-    expires = [c for c in commands if c[0] == "EXPIRE"]
-    assert [c[2] for c in expires] == ["3600", "86400"]  # once per window, on the first hit
+    ttls = [c[4] for c in commands if c[0] == "SET"]
+    assert ttls[:2] == ["3600", "86400"] and all(c[-1] == "NX" for c in commands if c[0] == "SET")  # TTL set before INCR
     assert any(k.startswith("jivika:demo:ip:") for k in store) and any(k.startswith("jivika:demo:day:") for k in store)
     assert client.get("/api/demo").json()["remaining_hourly"] == 0
 
@@ -143,3 +143,26 @@ def test_redis_failure_falls_back_to_memory(demo, calls, monkeypatch):
     assert client.post("/api/match", json=JOB).status_code == 200
     assert len(main._demo_counts) == 2
     assert client.get("/api/demo").json()["remaining_hourly"] is None
+
+
+def test_invalid_requests_do_not_spend_demo_quota(demo, calls):
+    assert client.post("/api/match", json={}).status_code == 422
+    assert client.post("/api/linkedin/review", json={}).status_code == 422
+    assert calls == [] and main._demo_counts == {}
+    assert client.get("/api/demo").json()["remaining_hourly"] == 20
+
+
+def test_rejected_demo_key_is_503_not_a_user_key_error(demo, monkeypatch):
+    def rejected(*args):
+        raise main.HTTPException(401, "The API key was rejected by Groq.")
+
+    monkeypatch.setattr(main, "complete_json", rejected)
+    r = client.post("/api/match", json=JOB)
+    assert r.status_code == 503 and r.json()["detail"] == main.DEMO_UNAVAILABLE
+
+
+def test_ipv6_clients_share_a_64_bucket():
+    a, _ = main._demo_windows("2001:db8:1:2::1")
+    b, _ = main._demo_windows("2001:db8:1:2:ffff::9")
+    assert a == b and "2001:db8:1:2::/64" in a
+    assert main._demo_windows("1.2.3.4")[0] != main._demo_windows("1.2.3.5")[0]

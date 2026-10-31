@@ -167,7 +167,7 @@ def test_match_blends_llm_score_with_keyword_coverage(fake_llm):
     r = client.post("/api/match", headers=HEADERS, json={"resume": resume, "job_description": jd})
     body = r.json()
     coverage = main.keyword_coverage(resume, jd, ["Python", "Kubernetes"])
-    assert coverage == 67  # python, fastapi of {python, kubernetes, fastapi}
+    assert coverage == 50  # python of {python, kubernetes}
     assert body["keyword_coverage"] == coverage
     assert body["match_score"] == round(0.7 * 80 + 0.3 * coverage)
     assert "required_skills" not in body
@@ -179,6 +179,9 @@ def test_keyword_coverage_edge_cases():
     assert main.keyword_coverage("the and for", "the and for", []) == 0  # stopwords only
     assert main.keyword_coverage("c++ and go", "", ["C++"]) == 100  # multi-char skill phrase
     assert main.keyword_coverage("", "rust golang", []) == 0
+    assert main.keyword_coverage("rust dev", "rust golang", []) == 50  # JD tokens only without skills
+    long_jd = " ".join(f"word{i}" for i in range(500)) + " python"
+    assert main.keyword_coverage("python", long_jd, ["Python"]) == 100  # JD length does not dilute
 
 
 @pytest.mark.parametrize("raw, expected", [(150, 100), (-5, 0), (72.6, 73), ("88", 88), ("n/a", 0), ("1e999", 0)])

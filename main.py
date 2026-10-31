@@ -12,6 +12,7 @@ search in jivika/jobs.py.
 import csv
 import hmac
 import io
+import ipaddress
 import json
 import logging
 import mimetypes
@@ -23,6 +24,7 @@ import time
 import http.client
 import urllib.request
 from contextlib import closing
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Literal
@@ -93,10 +95,14 @@ def upload_too_large() -> str:
 # ---------------------------------------------------------------------------
 
 
-class LLMConfig(BaseModel):
+@dataclass
+class LLMConfig:
     provider: str
     key: str
     model: str
+    # Demo requests are charged in ask(), only when the provider is actually called (not on 422s).
+    demo_ip: str | None = None
+    response: Response | None = None
 
 
 def byok(
@@ -109,9 +115,7 @@ def byok(
     if not x_llm_key.strip():
         if key := demo_key():
             # Demo mode: the owner's Groq key and model, whatever provider or model the client sent.
-            remaining = use_demo(client_ip(request))
-            response.headers.update({"X-Jivika-Demo": "1", "X-Jivika-Demo-Remaining": str(remaining)})
-            return LLMConfig(provider=DEMO_PROVIDER, key=key, model=demo_model())
+            return LLMConfig(provider=DEMO_PROVIDER, key=key, model=demo_model(), demo_ip=client_ip(request), response=response)
         raise HTTPException(401, "An API key is required. Add one in Settings.")
     provider = x_llm_provider.strip().lower()
     if provider not in PROVIDERS:
@@ -179,7 +183,18 @@ def _strip_fences(text: str) -> str:
 
 def ask(cfg: LLMConfig, task: str, schema_model, **sections: str):
     user = "\n\n".join(f"## {label.replace('_', ' ').title()}\n{value}" for label, value in sections.items() if value)
-    return complete_json(cfg.provider, cfg.key, cfg.model, PROMPTS[task], user, schema_model)
+    if cfg.demo_ip is None:
+        return complete_json(cfg.provider, cfg.key, cfg.model, PROMPTS[task], user, schema_model)
+    remaining = use_demo(cfg.demo_ip)
+    if cfg.response is not None:
+        cfg.response.headers.update({"X-Jivika-Demo": "1", "X-Jivika-Demo-Remaining": str(remaining)})
+    try:
+        return complete_json(cfg.provider, cfg.key, cfg.model, PROMPTS[task], user, schema_model)
+    except HTTPException as exc:
+        if exc.status_code != 401:
+            raise
+        log.error("Demo key rejected by %s", PROVIDERS[cfg.provider]["name"])  # never the key
+        raise HTTPException(503, DEMO_UNAVAILABLE) from None
 
 
 # ---------------------------------------------------------------------------
@@ -188,6 +203,7 @@ def ask(cfg: LLMConfig, task: str, schema_model, **sections: str):
 
 DEMO_PROVIDER = "groq"
 DEMO_LIMIT_REACHED = "Demo limit reached. Add your own API key in Settings to keep going."
+DEMO_UNAVAILABLE = "The demo model is unavailable right now. Add your own API key in Settings."
 DEMO_MAX_KEYS = 10_000
 _demo_counts: dict[str, int] = {}
 _demo_lock = threading.Lock()
@@ -214,21 +230,25 @@ def demo_limits() -> tuple[int, int]:
 
 
 def _demo_windows(ip: str) -> tuple[str, str]:
-    """Fixed-window counter keys: this clock hour for the IP, this UTC day for everyone."""
+    """Fixed-window counter keys: this clock hour for the IP (IPv6 bucketed by /64), this UTC day for everyone."""
+    try:
+        addr = ipaddress.ip_address(ip)
+        if addr.version == 6:
+            ip = str(ipaddress.ip_network(f"{addr}/64", strict=False))
+    except ValueError:
+        pass
     now = int(time.time())
     return f"jivika:demo:ip:{ip}:{now // 3600}", f"jivika:demo:day:{now // 86400}"
 
 
 def _demo_count(key: str, ttl: int, increment: bool) -> int | None:
-    """INCR (+EXPIRE on first hit) in Upstash Redis when configured, else in-process memory. None if unknown."""
+    """SET NX EX then INCR in Upstash Redis when configured (the TTL exists before the count), else memory. None if unknown."""
     if config := redis_config():
         try:
             if not increment:
                 return int(redis_http(*config, ["GET", key]).get("result") or 0)
-            count = int(redis_http(*config, ["INCR", key])["result"])
-            if count == 1:
-                redis_http(*config, ["EXPIRE", key, str(ttl)])
-            return count
+            redis_http(*config, ["SET", key, "0", "EX", str(ttl), "NX"])
+            return int(redis_http(*config, ["INCR", key])["result"])
         except (OSError, ValueError, KeyError, TypeError, AttributeError, http.client.HTTPException) as exc:
             log.warning("Demo limiter store error: %s; using memory", type(exc).__name__)
             if not increment:
@@ -290,14 +310,13 @@ def _tokens(text: str) -> set[str]:
 
 def keyword_coverage(resume: str, job_description: str, required_skills: list[str]) -> int:
     # Simple bag-of-words overlap, no stemming; swap in a lemmatizer if plurals skew scores
+    # Over the model's required skills when there are any, so long JDs do not dilute the score.
     resume_lower = resume.lower()
-    resume_tokens = _tokens(resume)
-    terms = _tokens(job_description)
     skills = {s.strip().lower() for s in required_skills if s.strip()}
-    if not terms and not skills:
-        return 0
-    hits = len(terms & resume_tokens) + sum(1 for s in skills - terms if s in resume_lower)
-    return round(100 * hits / len(terms | skills))
+    if skills:
+        return round(100 * sum(1 for s in skills if s in resume_lower) / len(skills))
+    terms = _tokens(job_description)
+    return round(100 * len(terms & _tokens(resume)) / len(terms)) if terms else 0
 
 
 # ---------------------------------------------------------------------------
