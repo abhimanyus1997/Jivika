@@ -126,7 +126,10 @@ def _function_problem(draft: CodingProblemDraft, languages: list[str]) -> dict |
     if not _IDENT.fullmatch(py_name) or not _IDENT.fullmatch(js_name):
         return None
     params = [snake(p) for p in draft.params if _IDENT.fullmatch(snake(p) or "")][:8]
-    arity = _arity(solution.code, name) if solution.language == "python" else None
+    # The runners call function_names[language], so the reference solution is renamed to match (and passes its own tests).
+    target = py_name if solution.language == "python" else js_name
+    code = re.sub(rf"\b{re.escape(name)}\b", target, solution.code) if name != target else solution.code
+    arity = _arity(code, target) if solution.language == "python" else None
     tests = []
     for test in draft.tests:
         try:
@@ -155,7 +158,7 @@ def _function_problem(draft: CodingProblemDraft, languages: list[str]) -> dict |
         "starter": starter,
         "tests": tests,
         "sql": None,
-        "solution": {"language": solution.language, "code": solution.code.strip()},
+        "solution": {"language": solution.language, "code": code.strip()},
     }
 
 

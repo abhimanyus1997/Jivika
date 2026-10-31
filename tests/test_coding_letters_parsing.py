@@ -20,7 +20,7 @@ HEADERS = {"X-LLM-Provider": "groq", "X-LLM-Key": "user-key"}
 def fake_llm(monkeypatch):
     payloads, calls = {}, []
 
-    def fake(provider, key, model, system, user, schema_model, max_tokens=None):
+    def fake(provider, key, model, system, user, schema_model, max_tokens=None, **_):
         calls.append({"system": system, "user": user, "schema": schema_model.__name__, "max_tokens": max_tokens})
         return schema_model.model_validate(payloads.get(schema_model.__name__, {}))
 
@@ -72,6 +72,16 @@ def test_function_problem_is_normalised():
     assert p["sql"] is None and p["solution"] == {"language": "python", "code": TWO_SUM["solution"]["code"]}
     assert len(p["hints"]) == 3 and p["examples"][0]["input"] == '{"nums": [2, 7], "target": 9}'
     assert p["practice_queries"] == [{"query": "two sum", "kind": "practice"}]
+
+
+def test_solution_is_renamed_to_the_language_convention():
+    code = "def pairSum(nums, target):\n    return pairSum(nums[1:], target) if nums else None"
+    [p] = coding.build([draft(solution={"language": "python", "code": code})], ["python", "javascript"], 4)
+    assert p["function_names"] == {"python": "pair_sum", "javascript": "pairSum"}
+    assert p["solution"]["code"] == "def pair_sum(nums, target):\n    return pair_sum(nums[1:], target) if nums else None"
+    js = "function pair_sum(nums, target) { return pair_sum(nums, target); }"
+    [p] = coding.build([draft(solution={"language": "javascript", "code": js})], ["javascript"], 4)
+    assert p["solution"]["code"] == "function pairSum(nums, target) { return pairSum(nums, target); }"
 
 
 def test_sql_problem_and_language_filter():
@@ -313,7 +323,7 @@ def test_docling_failure_falls_back_to_pypdf_for_pdfs(monkeypatch):
     monkeypatch.setenv("JIVIKA_PARSER", "auto")
     monkeypatch.setattr(parsing.importlib.util, "find_spec", lambda name: object())
 
-    def broken(*args):
+    def broken(*args, **_):
         raise RuntimeError("model download failed")
 
     monkeypatch.setattr(parsing, "_docling", broken)
@@ -369,6 +379,52 @@ def test_csp_is_relaxed_only_for_the_app_and_worker_scripts():
     worker = client.get("/assets/js-runner.worker-AbC123.js").headers["content-security-policy"]
     bundle = client.get("/assets/index-AbC123.js").headers["content-security-policy"]
     assert "wasm-unsafe-eval" not in site and "worker-src" not in site and site == bundle
-    assert "script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:" in app and "'unsafe-eval'" not in app
+    assert "script-src 'self'; worker-src 'self';" in app and "unsafe-eval" not in app and "blob:" not in app
     assert "script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'" in worker
     assert "frame-ancestors 'none'" in app and "frame-ancestors 'none'" in worker
+
+
+def test_docling_limits_pages_size_and_image_pixels(monkeypatch):
+    import sys
+    import types
+
+    seen = {}
+
+    class Converter:
+        def convert(self, stream, **limits):
+            seen.update(limits)
+            doc = types.SimpleNamespace(export_to_text=lambda: "text", export_to_dict=lambda: {})
+            return types.SimpleNamespace(document=doc)
+
+    class Image:
+        DecompressionBombError = ValueError
+        size = (8000, 8000)
+
+        @classmethod
+        def open(cls, stream):
+            return cls()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setitem(sys.modules, "docling.datamodel.base_models", types.SimpleNamespace(DocumentStream=lambda **kw: kw))
+    monkeypatch.setitem(sys.modules, "docling.document_converter", types.SimpleNamespace(DocumentConverter=Converter))
+    monkeypatch.setitem(sys.modules, "PIL", types.SimpleNamespace(Image=Image))
+    monkeypatch.setattr(parsing, "_converter", None)
+    parsing._docling(b"%PDF", "cv.pdf", "pdf")
+    assert seen == {"max_num_pages": 10, "max_file_size": parsing.MAX_FILE_BYTES}
+    with pytest.raises(parsing.ParseError) as e:
+        parsing.check_image(b"png")
+    assert e.value.status == 413
+    Image.size = (2000, 3000)
+    parsing.check_image(b"png")
+
+
+def test_pyodide_module_and_wasm_types():
+    import mimetypes
+
+    assert mimetypes.guess_type("pyodide.asm.mjs")[0] == "text/javascript"
+    assert mimetypes.guess_type("pyodide.asm.wasm")[0] == "application/wasm"
