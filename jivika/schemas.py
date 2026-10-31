@@ -292,7 +292,8 @@ BASE_RULES = (
 PROMPTS = {
     "verify": "Reply with the JSON object {\"ok\": true}.",
     "profile": "Extract a candidate profile from the resume. years_experience is a number "
-    "estimated from the listed roles. skills is a deduplicated list of concrete skills.",
+    "estimated from the listed roles. skills is a deduplicated list of concrete skills. "
+    "current_role is the job title only, without the employer.",
     "match": "Compare the resume against the job description. Extract job details from the "
     "job description (salary_range is an empty string if not stated). match_score reflects "
     "overall fit. required_skills lists the concrete skills and tools the job requires. "
@@ -308,7 +309,9 @@ PROMPTS = {
     "practical tips.",
     "career_path": "Suggest a realistic career path from the candidate's current role. "
     "Salary ranges are rough market estimates in the requested currency for the given "
-    "location. career_score rates how well positioned the candidate is to progress. "
+    "location. Every salary_range, including current, is an estimate for the location and "
+    "must not be empty; prefix it with the currency symbol or code (e.g. ₹18-25 LPA). "
+    "career_score rates how well positioned the candidate is to progress. "
     "skills_to_build lists 3 to 6 skills with a reason and a type of learning resource.",
     "interview_questions": "Generate interview questions for this candidate and job. Mix "
     "behavioral, technical and situational types. what_they_look_for explains what a strong "
