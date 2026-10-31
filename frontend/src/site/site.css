@@ -1,0 +1,112 @@
+/* Marketing site styles: shared tokens from the app, plus a few site-only components. */
+@import '../index.css';
+
+@layer components {
+  .site-body {
+    @apply text-[15px] leading-7;
+  }
+  /* Site overlines sit beside body copy, so use muted for AA contrast (the app keeps faint). */
+  .site-body .t-overline {
+    @apply text-muted;
+  }
+  .wrap {
+    @apply mx-auto w-full max-w-[1160px] px-5 sm:px-8;
+  }
+  .section {
+    @apply py-16 sm:py-24;
+  }
+  .btn {
+    @apply inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium whitespace-nowrap transition-colors duration-150 select-none disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply bg-ink text-white hover:bg-black disabled:bg-ink/40;
+  }
+  .btn-secondary {
+    @apply border border-line bg-surface text-ink hover:border-line-strong hover:bg-subtle;
+  }
+  .btn-sm {
+    @apply h-8 px-3 text-[13px];
+  }
+  .eyebrow {
+    @apply text-[12px] leading-4 font-medium tracking-[0.06em] text-brand-600 uppercase;
+  }
+  .h-display {
+    @apply text-[38px] leading-[1.08] font-semibold tracking-[-0.035em] text-balance text-ink sm:text-[52px];
+  }
+  .h-section {
+    @apply text-[28px] leading-[1.15] font-semibold tracking-[-0.025em] text-balance text-ink sm:text-[36px];
+  }
+  .lead {
+    @apply text-[17px] leading-7 text-pretty text-muted;
+  }
+  .card {
+    @apply rounded-xl border border-line bg-surface p-6 shadow-card;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-[12.5px] leading-5 font-medium text-muted;
+  }
+  .icon {
+    @apply size-5 shrink-0 fill-none stroke-current;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .nav-link {
+    @apply rounded-lg px-3 py-1.5 text-sm text-muted transition-colors duration-150 hover:bg-subtle hover:text-ink aria-[current=page]:font-medium aria-[current=page]:text-ink;
+  }
+  .field {
+    @apply h-10 w-full min-w-0 rounded-lg border border-line-strong bg-surface px-3 text-sm text-ink placeholder:text-faint focus:border-brand-500 focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-brand-500/30 aria-[invalid=true]:border-danger;
+  }
+  .browser-frame {
+    @apply overflow-hidden rounded-xl border border-line bg-surface shadow-pop;
+  }
+  .browser-frame > .bar {
+    @apply flex h-9 items-center gap-1.5 border-b border-line bg-subtle px-4;
+  }
+  .browser-frame > .bar > span {
+    @apply size-2.5 rounded-full bg-line-strong;
+  }
+  .browser-frame img {
+    @apply block h-auto w-full bg-subtle;
+  }
+
+  /* FAQ disclosure */
+  .faq {
+    @apply divide-y divide-line rounded-xl border border-line bg-surface;
+  }
+  .faq summary {
+    @apply flex list-none items-center justify-between gap-4 px-5 py-4 font-medium text-ink [&::-webkit-details-marker]:hidden;
+  }
+  .faq summary::after {
+    content: '+';
+    @apply font-mono text-lg leading-none text-faint transition-transform duration-150;
+  }
+  .faq details[open] summary::after {
+    @apply rotate-45;
+  }
+  .faq details > div {
+    @apply px-5 pb-5 text-muted;
+  }
+
+  /* Long-form legal text */
+  .prose-legal {
+    @apply max-w-[720px] text-muted;
+  }
+  .prose-legal h2 {
+    @apply mt-10 mb-3 text-lg leading-7 font-semibold tracking-[-0.01em] text-ink;
+  }
+  .prose-legal p,
+  .prose-legal ul {
+    @apply mb-4;
+  }
+  .prose-legal ul {
+    @apply list-disc space-y-1.5 pl-5;
+  }
+  .prose-legal a,
+  .link {
+    @apply font-medium text-brand-600 underline decoration-brand-200 underline-offset-2 hover:decoration-brand-600;
+  }
+  .prose-legal strong {
+    @apply font-medium text-ink;
+  }
+}
