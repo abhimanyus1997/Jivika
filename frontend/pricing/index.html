@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!--partial:head-->
+    <title>Pricing - Jivika</title>
+    <meta name="description" content="Jivika is free with your own Gemini, OpenAI, Groq or OpenRouter key. Pro, with hosted AI and no key needed, is coming soon." />
+    <link rel="canonical" href="%VITE_SITE_URL%/pricing/" />
+    <meta property="og:title" content="Pricing - Jivika" />
+    <meta property="og:description" content="Free with your own model key. Pro, with hosted AI and no key needed, is coming soon." />
+    <meta property="og:url" content="%VITE_SITE_URL%/pricing/" />
+    <meta name="twitter:title" content="Pricing - Jivika" />
+    <meta name="twitter:description" content="Free with your own model key. Pro, with hosted AI and no key needed, is coming soon." />
+  </head>
+  <body class="site-body">
+    <!--partial:header-->
+    <main id="main">
+      <section class="pt-16 pb-12 sm:pt-24">
+        <div class="wrap text-center">
+          <p class="eyebrow">Pricing</p>
+          <h1 class="h-display mx-auto mt-4 max-w-[720px]">Simple plans for your job search.</h1>
+          <p class="lead mx-auto mt-5 max-w-[600px]">Every tool is free when you bring your own model key. Pro will add hosted AI for people who would rather not manage a key.</p>
+        </div>
+      </section>
+
+      <section class="pb-16 sm:pb-24">
+        <div class="wrap mx-auto max-w-[940px]">
+          <h2 class="sr-only">Plans</h2>
+          <!--partial:pricing-cards-->
+          <article class="card mt-5 flex flex-col gap-5 p-7 md:flex-row md:items-center md:justify-between">
+            <div class="max-w-[560px]">
+              <div class="flex items-center gap-3">
+                <h3 class="text-lg font-semibold text-ink">Teams and career coaches</h3>
+                <span class="badge">Planned</span>
+              </div>
+              <p class="mt-2 text-sm text-muted">For placement cells, bootcamps and career coaches who want to support several job seekers at once. Tell us what you need and we will talk it through.</p>
+            </div>
+            <a href="mailto:%VITE_CONTACT_EMAIL%?subject=Jivika%20for%20teams" class="btn btn-secondary">Contact us</a>
+          </article>
+        </div>
+      </section>
+
+      <section id="waitlist" class="scroll-mt-16 border-y border-line bg-surface py-14">
+        <div class="wrap mx-auto flex max-w-[940px] flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+          <div class="max-w-[480px]">
+            <h2 class="text-[24px] leading-8 font-semibold tracking-[-0.02em] text-ink">Join the Pro waitlist</h2>
+            <p class="mt-2 text-muted">Be the first to know when hosted AI is available. Pricing will be announced at launch.</p>
+          </div>
+          <!--partial:waitlist-form-->
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="wrap mx-auto max-w-[940px]">
+          <h2 class="h-section">Compare plans</h2>
+          <div class="table-wrap mt-8 lg:max-h-none">
+            <table class="data-table">
+              <caption class="sr-only">Comparison of the Free and Pro plans</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Feature</th>
+                  <th scope="col">Free</th>
+                  <th scope="col">Pro (coming soon)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><th scope="row" class="h-11 border-b border-line px-4 text-left font-normal text-ink">All 8 tools</th><td>Included</td><td>Included</td></tr>
+                <tr><th scope="row" class="h-11 border-b border-line px-4 text-left font-normal text-ink">Model access</th><td>Your own key</td><td>Hosted, no key needed</td></tr>
+                <tr><th scope="row" class="h-11 border-b border-line px-4 text-left font-normal text-ink">Model choice</th><td>Any supported model you pick</td><td>Higher-quality models selected for you</td></tr>
+                <tr><th scope="row" class="h-11 border-b border-line px-4 text-left font-normal text-ink">Where your data lives</th><td>Your browser</td><td>Your browser, with sync across devices planned</td></tr>
+                <tr><th scope="row" class="h-11 border-b border-line px-4 text-left font-normal text-ink">Account</th><td>Not required</td><td>Details at launch</td></tr>
+                <tr><th scope="row" class="h-11 border-b-0 px-4 text-left font-normal text-ink">Support</th><td>Email and GitHub issues</td><td>Priority support</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="section border-t border-line bg-surface">
+        <div class="wrap mx-auto grid max-w-[940px] gap-10 lg:grid-cols-[1fr_1.6fr]">
+          <div>
+            <h2 class="h-section">Pricing questions</h2>
+            <p class="mt-4 text-muted">More answers on the <a href="/faq/" class="link">FAQ page</a>.</p>
+          </div>
+          <div class="faq">
+            <details>
+              <summary>What does bring your own key cost me?</summary>
+              <div><p>Jivika charges nothing on the Free plan. Your model provider bills you for the requests you make, at its published rates. Google Gemini and Groq offer free tiers, and OpenRouter offers some free models that you can enter in Settings, all subject to the provider&#39;s limits.</p></div>
+            </details>
+            <details>
+              <summary>Is my key safe?</summary>
+              <div><p>Your key is kept in your browser, in session storage by default or local storage if you choose to remember it. It is sent with each request in a header so the server can call your provider, and it is never stored or logged on our servers. You can remove it from Settings at any time.</p></div>
+            </details>
+            <details>
+              <summary>When will Pro launch?</summary>
+              <div><p>We do not have a date yet. Join the waitlist and we will email you when Pro is ready, along with its pricing.</p></div>
+            </details>
+          </div>
+        </div>
+      </section>
+    </main>
+    <!--partial:footer-->
+  </body>
+</html>
