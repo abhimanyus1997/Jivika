@@ -1,7 +1,7 @@
-import { ArrowRight, BarChart3, Briefcase, ChevronDown, ChevronUp, Compass, KeyRound, ShieldCheck, Star, X } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { ArrowRight, BarChart3, Check, Compass, Plus, ShieldCheck, Sparkles, Star } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { ApplicationTrends, MiniBars, weeklyTrends } from '../components/charts'
-import { Card, Chip, EmptyState } from '../components/ui'
+import { Badge, ButtonLink, Card, CareerTimeline, EmptyState, Note, PageHeader, Segmented, StatCell, scoreBand } from '../components/ui'
 import {
   useApiKey,
   useApplications,
@@ -11,272 +11,341 @@ import {
   useLastMatchJd,
   useMatches,
   useProfile,
+  useResume,
   useStored,
   type Point,
 } from '../lib/store'
 
-function Delta({ value, unit = '' }: { value: number; unit?: string }) {
-  if (value === 0) return <span className="text-xs text-slate-500">No change</span>
-  const up = value > 0
-  const Icon = up ? ChevronUp : ChevronDown
-  return (
-    <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${up ? 'text-emerald-700' : 'text-rose-700'}`}>
-      <Icon className="size-3.5" aria-hidden="true" />
-      <span className="sr-only">{up ? 'Up' : 'Down'}</span>
-      {Math.abs(value)}
-      {unit} vs previous
-    </span>
-  )
+function greeting(name?: string) {
+  const first = name?.trim().split(/\s+/)[0]
+  if (!first) return 'Your job search at a glance.'
+  const h = new Date().getHours()
+  return `Good ${h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening'}, ${first}.`
 }
 
-function MetricCard({
-  label,
-  points,
-  value,
-  suffix = '',
-  href,
-  emptyText,
-}: {
-  label: string
-  points: Point[]
-  value?: number
-  suffix?: string
-  href: string
-  emptyText: string
-}) {
-  const latest = value ?? points.at(-1)?.value
-  const prev = points.at(-2)?.value
-  return (
-    <section className="flex flex-col rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm">
-      <h2 className="text-sm font-medium text-slate-600">{label}</h2>
-      {latest === undefined ? (
-        <>
-          <p className="mt-3 flex-1 text-sm text-slate-500">{emptyText}</p>
-          <a href={href} className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-indigo-700 hover:underline">
-            Get started <ArrowRight className="size-4" aria-hidden="true" />
-          </a>
-        </>
-      ) : (
-        <>
-          <div className="mt-2 flex items-end justify-between gap-3">
-            <span className="text-3xl font-bold tabular-nums text-slate-900">
-              {latest}
-              {suffix && <span className="text-lg font-semibold text-slate-400">{suffix}</span>}
-            </span>
-            {points.length > 0 && <MiniBars points={points} label={label} />}
-          </div>
-          <div className="mt-2 flex h-5 items-center">{prev !== undefined && <Delta value={(points.at(-1)?.value ?? 0) - prev} />}</div>
-          <a href={href} className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-indigo-700 hover:underline">
-            Improve <ArrowRight className="size-4" aria-hidden="true" />
-          </a>
-        </>
-      )}
-    </section>
-  )
-}
+const delta = (points: Point[]) => (points.length > 1 ? points[points.length - 1].value - points[points.length - 2].value : null)
 
-function KeyBanner() {
-  const [dismissed, setDismissed] = useStored('bannerDismissed', false)
+function GetStarted() {
   const key = useApiKey()
-  if (dismissed) return null
-  return (
-    <section className="relative overflow-hidden rounded-2xl bg-ink p-6 text-white shadow-sm">
-      <div className="pointer-events-none absolute -right-10 -top-16 size-56 rounded-full bg-indigo-600/30 blur-2xl" aria-hidden="true" />
-      <div className="relative flex flex-col gap-4 md:flex-row md:items-center">
-        <ShieldCheck className="size-10 shrink-0 text-emerald-400" aria-hidden="true" />
-        <div className="flex-1">
-          <h2 className="text-base font-semibold">Your key, your data</h2>
-          <p className="mt-1 max-w-2xl text-sm text-slate-300">
-            Jivika runs on your own LLM API key. The key and everything you create stay in this browser; the server
-            forwards each request to your provider and keeps nothing.
-          </p>
-        </div>
-        <a
-          href="#settings"
-          className="inline-flex items-center gap-2 self-start rounded-xl bg-white px-4 py-2 text-sm font-medium text-ink hover:bg-indigo-50 md:self-center"
-        >
-          <KeyRound className="size-4" aria-hidden="true" />
-          {key ? 'Manage key' : 'Add your key'}
-        </a>
-      </div>
-      <button
-        type="button"
-        onClick={() => setDismissed(true)}
-        aria-label="Dismiss"
-        className="absolute right-3 top-3 rounded-lg p-1 text-slate-400 hover:bg-white/10 hover:text-white"
-      >
-        <X className="size-4" aria-hidden="true" />
-      </button>
-    </section>
-  )
-}
-
-function TimelineItem({ label, title, salary, timeframe, last, accent }: { label: string; title: string; salary: string; timeframe?: string; last?: boolean; accent: string }) {
-  return (
-    <li className="relative flex gap-4 pb-6 last:pb-0">
-      {!last && <span className="absolute left-[7px] top-5 h-full w-0.5 bg-slate-200" aria-hidden="true" />}
-      <span className={`relative mt-1 size-4 shrink-0 rounded-full ring-4 ring-white ${accent}`} aria-hidden="true" />
-      <div className="min-w-0">
-        <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-          {label}
-          {timeframe && <span className="normal-case tracking-normal"> - {timeframe}</span>}
-        </div>
-        <div className="font-semibold text-slate-900">{title}</div>
-        {salary && (
-          <div className="text-sm text-slate-600">
-            {salary} <span className="text-xs text-slate-500">(Estimated)</span>
-          </div>
-        )}
-      </div>
-    </li>
-  )
-}
-
-export function CareerTimeline() {
-  const [path] = useCareerPath()
-  if (!path) return null
-  return (
-    <ol>
-      <TimelineItem label="You are here" title={path.current.title} salary={path.current.salary_range} accent="bg-indigo-600" />
-      <TimelineItem label="Next target" title={path.next.title} salary={path.next.salary_range} timeframe={path.next.timeframe} accent="bg-emerald-500" />
-      <TimelineItem label="Future potential" title={path.future.title} salary={path.future.salary_range} timeframe={path.future.timeframe} accent="bg-amber-500" last />
-    </ol>
-  )
-}
-
-function Stat({ label, children, note }: { label: string; children: ReactNode; note?: ReactNode }) {
-  return (
-    <div>
-      <div className="text-xs text-slate-500">{label}</div>
-      <div className="text-xl font-bold tabular-nums text-slate-900">{children}</div>
-      {note && <div className="mt-0.5">{note}</div>}
-    </div>
-  )
-}
-
-export default function Dashboard() {
-  const [profile] = useProfile()
-  const [history] = useHistory()
-  const [applications] = useApplications()
+  const [resume] = useResume()
   const [matches] = useMatches()
-  const [careerPath] = useCareerPath()
-  const weeks = weeklyTrends(applications)
+  const [lastMatch] = useLastMatch()
+  const [applications] = useApplications()
+  const [noteDismissed, setNoteDismissed] = useStored('bannerDismissed', false)
+
+  const steps = [
+    { title: 'Connect a model key', text: 'Add your own provider key in Settings.', done: !!key, href: '#settings', cta: 'Open settings' },
+    { title: 'Upload your resume', text: 'Jivika extracts your profile and skills.', done: !!resume, href: '#profile', cta: 'Upload resume' },
+    { title: 'Run your first job match', text: 'Compare your resume with a job description.', done: matches.length > 0 || !!lastMatch, href: '#match', cta: 'Run job match' },
+    { title: 'Track an application', text: 'Log a job you applied to and follow its status.', done: applications.length > 0, href: '#applications?new', cta: 'Add application' },
+  ]
+  const done = steps.filter((s) => s.done).length
+  if (done === steps.length) return null
+  const next = steps.findIndex((s) => !s.done)
+
+  return (
+    <Card
+      title="Get started"
+      description="Four steps to a complete picture of your job search."
+      action={
+        <span className="t-num text-[13px] text-muted">
+          {done}/{steps.length} done
+        </span>
+      }
+      divider
+      padding={false}
+    >
+      <div className="px-5 pt-4">
+        <div
+          className="h-1.5 overflow-hidden rounded-full bg-subtle"
+          role="progressbar"
+          aria-label="Setup progress"
+          aria-valuenow={done}
+          aria-valuemin={0}
+          aria-valuemax={steps.length}
+        >
+          <div className="h-full rounded-full bg-brand-500 transition-[width] duration-150" style={{ width: `${(done / steps.length) * 100}%` }} />
+        </div>
+      </div>
+      <ol className="grid gap-px p-2 sm:grid-cols-2 lg:grid-cols-4">
+        {steps.map((s, i) => (
+          <li key={s.title} className="flex flex-col gap-2 rounded-lg p-3">
+            <div className="flex items-center gap-2">
+              {s.done ? (
+                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-brand-500 text-white">
+                  <Check className="size-3" strokeWidth={2.5} aria-hidden="true" />
+                </span>
+              ) : (
+                <span
+                  className={`t-num flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] ${
+                    i === next ? 'bg-surface text-brand-700 ring-2 ring-brand-500' : 'border border-dashed border-line-strong text-faint'
+                  }`}
+                >
+                  {i + 1}
+                </span>
+              )}
+              <span className={`t-title ${s.done ? 'text-muted line-through decoration-line-strong' : ''}`}>{s.title}</span>
+              <span className="sr-only">{s.done ? '(done)' : '(to do)'}</span>
+            </div>
+            <p className="text-[13px] leading-5 text-muted">{s.text}</p>
+            {!s.done && (
+              <ButtonLink href={s.href} size="sm" variant={i === next ? 'brand' : 'secondary'} className="self-start">
+                {s.cta}
+              </ButtonLink>
+            )}
+          </li>
+        ))}
+      </ol>
+      {!noteDismissed && (
+        <div className="border-t border-line px-5 py-3">
+          <Note icon={ShieldCheck} onDismiss={() => setNoteDismissed(true)}>
+            Your key and data stay in this browser. The server forwards each request to your provider and keeps nothing.
+          </Note>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function KpiStrip() {
+  const [history] = useHistory()
+  const cells = [
+    { label: 'Career score', points: history.career, href: '#career', empty: 'Map your career path' },
+    { label: 'Skills', points: history.skills, href: '#profile', empty: 'Upload your resume' },
+    { label: 'CV score', points: history.cv, suffix: '/100', href: '#cv', empty: 'Run a CV review' },
+    { label: 'LinkedIn health', points: history.linkedin, suffix: '/100', href: '#linkedin', empty: 'Review your LinkedIn' },
+  ]
+  return (
+    <Card padding={false}>
+      <div className="grid grid-cols-2 divide-line lg:grid-cols-4 lg:divide-x [&>*]:border-line max-lg:[&>*:nth-child(-n+2)]:border-b max-lg:[&>*:nth-child(odd)]:border-r">
+        {cells.map((c) => (
+          <StatCell
+            key={c.label}
+            label={c.label}
+            value={c.points.at(-1)?.value ?? null}
+            suffix={c.suffix}
+            delta={delta(c.points)}
+            chart={c.points.length > 1 && <MiniBars points={c.points} label={c.label} />}
+            href={c.href}
+            linkLabel={c.points.length ? 'Improve' : 'Start'}
+            empty={c.empty}
+          />
+        ))}
+      </div>
+    </Card>
+  )
+}
+
+function TrendsCard() {
+  const [applications] = useApplications()
+  const [view, setView] = useState<'chart' | 'table'>('chart')
+  const weeks = useMemo(() => weeklyTrends(applications), [applications])
   const windowTotal = weeks.reduce((s, w) => s + w.total, 0)
-  const thisWeek = weeks.at(-1)?.total ?? 0
-  const lastWeek = weeks.at(-2)?.total ?? 0
+  const change = (weeks.at(-1)?.total ?? 0) - (weeks.at(-2)?.total ?? 0)
+
+  return (
+    <Card
+      title="Application trends"
+      description="Weekly applications by response status, last 8 weeks."
+      className="h-full lg:col-span-8"
+      action={
+        applications.length > 0 && (
+          <Segmented
+            label="Trends view"
+            size="sm"
+            value={view}
+            onChange={setView}
+            options={[
+              { value: 'chart', label: 'Chart' },
+              { value: 'table', label: 'Table' },
+            ]}
+          />
+        )
+      }
+    >
+      {applications.length ? (
+        <div className="space-y-4">
+          <div className="flex items-baseline gap-3">
+            <span className="t-metric">{windowTotal}</span>
+            <span className="text-[13px] text-muted">applications</span>
+            {change !== 0 ? (
+              <Badge tone={change > 0 ? 'brand' : 'neutral'} mono>
+                {change > 0 ? '+' : '-'}
+                {Math.abs(change)} vs last week
+              </Badge>
+            ) : (
+              <span className="text-[13px] text-faint">Same as last week</span>
+            )}
+          </div>
+          <ApplicationTrends rows={weeks} view={view} />
+        </div>
+      ) : (
+        <EmptyState
+          icon={<BarChart3 />}
+          title="No applications tracked yet"
+          text="Log the jobs you apply to and see weekly trends by response status."
+          action={
+            <ButtonLink href="#applications?new" icon={Plus} size="sm">
+              Add application
+            </ButtonLink>
+          }
+        />
+      )}
+    </Card>
+  )
+}
+
+function GoalsCard() {
+  const [careerPath] = useCareerPath()
+  return (
+    <Card
+      title="Career goals"
+      className="h-full lg:col-span-4"
+      action={
+        careerPath && (
+          <a href="#career" className="inline-flex items-center gap-1 text-[13px] font-medium text-brand-600 hover:text-brand-700 hover:underline">
+            View plan <ArrowRight className="size-3.5" aria-hidden="true" />
+          </a>
+        )
+      }
+    >
+      {careerPath ? (
+        <CareerTimeline path={careerPath} />
+      ) : (
+        <EmptyState
+          icon={<Compass />}
+          title="No career goals yet"
+          text="See where your experience can take you next, with estimated salaries."
+          action={
+            <ButtonLink href="#career" size="sm">
+              Map your career path
+            </ButtonLink>
+          }
+        />
+      )}
+    </Card>
+  )
+}
+
+function TopPicks() {
+  const [matches] = useMatches()
   const [, setLastMatch] = useLastMatch()
   const [, setLastMatchJd] = useLastMatchJd()
   const picks = [...matches].sort((a, b) => b.result.match_score - a.result.match_score).slice(0, 5)
 
   return (
-    <>
-      <div>
-        <h2 className="text-2xl font-bold text-slate-900">
-          {profile?.name?.trim() ? `Welcome back, ${profile.name.trim().split(' ')[0]}` : 'Welcome to Jivika'}
-        </h2>
-        <p className="mt-1 text-sm text-slate-600">Here is where your job search stands.</p>
-      </div>
-
-      <KeyBanner />
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Career Score" points={history.career} href="#career" emptyText="Map your career path to get a score." />
-        <MetricCard
-          label="Skills"
-          points={history.skills}
-          href="#profile"
-          emptyText="Upload your resume to extract your skills."
-        />
-        <MetricCard label="CV Score" points={history.cv} suffix="/100" href="#cv" emptyText="Run a CV review to get an ATS score." />
-        <MetricCard label="LinkedIn Health" points={history.linkedin} suffix="/100" href="#linkedin" emptyText="Review your LinkedIn headline and about." />
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card title="Application Trends" className="lg:col-span-2">
-          {applications.length ? (
-            <>
-              <div className="mb-4 flex gap-8">
-                <Stat label="Last 8 weeks">{windowTotal}</Stat>
-                <Stat label="This week" note={<Delta value={thisWeek - lastWeek} />}>
-                  {thisWeek}
-                </Stat>
-              </div>
-              <ApplicationTrends applications={applications} />
-            </>
-          ) : (
-            <EmptyState
-              icon={<BarChart3 className="size-8" />}
-              title="No applications tracked yet"
-              text="Log the jobs you apply to and see weekly trends by response status."
-              action={<a href="#applications" className="text-sm font-medium text-indigo-700 hover:underline">Track an application</a>}
-            />
-          )}
-        </Card>
-
-        <Card title="Career Goals">
-          {careerPath ? (
-            <>
-              <CareerTimeline />
-              <a href="#career" className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-indigo-700 hover:underline">
-                View plan <ArrowRight className="size-4" aria-hidden="true" />
-              </a>
-            </>
-          ) : (
-            <EmptyState
-              icon={<Compass className="size-8" />}
-              title="No career goals yet"
-              text="See where your experience can take you next, with estimated salaries."
-              action={<a href="#career" className="text-sm font-medium text-indigo-700 hover:underline">Map your career path</a>}
-            />
-          )}
-        </Card>
-      </div>
-
-      <Card title="Top Picks" action={matches.length > 0 && <a href="#match" className="text-sm font-medium text-indigo-700 hover:underline">Match another job</a>}>
-        {picks.length ? (
-          <ul className="divide-y divide-slate-100">
-            {picks.map(({ id, result: r, job_description }) => (
-              <li key={id}>
-                <a
-                  href="#match"
-                  onClick={() => {
-                    setLastMatch(r)
-                    setLastMatchJd(job_description)
-                  }}
-                  className="-mx-2 flex flex-wrap items-center gap-4 rounded-xl px-2 py-3 hover:bg-slate-50"
-                >
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700">
-                    <Briefcase className="size-5" aria-hidden="true" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-semibold text-slate-900" title={r.job_title || undefined}>
-                      {r.job_title || 'Untitled role'}
+    <Card
+      title="Top picks"
+      description={picks.length ? 'Your best saved matches. Open one to see the full analysis.' : undefined}
+      padding={false}
+      divider={picks.length > 0}
+      action={
+        matches.length > 0 && (
+          <ButtonLink href="#match" size="sm" icon={Sparkles}>
+            Match another job
+          </ButtonLink>
+        )
+      }
+    >
+      {picks.length ? (
+        <>
+          <div className="hidden grid-cols-[minmax(0,1fr)_140px_160px] gap-4 border-b border-line bg-subtle px-5 py-2 md:grid">
+            <span className="t-overline">Role</span>
+            <span className="t-overline">Match</span>
+            <span className="t-overline text-right">Salary</span>
+          </div>
+          <ul className="divide-y divide-line">
+            {picks.map(({ id, result: r, job_description }) => {
+              const band = scoreBand(r.match_score)
+              const tags = [r.experience_required, r.employment_type, r.location].filter(Boolean)
+              return (
+                <li key={id}>
+                  <a
+                    href="#match"
+                    onClick={() => {
+                      setLastMatch(r)
+                      setLastMatchJd(job_description)
+                    }}
+                    className="grid gap-3 px-5 py-3 transition-colors duration-150 hover:bg-subtle md:grid-cols-[minmax(0,1fr)_140px_160px] md:items-center md:gap-4"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex min-w-0 items-baseline gap-2">
+                        <span className="t-title truncate" title={r.job_title || undefined}>
+                          {r.job_title || 'Untitled role'}
+                        </span>
+                        <span className="truncate text-[13px] text-muted">{r.company || 'Company not stated'}</span>
+                      </div>
+                      {tags.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {tags.map((t) => (
+                            <Badge key={t}>{t}</Badge>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <div className="truncate text-sm text-slate-600">{r.company || 'Company not stated'}</div>
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {r.experience_required && <Chip>{r.experience_required}</Chip>}
-                      {r.employment_type && <Chip>{r.employment_type}</Chip>}
-                      {r.location && <Chip>{r.location}</Chip>}
-                      {r.salary_range && <Chip tone="emerald">{r.salary_range}</Chip>}
+                    <div className="flex items-center gap-2.5">
+                      <span className="t-num w-10 text-[13px] font-medium text-ink">{r.match_score}%</span>
+                      <div
+                        className="h-1.5 flex-1 overflow-hidden rounded-full bg-subtle md:bg-canvas"
+                        role="progressbar"
+                        aria-label={`Match score, ${band.label}`}
+                        aria-valuenow={r.match_score}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                      >
+                        <div className={`h-full rounded-full ${band.bar}`} style={{ width: `${Math.max(0, Math.min(100, r.match_score))}%` }} />
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold tabular-nums text-slate-900">{r.match_score}%</div>
-                    <div className="text-xs text-slate-500">match</div>
-                  </div>
-                </a>
-              </li>
-            ))}
+                    <span className={`t-num truncate text-[13px] md:text-right ${r.salary_range ? 'text-ink' : 'text-faint'}`}>
+                      {r.salary_range || 'Not stated'}
+                    </span>
+                  </a>
+                </li>
+              )
+            })}
           </ul>
-        ) : (
-          <EmptyState
-            icon={<Star className="size-8" />}
-            title="No saved matches"
-            text="Match your resume against a job description and save the best fits here."
-            action={<a href="#match" className="text-sm font-medium text-indigo-700 hover:underline">Match a job</a>}
-          />
-        )}
-      </Card>
+        </>
+      ) : (
+        <EmptyState
+          icon={<Star />}
+          title="No saved matches"
+          text="Match your resume against a job description and save the best fits here."
+          action={
+            <ButtonLink href="#match" size="sm">
+              Run job match
+            </ButtonLink>
+          }
+        />
+      )}
+    </Card>
+  )
+}
+
+export default function Dashboard() {
+  const [profile] = useProfile()
+  return (
+    <>
+      <PageHeader
+        title="Dashboard"
+        description={greeting(profile?.name)}
+        actions={
+          <>
+            <ButtonLink href="#applications?new" icon={Plus}>
+              Add application
+            </ButtonLink>
+            <ButtonLink href="#match" variant="brand" icon={Sparkles}>
+              Run job match
+            </ButtonLink>
+          </>
+        }
+      />
+      <GetStarted />
+      <KpiStrip />
+      <div className="grid gap-6 lg:grid-cols-12">
+        <TrendsCard />
+        <GoalsCard />
+      </div>
+      <TopPicks />
     </>
   )
 }
