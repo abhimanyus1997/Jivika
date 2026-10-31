@@ -1,16 +1,22 @@
-import { ExternalLink, KanbanSquare, Pencil, Plus, Trash2 } from 'lucide-react'
-import { useState } from 'react'
-import { Button, Card, Chip, EmptyState, Field, inputCls, PageIntro } from '../components/ui'
+import { ExternalLink, KanbanSquare, Pencil, Plus, Search, SearchX, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import {
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  IconButton,
+  inputCls,
+  Modal,
+  PageHeader,
+  Segmented,
+  StatusBadge,
+  textareaCls,
+  toast,
+} from '../components/ui'
 import { newId, STATUSES, today, useApplications, type Application, type Status } from '../lib/store'
 
-const STATUS_TONE: Record<Status, 'slate' | 'indigo' | 'emerald' | 'rose' | 'amber'> = {
-  Applied: 'slate',
-  'Awaiting response': 'amber',
-  'Response received': 'indigo',
-  Interview: 'indigo',
-  Offer: 'emerald',
-  Rejected: 'rose',
-}
+type Filter = 'all' | Status
 
 const blank = (): Application => ({ id: '', company: '', role: '', date: today(), status: 'Applied', link: '', notes: '' })
 
@@ -25,53 +31,212 @@ const safeLink = (url: string) => (/^https?:\/\//i.test(url) ? url : `https://${
 export default function Applications() {
   const [apps, setApps] = useApplications()
   const [draft, setDraft] = useState<Application | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<Application | null>(null)
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState<Filter>('all')
+
+  // The command palette links to #applications?new to open the add dialog.
+  useEffect(() => {
+    const check = () => {
+      if (location.hash.endsWith('?new')) {
+        setDraft(blank())
+        history.replaceState(null, '', '#applications')
+      }
+    }
+    check()
+    window.addEventListener('hashchange', check)
+    return () => window.removeEventListener('hashchange', check)
+  }, [])
 
   function save() {
     if (!draft) return
     const entry = { ...draft, company: draft.company.trim(), role: draft.role.trim(), link: draft.link.trim() }
     setApps((list) => (entry.id ? list.map((a) => (a.id === entry.id ? entry : a)) : [{ ...entry, id: newId() }, ...list]))
+    toast(entry.id ? 'Application updated' : 'Application added')
     setDraft(null)
   }
 
-  function remove(app: Application) {
-    if (confirm(`Delete the application for ${app.role || 'this role'} at ${app.company || 'this company'}?`)) {
-      setApps((list) => list.filter((a) => a.id !== app.id))
-    }
+  function confirmDelete() {
+    if (!pendingDelete) return
+    const id = pendingDelete.id
+    setApps((list) => list.filter((a) => a.id !== id))
+    setPendingDelete(null)
+    toast('Application deleted')
   }
 
   const set = <K extends keyof Application>(k: K, v: Application[K]) => setDraft((d) => (d ? { ...d, [k]: v } : d))
-  const sorted = [...apps].sort((a, b) => b.date.localeCompare(a.date))
+
+  const q = query.trim().toLowerCase()
+  const visible = [...apps]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .filter((a) => filter === 'all' || a.status === filter)
+    .filter((a) => !q || `${a.company} ${a.role} ${a.notes}`.toLowerCase().includes(q))
+
+  const filterOptions = [
+    { value: 'all' as Filter, label: 'All', count: apps.length },
+    ...STATUSES.map((s) => ({ value: s as Filter, label: s, count: apps.filter((a) => a.status === s).length })),
+  ]
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <PageIntro>Keep track of where you have applied. Status updates feed the trends on your dashboard.</PageIntro>
-        {!draft && apps.length > 0 && (
-          <Button onClick={() => setDraft(blank())}>
-            <Plus className="size-4" aria-hidden="true" />
+      <PageHeader
+        title="Applications"
+        description="Track where you have applied. Status updates feed the trends on your dashboard."
+        actions={
+          <Button icon={Plus} onClick={() => setDraft(blank())}>
             Add application
           </Button>
-        )}
-      </div>
+        }
+      />
 
-      {draft && (
-        <Card title={draft.id ? 'Edit application' : 'New application'}>
+      {apps.length ? (
+        <div className="space-y-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <div className="relative lg:w-64">
+              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-faint" strokeWidth={1.75} aria-hidden="true" />
+              <input
+                type="search"
+                className={`${inputCls} pl-8`}
+                placeholder="Search company, role or notes"
+                aria-label="Search applications"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+            <Segmented label="Filter by status" size="sm" options={filterOptions} value={filter} onChange={setFilter} />
+          </div>
+
+          {visible.length ? (
+            <div className="table-wrap">
+              <table className="data-table min-w-[520px] md:min-w-[760px]">
+                <caption className="sr-only">Tracked applications</caption>
+                <thead>
+                  <tr>
+                    <th>Company</th>
+                    <th>Role</th>
+                    <th>Applied</th>
+                    <th>Status</th>
+                    <th className="hidden md:table-cell">Link</th>
+                    <th className="hidden md:table-cell">Notes</th>
+                    <th className="text-right">
+                      <span className="sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.map((a) => (
+                    <tr key={a.id}>
+                      <td className="font-medium">{a.company}</td>
+                      <td className="text-muted">{a.role}</td>
+                      <td className="t-num text-[13px] whitespace-nowrap text-muted">{formatDate(a.date)}</td>
+                      <td>
+                        <StatusBadge status={a.status} />
+                      </td>
+                      <td className="hidden md:table-cell">
+                        {a.link ? (
+                          <a
+                            href={safeLink(a.link)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[13px] font-medium text-brand-600 hover:text-brand-700 hover:underline"
+                          >
+                            Open <ExternalLink className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
+                            <span className="sr-only">job posting for {a.company}</span>
+                          </a>
+                        ) : (
+                          <span className="text-faint">-</span>
+                        )}
+                      </td>
+                      <td className="hidden max-w-64 text-[13px] text-muted md:table-cell">
+                        <span className="line-clamp-1" title={a.notes}>
+                          {a.notes}
+                        </span>
+                      </td>
+                      <td className="text-right whitespace-nowrap">
+                        <IconButton icon={Pencil} size="sm" label={`Edit ${a.company} application`} onClick={() => setDraft(a)} />
+                        <IconButton
+                          icon={Trash2}
+                          size="sm"
+                          label={`Delete ${a.company} application`}
+                          className="hover:bg-danger-bg hover:text-danger"
+                          onClick={() => setPendingDelete(a)}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <Card>
+              <EmptyState
+                icon={<SearchX />}
+                title="No matching applications"
+                text="Try a different search or status filter."
+                action={
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setQuery('')
+                      setFilter('all')
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                }
+              />
+            </Card>
+          )}
+        </div>
+      ) : (
+        <Card>
+          <EmptyState
+            icon={<KanbanSquare />}
+            title="No applications yet"
+            text="Add the jobs you apply to, or use Track application from a job match."
+            action={
+              <Button icon={Plus} onClick={() => setDraft(blank())}>
+                Add application
+              </Button>
+            }
+          />
+        </Card>
+      )}
+
+      <Modal
+        open={!!draft}
+        onClose={() => setDraft(null)}
+        title={draft?.id ? 'Edit application' : 'Add application'}
+        description="Saved in this browser only."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDraft(null)}>
+              Cancel
+            </Button>
+            <Button type="submit" form="application-form">
+              {draft?.id ? 'Save changes' : 'Add application'}
+            </Button>
+          </>
+        }
+      >
+        {draft && (
           <form
+            id="application-form"
             className="space-y-4"
             onSubmit={(e) => {
               e.preventDefault()
               save()
             }}
           >
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Company">
-                <input required autoFocus className={inputCls} value={draft.company} onChange={(e) => set('company', e.target.value)} />
+                <input required data-autofocus className={inputCls} value={draft.company} onChange={(e) => set('company', e.target.value)} />
               </Field>
               <Field label="Role">
                 <input required className={inputCls} value={draft.role} onChange={(e) => set('role', e.target.value)} />
               </Field>
               <Field label="Date applied">
-                <input required type="date" className={inputCls} value={draft.date} onChange={(e) => set('date', e.target.value)} />
+                <input required type="date" className={`${inputCls} t-num`} value={draft.date} onChange={(e) => set('date', e.target.value)} />
               </Field>
               <Field label="Status">
                 <select className={inputCls} value={draft.status} onChange={(e) => set('status', e.target.value as Status)}>
@@ -80,99 +245,39 @@ export default function Applications() {
                   ))}
                 </select>
               </Field>
-              <Field label="Job link">
-                <input type="url" className={inputCls} value={draft.link} onChange={(e) => set('link', e.target.value)} placeholder="https://" />
-              </Field>
+              <div className="sm:col-span-2">
+                <Field label="Job link">
+                  <input type="url" className={inputCls} value={draft.link} onChange={(e) => set('link', e.target.value)} placeholder="https://" />
+                </Field>
+              </div>
             </div>
             <Field label="Notes">
-              <textarea className={`${inputCls} h-20`} value={draft.notes} onChange={(e) => set('notes', e.target.value)} />
+              <textarea className={`${textareaCls} h-24`} value={draft.notes} onChange={(e) => set('notes', e.target.value)} />
             </Field>
-            <div className="flex gap-2">
-              <Button type="submit">{draft.id ? 'Save changes' : 'Add application'}</Button>
-              <Button variant="secondary" onClick={() => setDraft(null)}>
-                Cancel
-              </Button>
-            </div>
           </form>
-        </Card>
-      )}
-
-      <Card>
-        {sorted.length ? (
-          <div className="relative -mx-6 overflow-x-auto px-6">
-            <table className="w-full min-w-[720px] text-sm">
-              <caption className="sr-only">Tracked applications</caption>
-              <thead>
-                <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
-                  <th className="py-2 pr-4 font-medium">Company</th>
-                  <th className="py-2 pr-4 font-medium">Role</th>
-                  <th className="py-2 pr-4 font-medium">Date applied</th>
-                  <th className="py-2 pr-4 font-medium">Status</th>
-                  <th className="py-2 pr-4 font-medium">Link</th>
-                  <th className="py-2 pr-4 font-medium">Notes</th>
-                  <th className="py-2 text-right font-medium">
-                    <span className="sr-only">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.map((a) => (
-                  <tr key={a.id} className="border-b border-slate-100 align-top last:border-0">
-                    <td className="py-3 pr-4 font-medium text-slate-900">{a.company}</td>
-                    <td className="py-3 pr-4 text-slate-700">{a.role}</td>
-                    <td className="py-3 pr-4 tabular-nums text-slate-600">{formatDate(a.date)}</td>
-                    <td className="py-3 pr-4">
-                      <Chip tone={STATUS_TONE[a.status]}>{a.status}</Chip>
-                    </td>
-                    <td className="py-3 pr-4">
-                      {a.link ? (
-                        <a
-                          href={safeLink(a.link)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-indigo-700 hover:underline"
-                        >
-                          Open <ExternalLink className="size-3.5" aria-hidden="true" />
-                        </a>
-                      ) : (
-                        <span className="text-slate-400">-</span>
-                      )}
-                    </td>
-                    <td className="max-w-56 py-3 pr-4 text-slate-600">
-                      <span className="line-clamp-2">{a.notes}</span>
-                    </td>
-                    <td className="py-3 text-right whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => setDraft(a)}
-                        aria-label={`Edit ${a.company} application`}
-                        className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                      >
-                        <Pencil className="size-4" aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => remove(a)}
-                        aria-label={`Delete ${a.company} application`}
-                        className="rounded-lg p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-700"
-                      >
-                        <Trash2 className="size-4" aria-hidden="true" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <EmptyState
-            icon={<KanbanSquare className="size-8" />}
-            title="No applications yet"
-            text="Add the jobs you apply to, or use Track application from a job match."
-            action={!draft && <Button onClick={() => setDraft(blank())}>Add application</Button>}
-          />
         )}
-      </Card>
+      </Modal>
+
+      <Modal
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        title="Delete application"
+        width="max-w-md"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setPendingDelete(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" icon={Trash2} onClick={confirmDelete}>
+              Delete
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink">
+          Delete the application for {pendingDelete?.role || 'this role'} at {pendingDelete?.company || 'this company'}? This cannot be undone.
+        </p>
+      </Modal>
     </>
   )
 }
