@@ -25,13 +25,14 @@ EXCLUDE = re.compile(
     r"rerank|realtime|-live|search-preview|computer-use|\baqa\b|ocr|babbage|davinci|gpt-3\.5-turbo-instruct"
 )
 # Snapshot, preview or experimental ids are only recommended when nothing else matches.
-UNSTABLE = re.compile(r"preview|exp(?:erimental)?\b|-exp-|beta|alpha|test|:free$|-\d{4}-?\d{2}-?\d{2}$|-\d{4}$")
+UNSTABLE = re.compile(r"preview|exp(?:erimental)?\b|-exp-|beta|alpha|\btest|:free$|-\d{4}-?\d{2}-?\d{2}$|-\d{4}$")
 
 # Recommended model heuristic, in order: the static default when the live list still has it (it was checked
 # by hand), else the newest stable id matching the provider's first matching pattern (fast, inexpensive,
 # capable tiers), else the newest stable model, else the newest model.
 PREFER = {
-    "gemini": [r"^gemini-[\d.]+-flash$", r"flash(?!.*lite)", r"flash"],
+    # Gemini's newest flash ids often have no free-tier quota or are overloaded; 2.5 flash and the lite alias are reliable.
+    "gemini": [r"^gemini-2\.5-flash$", r"^gemini-flash-lite-latest$", r"^gemini-2\.5-flash-lite$", r"^gemini-[\d.]+-flash$", r"flash(?!.*lite)", r"flash"],
     "openai": [r"^gpt-[\d.]+-mini$", r"mini"],
     "anthropic": [r"haiku", r"sonnet"],
     "groq": [r"gpt-oss-120b", r"versatile", r"gpt-oss", r"instant"],
@@ -109,13 +110,17 @@ def normalize(provider: str, data) -> list[dict]:
 def recommend(provider: str, models: list[dict]) -> str:
     ids = [m["id"] for m in models]
     default = PROVIDERS[provider]["default_model"]
-    if default in ids or not ids:
+    if (default in ids and stable(default)) or not ids:
         return default
-    stable = [i for i in ids if not UNSTABLE.search(i.lower())]
+    stable_ids = [i for i in ids if stable(i)]
     for pattern in PREFER.get(provider, []):
-        if hits := [i for i in stable if re.search(pattern, i.lower())]:
+        if hits := [i for i in stable_ids if re.search(pattern, i.lower())]:
             return hits[0]
-    return (stable or ids)[0]
+    return (stable_ids or ids)[0]
+
+
+def stable(model_id: str) -> bool:
+    return not UNSTABLE.search(model_id.lower())
 
 
 def _request(provider: str, key: str):
@@ -162,6 +167,15 @@ def list_models(provider: str, key: str) -> dict:
         while len(_cache) > MAX_ENTRIES:
             _cache.popitem(last=False)
     return result
+
+
+def cached_ids(provider: str, key: str) -> list[str] | None:
+    """Model ids from a recent live listing for this provider+key; never fetches."""
+    with _lock:
+        hit = _cache.get(_cache_key(provider, key))
+    if hit and time.monotonic() < hit[0] and hit[1]["source"] == "live":
+        return [m["id"] for m in hit[1]["models"]]
+    return None
 
 
 def cached_recommended(provider: str, key: str) -> str | None:
