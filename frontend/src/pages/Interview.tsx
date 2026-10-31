@@ -1,5 +1,7 @@
 import { ChevronDown, MessageSquareText, MessagesSquare } from 'lucide-react'
 import { useState } from 'react'
+import { CodingSetup, ProblemList, ProblemView } from '../components/coding/Playground'
+import { useCoding } from '../components/coding/store'
 import { JobImport } from '../components/JobImport'
 import { ResumeSource } from '../components/Resume'
 import {
@@ -17,12 +19,13 @@ import {
   PageHeader,
   ScoreRing,
   scoreBand,
+  Segmented,
   SkeletonCard,
   textareaCls,
   type BadgeTone,
 } from '../components/ui'
 import { api, useAction, useAiReady, type InterviewQuestion, type QuestionType } from '../lib/api'
-import { useInterview, useJobDescription, useResume } from '../lib/store'
+import { useInterview, useJobDescription, useResume, useStored } from '../lib/store'
 
 const TYPE_TONE: Record<QuestionType, BadgeTone> = { behavioral: 'info', technical: 'brand', situational: 'accent' }
 
@@ -129,6 +132,11 @@ export default function Interview() {
   const action = useAction(api.questions)
   const total = session.questions.length
   const reviewed = Object.keys(session.feedback).length
+  const [tab, setTab] = useStored<'questions' | 'coding'>('interview.tab', 'questions')
+  const [codingSession] = useCoding()
+  const [openId, setOpenId] = useState('')
+  const codingAction = useAction(api.codingProblems)
+  const open = tab === 'coding' ? codingSession.problems.find((p) => p.id === openId) : undefined
 
   async function generate() {
     if (!resume?.text) return
@@ -136,86 +144,117 @@ export default function Interview() {
     if (r) setSession({ questions: r.questions, answers: {}, feedback: {} })
   }
 
+  const coding = tab === 'coding'
+
   return (
     <>
       <PageHeader
         title="Interview prep"
-        description="Practice with questions tailored to the role, then get feedback on each answer."
+        description={
+          coding
+            ? 'Solve coding problems for the role. Your code runs in this browser, then you can get an AI review.'
+            : 'Practice with questions tailored to the role, then get feedback on each answer.'
+        }
+      />
+      <Segmented
+        label="Practice type"
+        className="mt-4 mb-5"
+        options={[
+          { value: 'questions', label: 'Questions' },
+          { value: 'coding', label: 'Coding' },
+        ]}
+        value={tab}
+        onChange={setTab}
       />
 
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
-        <div className="lg:sticky lg:top-[76px] lg:max-h-[calc(100vh-100px)] lg:overflow-y-auto">
-          <Card title="Setup" description="Questions are based on your resume and the job description.">
-            <div className="space-y-4">
-              <ResumeSource />
-              <JobImport onImport={(text) => setJd(text)} />
-              <Field label="Job description">
-                <textarea
-                  className={`${textareaCls} min-h-40`}
-                  value={jd}
-                  onChange={(e) => setJd(e.target.value)}
-                  placeholder="Paste the job description."
-                />
-              </Field>
-              <Field label="Number of questions" hint="Between 1 and 15.">
-                <input
-                  type="number"
-                  min={1}
-                  max={15}
-                  className={`${inputCls} t-num max-w-24`}
-                  value={count}
-                  onChange={(e) => setCount(Math.min(15, Math.max(1, Number(e.target.value) || 1)))}
-                />
-              </Field>
-              <KeyNotice />
-              <ErrorMessage message={action.error} />
-              <Button
-                variant="brand"
-                icon={MessagesSquare}
-                className="w-full"
-                onClick={generate}
-                loading={action.loading}
-                disabled={!key || !resume?.text || jd.trim().length < 30}
-              >
-                {total ? 'Generate new questions' : 'Generate questions'}
-              </Button>
-              <ActionHint show={key && resume?.text && jd.trim().length < 30}>
-                Paste at least a few lines of the job description to continue.
-              </ActionHint>
-            </div>
-          </Card>
-        </div>
-
-        <div className="min-w-0 space-y-3">
-          {action.loading ? (
-            <>
-              <SkeletonCard lines={2} label="Generating questions" />
-              <SkeletonCard lines={2} label="Generating questions" />
-              <SkeletonCard lines={2} label="Generating questions" />
-            </>
-          ) : total ? (
-            <>
-              <div className="flex items-baseline justify-between gap-3 px-1">
-                <h2 className="t-title">Questions</h2>
-                <span className="t-num text-[13px] text-muted">
-                  {reviewed} of {total} reviewed
-                </span>
+      {open ? (
+        <ProblemView key={open.id} problem={open} onBack={() => setOpenId('')} />
+      ) : (
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
+          <div className="lg:sticky lg:top-[76px] lg:max-h-[calc(100vh-100px)] lg:overflow-y-auto">
+            <Card title="Setup" description={`${coding ? 'Problems' : 'Questions'} are based on your resume and the job description.`}>
+              <div className="space-y-4">
+                <ResumeSource />
+                <JobImport onImport={(text) => setJd(text)} />
+                <Field label="Job description">
+                  <textarea
+                    className={`${textareaCls} min-h-40`}
+                    value={jd}
+                    onChange={(e) => setJd(e.target.value)}
+                    placeholder="Paste the job description."
+                  />
+                </Field>
+                {coding ? (
+                  <>
+                    <KeyNotice />
+                    <CodingSetup resume={resume?.text ?? ''} jd={jd} action={codingAction} />
+                  </>
+                ) : (
+                  <>
+                    <Field label="Number of questions" hint="Between 1 and 15.">
+                      <input
+                        type="number"
+                        min={1}
+                        max={15}
+                        className={`${inputCls} t-num max-w-24`}
+                        value={count}
+                        onChange={(e) => setCount(Math.min(15, Math.max(1, Number(e.target.value) || 1)))}
+                      />
+                    </Field>
+                    <KeyNotice />
+                    <ErrorMessage message={action.error} />
+                    <Button
+                      variant="brand"
+                      icon={MessagesSquare}
+                      className="w-full"
+                      onClick={generate}
+                      loading={action.loading}
+                      disabled={!key || !resume?.text || jd.trim().length < 30}
+                    >
+                      {total ? 'Generate new questions' : 'Generate questions'}
+                    </Button>
+                    <ActionHint show={key && resume?.text && jd.trim().length < 30}>
+                      Paste at least a few lines of the job description to continue.
+                    </ActionHint>
+                  </>
+                )}
               </div>
-              {session.questions.map((q, i) => (
-                <QuestionCard key={`${i}-${q.question}`} index={i} q={q} jd={jd} />
-              ))}
-            </>
-          ) : (
-            <Card>
-              <EmptyState
-                icon={<MessagesSquare strokeWidth={1.75} />}
-                title="No questions yet"
-                text="Add your resume and the job description, then generate questions to start practising."
-              />
             </Card>
-          )}
+          </div>
+
+          <div className="min-w-0 space-y-3">
+            {coding ? (
+              <ProblemList loading={codingAction.loading} onOpen={setOpenId} />
+            ) : action.loading ? (
+              <>
+                <SkeletonCard lines={2} label="Generating questions" />
+                <SkeletonCard lines={2} label="Generating questions" />
+                <SkeletonCard lines={2} label="Generating questions" />
+              </>
+            ) : total ? (
+              <>
+                <div className="flex items-baseline justify-between gap-3 px-1">
+                  <h2 className="t-title">Questions</h2>
+                  <span className="t-num text-[13px] text-muted">
+                    {reviewed} of {total} reviewed
+                  </span>
+                </div>
+                {session.questions.map((q, i) => (
+                  <QuestionCard key={`${i}-${q.question}`} index={i} q={q} jd={jd} />
+                ))}
+              </>
+            ) : (
+              <Card>
+                <EmptyState
+                  icon={<MessagesSquare strokeWidth={1.75} />}
+                  title="No questions yet"
+                  text="Add your resume and the job description, then generate questions to start practising."
+                />
+              </Card>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </>
   )
 }

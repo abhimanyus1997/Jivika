@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { createRequire } from 'node:module'
+import { dirname, resolve } from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
@@ -50,6 +51,34 @@ Sitemap: ${site}/sitemap.xml
   }
 }
 
+/**
+ * Self-hosts the Pyodide runtime (the coding playground's Python) at <base>assets/pyodide-<version>/, so no CDN is
+ * needed. The worker passes that directory as indexURL. Served from node_modules in dev and emitted at build;
+ * the version in the path keeps the immutable asset cache correct across upgrades.
+ */
+const PYODIDE_FILES = ['pyodide.asm.mjs', 'pyodide.asm.wasm', 'python_stdlib.zip', 'pyodide-lock.json']
+const pyodideDir = dirname(createRequire(import.meta.url).resolve('pyodide/package.json'))
+const PYODIDE_PATH = `assets/pyodide-${JSON.parse(readFileSync(resolve(pyodideDir, 'package.json'), 'utf8')).version}/`
+
+function pyodide(base: string): Plugin {
+  const types: Record<string, string> = { mjs: 'text/javascript', wasm: 'application/wasm', zip: 'application/zip', json: 'application/json' }
+  return {
+    name: 'jivika-pyodide',
+    configureServer(server) {
+      server.middlewares.use(`${base}${PYODIDE_PATH}`, (req, res, next) => {
+        const file = (req.url ?? '').split('?')[0].replace(/^\//, '')
+        if (!PYODIDE_FILES.includes(file)) return next()
+        res.setHeader('Content-Type', types[file.split('.').pop()!])
+        res.end(readFileSync(resolve(pyodideDir, file)))
+      })
+    },
+    generateBundle() {
+      for (const file of PYODIDE_FILES)
+        this.emitFile({ type: 'asset', fileName: PYODIDE_PATH + file, source: readFileSync(resolve(pyodideDir, file)) })
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, root, 'VITE_')
   // Sub-path to serve from, e.g. /jivika/ (pair with JIVIKA_BASE_PATH=/jivika on the server). Normalised to '/x/' or '/'.
@@ -59,7 +88,10 @@ export default defineConfig(({ mode }) => {
   return {
     base,
     appType: 'mpa', // unknown dev routes 404 instead of falling back to the landing page
-    plugins: [react(), tailwindcss(), site(env.VITE_SITE_URL || 'https://jivika.app', base)],
+    plugins: [react(), tailwindcss(), site(env.VITE_SITE_URL || 'https://jivika.app', base), pyodide(base)],
+    define: { __PYODIDE_PATH__: JSON.stringify(PYODIDE_PATH) },
+    // Playground workers are ES modules named *.worker-<hash>.js; main.py gives only those files a CSP that allows eval.
+    worker: { format: 'es' },
     build: { rollupOptions: { input: [...html, resolve(root, '404.html')] } },
     server: {
       port: 5173,
