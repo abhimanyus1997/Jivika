@@ -160,3 +160,32 @@ if (heroVideos.length) {
   motion.addEventListener('change', update)
   update()
 }
+
+// Clipper page: the bookmarklet code is built with the extension (extension/ writes public/downloads/bookmarklet.txt).
+const bookmarklet = document.querySelector<HTMLAnchorElement>('[data-bookmarklet]')
+if (bookmarklet) {
+  const status = document.querySelector<HTMLElement>('[data-bookmarklet-status]')
+  const code = fetch(`${import.meta.env.BASE_URL}downloads/bookmarklet.txt`)
+    .then((r) => (r.ok ? r.text() : ''))
+    .then((t) => (t.trim().startsWith('javascript:') ? t.trim() : ''))
+    .catch(() => '')
+  void code.then((c) => {
+    if (c) bookmarklet.href = c
+    else if (status) status.textContent = 'The bookmarklet is not available right now. Use the extension instead.'
+  })
+  // Clicking it here would do nothing useful; it is meant to be dragged to the bookmarks bar.
+  bookmarklet.addEventListener('click', (e) => {
+    e.preventDefault()
+    if (status) status.textContent = 'Drag this link to your bookmarks bar.'
+  })
+  document.querySelector('[data-bookmarklet-copy]')?.addEventListener('click', async () => {
+    const c = await code
+    if (!c || !status) return
+    try {
+      await navigator.clipboard.writeText(c)
+      status.textContent = 'Copied. Create a bookmark and paste this as its URL.'
+    } catch {
+      status.textContent = 'Copy failed. Drag the link to your bookmarks bar instead.'
+    }
+  })
+}

@@ -6,7 +6,7 @@ import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 
 // Marketing pages, as served paths. Each maps to <dir>/index.html and is listed in sitemap.xml.
-const PAGES = ['/', '/pricing/', '/faq/', '/about/', '/contact/', '/privacy/', '/terms/']
+const PAGES = ['/', '/pricing/', '/faq/', '/about/', '/clipper/', '/contact/', '/privacy/', '/terms/']
 const root = import.meta.dirname
 
 /**

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!--partial:head-->
+    <title>Jivika Clipper - Jivika</title>
+    <meta name="description" content="Jivika Clipper sends the job you are viewing on Naukri, LinkedIn and other job sites to Jivika from your own browser. It reads only the current tab when you click and sends nothing to our servers." />
+    <link rel="canonical" href="%VITE_SITE_URL%/clipper/" />
+    <meta property="og:title" content="Jivika Clipper - Jivika" />
+    <meta property="og:description" content="Send the job you are viewing to Jivika from your own browser." />
+    <meta property="og:url" content="%VITE_SITE_URL%/clipper/" />
+    <meta name="twitter:title" content="Jivika Clipper - Jivika" />
+    <meta name="twitter:description" content="Send the job you are viewing to Jivika from your own browser." />
+  </head>
+  <body class="site-body">
+    <!--partial:header-->
+    <main id="main">
+      <section class="pt-16 pb-12 sm:pt-24">
+        <div class="wrap mx-auto max-w-[800px]">
+          <p class="eyebrow">Jivika Clipper</p>
+          <h1 class="h-display mt-4">Send any job to Jivika in one click.</h1>
+          <p class="lead mt-6">Some job sites, including Naukri and at times LinkedIn, block server imports. Jivika Clipper is a small browser extension that reads the job you are already viewing and opens it in Jivika, ready for a match, ATS check, cover letter or interview prep.</p>
+          <div class="mt-8 flex flex-wrap gap-3">
+            <a href="%BASE%/downloads/jivika-clipper.zip" class="btn btn-primary h-11 px-5" download>Download Jivika Clipper</a>
+            <a href="#bookmarklet" class="btn btn-secondary h-11 px-5">Use the bookmarklet</a>
+          </div>
+          <p class="mt-3 text-sm text-muted">Version 0.1.0 for Chrome, Edge and Brave. A Chrome Web Store listing is planned.</p>
+        </div>
+      </section>
+
+      <section class="pb-16 sm:pb-20">
+        <div class="wrap mx-auto grid max-w-[800px] gap-5 sm:grid-cols-2">
+          <article class="card">
+            <h2 class="t-title text-[15px]">What it does</h2>
+            <p class="mt-2 text-sm leading-6 text-muted">When you click the Jivika button on a job page, the Clipper reads the title, company, location, experience, salary and description, shows you a preview, and opens the Jivika page you choose with the job description filled in.</p>
+          </article>
+          <article class="card">
+            <h2 class="t-title text-[15px]">Privacy</h2>
+            <p class="mt-2 text-sm leading-6 text-muted">It reads only the current tab, and only when you click. It sends nothing to our servers: the job travels to the app in the URL fragment, which browsers never send to a server. Each clip opens Jivika in a new tab. It has no background access to your browsing, no analytics and no remote code.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section border-t border-line">
+        <div class="wrap mx-auto max-w-[800px]">
+          <h2 class="h-section">Install on Chrome, Edge or Brave</h2>
+          <ol class="mt-8 space-y-6">
+            <li class="flex gap-4">
+              <span class="t-num flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-[13px] font-semibold text-brand-700">1</span>
+              <div>
+                <h3 class="t-title text-[15px]">Download and unzip</h3>
+                <p class="mt-1 text-muted"><a href="%BASE%/downloads/jivika-clipper.zip" class="link" download>Download jivika-clipper.zip</a> and extract it to a folder you will keep.</p>
+              </div>
+            </li>
+            <li class="flex gap-4">
+              <span class="t-num flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-[13px] font-semibold text-brand-700">2</span>
+              <div>
+                <h3 class="t-title text-[15px]">Open the extensions page</h3>
+                <p class="mt-1 text-muted">Go to <code>chrome://extensions</code> in Chrome, <code>edge://extensions</code> in Edge or <code>brave://extensions</code> in Brave.</p>
+              </div>
+            </li>
+            <li class="flex gap-4">
+              <span class="t-num flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-[13px] font-semibold text-brand-700">3</span>
+              <div>
+                <h3 class="t-title text-[15px]">Turn on Developer mode</h3>
+                <p class="mt-1 text-muted">Switch on Developer mode, then choose Load unpacked and select the extracted folder.</p>
+              </div>
+            </li>
+            <li class="flex gap-4">
+              <span class="t-num flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-[13px] font-semibold text-brand-700">4</span>
+              <div>
+                <h3 class="t-title text-[15px]">Clip a job</h3>
+                <p class="mt-1 text-muted">Pin Jivika Clipper to the toolbar, open a job posting and click the button. Choose where to send it: Match in Jivika, ATS check, Cover letter or Interview prep.</p>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section id="bookmarklet" class="section border-y border-line bg-surface">
+        <div class="wrap mx-auto max-w-[800px]">
+          <h2 class="h-section">Bookmarklet</h2>
+          <p class="mt-4 text-muted">Prefer not to install an extension? Drag this link to your bookmarks bar, then click the bookmark on a job page. It sends the job to Job match.</p>
+          <div class="mt-6 flex flex-wrap items-center gap-3">
+            <a href="#bookmarklet" class="btn btn-primary h-11 px-5" data-bookmarklet draggable="true">Clip to Jivika</a>
+            <button type="button" class="btn btn-secondary h-11 px-5" data-bookmarklet-copy>Copy bookmarklet code</button>
+            <span class="text-sm text-muted" data-bookmarklet-status role="status"></span>
+          </div>
+          <p class="mt-4 text-sm text-muted">Some sites&#39; security settings block bookmarklets. The extension is the reliable option.</p>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="wrap mx-auto max-w-[800px]">
+          <h2 class="h-section">Supported sites</h2>
+          <ul class="mt-6 grid gap-2 text-muted sm:grid-cols-2">
+            <li>Naukri job listings</li>
+            <li>LinkedIn job pages and search results</li>
+            <li>Indeed</li>
+            <li>Instahyre</li>
+            <li>Wellfound</li>
+            <li>foundit</li>
+            <li>Company career pages that publish structured job data</li>
+            <li>Most other job pages, by reading the main text</li>
+          </ul>
+          <p class="mt-6 text-sm text-muted">Always check the clipped description in Jivika before you run a tool. You can edit it like any pasted text.</p>
+        </div>
+      </section>
+    </main>
+    <!--partial:footer-->
+  </body>
+</html>
