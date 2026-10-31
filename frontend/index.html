@@ -30,12 +30,12 @@
         <div class="wrap text-center">
           <p class="badge"><svg viewBox="0 0 24 24" class="icon size-3.5 text-brand-600" aria-hidden="true"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>Bring your own key &middot; No sign-up</p>
           <h1 class="h-display mx-auto mt-6 max-w-[760px]">Your job search, organised and sharpened.</h1>
-          <p class="lead mx-auto mt-5 max-w-[640px]">Match your resume to roles, improve your CV and LinkedIn, plan your next move and prepare for interviews, using your own model key with your data kept in your browser.</p>
+          <p class="lead mx-auto mt-5 max-w-[640px]">Search live job listings, match your resume to roles, improve your CV and LinkedIn, plan your next move and prepare for interviews, using your own model key with your data kept in your browser.</p>
           <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
             <a href="%BASE%/app/" class="btn btn-primary h-11 px-5">Open the app <svg viewBox="0 0 24 24" class="icon size-4" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
             <a href="#waitlist" class="btn btn-secondary h-11 px-5">Join the Pro waitlist</a>
           </div>
-          <p class="mt-4 text-[13px] text-muted">Free with your own Gemini, OpenAI, Groq or OpenRouter key.</p>
+          <p class="mt-4 text-[13px] text-muted">Try it instantly with the free demo model, then bring your own key.</p>
           <div class="browser-frame mx-auto mt-14 max-w-[1100px] text-left">
             <div class="bar"><span></span><span></span><span></span></div>
             <img src="/img/dashboard.png" alt="Jivika dashboard showing career, skills, CV and LinkedIn scores, application trends and top job matches" width="1100" height="688" fetchpriority="high" decoding="async" />
@@ -44,12 +44,9 @@
       </section>
 
       <section aria-label="Supported model providers" class="pt-14 pb-4">
-        <div class="wrap flex flex-wrap items-center justify-center gap-3">
-          <span class="t-overline mr-1 max-sm:w-full max-sm:text-center">Works with</span>
-          <span class="badge">Google Gemini</span>
-          <span class="badge">OpenAI</span>
-          <span class="badge">Groq</span>
-          <span class="badge">OpenRouter</span>
+        <div class="wrap flex flex-col items-center gap-4">
+          <span class="t-overline">Works with</span>
+          <!--partial:providers-->
         </div>
       </section>
 
@@ -57,10 +54,15 @@
         <div class="wrap">
           <div class="max-w-[640px]">
             <p class="eyebrow">Product</p>
-            <h2 class="h-section mt-3">Eight tools for every stage of your search.</h2>
-            <p class="lead mt-4">From reading a job description to following up on an application, each tool works from the same resume and profile.</p>
+            <h2 class="h-section mt-3">Nine tools for every stage of your search.</h2>
+            <p class="lead mt-4">From finding a role to following up on an application, each tool works from the same resume and profile.</p>
           </div>
-          <ul class="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <ul class="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <li class="card">
+              <div class="flex size-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="m8 11 2 2 4-4"/><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div>
+              <h3 class="t-title mt-4 text-[15px]">Job search</h3>
+              <p class="mt-1.5 text-sm leading-6 text-muted">Search live listings from job boards and company career pages, see a quick fit for each, then match or track it.</p>
+            </li>
             <li class="card">
               <div class="flex size-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div>
               <h3 class="t-title mt-4 text-[15px]">Job match</h3>
@@ -169,7 +171,7 @@
             <li class="card">
               <span class="t-num flex size-8 items-center justify-center rounded-full bg-ink text-[13px] font-semibold text-white">1</span>
               <h3 class="t-title mt-4 text-[15px]">Add your model key</h3>
-              <p class="mt-1.5 text-sm leading-6 text-muted">Choose Gemini, OpenAI, Groq or OpenRouter in Settings, paste a key and verify it with one click.</p>
+              <p class="mt-1.5 text-sm leading-6 text-muted">Start right away on the free demo model, or pick Gemini, OpenAI, Claude, Groq, Mistral, DeepSeek, Grok or OpenRouter in Settings and paste your key.</p>
             </li>
             <li class="card">
               <span class="t-num flex size-8 items-center justify-center rounded-full bg-ink text-[13px] font-semibold text-white">2</span>
