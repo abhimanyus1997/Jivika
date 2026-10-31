@@ -11,7 +11,9 @@ import {
   useLastMatchJd,
   useMatches,
   useProfile,
+  roadmapProgress,
   useResume,
+  useRoadmapDone,
   useStored,
   type Point,
 } from '../lib/store'
@@ -116,15 +118,21 @@ function GetStarted() {
 
 function KpiStrip() {
   const [history] = useHistory()
+  const [careerPath] = useCareerPath()
+  const [done] = useRoadmapDone()
+  const items = careerPath?.roadmap?.stages.flatMap((s) => s.items) ?? []
+  const roadmap = items.length ? `Roadmap ${roadmapProgress(items, done).pct}% complete` : undefined
   const cells = [
-    { label: 'Career score', points: history.career, href: '#career', empty: 'Map your career path' },
+    { label: 'Career score', points: history.career, href: '#career', empty: 'Map your career path', note: roadmap },
     { label: 'Skills', points: history.skills, href: '#profile', empty: 'Upload your resume' },
     { label: 'CV score', points: history.cv, suffix: '/100', href: '#cv', empty: 'Run a CV review' },
     { label: 'LinkedIn health', points: history.linkedin, suffix: '/100', href: '#linkedin', empty: 'Review your LinkedIn' },
+    { label: 'ATS score', points: history.ats, suffix: '/100', href: '#ats', empty: 'Run an ATS check' },
   ]
   return (
     <Card padding={false}>
-      <div className="grid grid-cols-2 divide-line lg:grid-cols-4 lg:divide-x [&>*]:border-line max-lg:[&>*:nth-child(-n+2)]:border-b max-lg:[&>*:nth-child(odd)]:border-r">
+      {/* 1px gaps over a line-colored background draw the dividers for any cell count. */}
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-line lg:grid-cols-5 [&>*]:bg-surface [&>*:last-child]:col-span-2 lg:[&>*:last-child]:col-span-1">
         {cells.map((c) => (
           <StatCell
             key={c.label}
@@ -136,6 +144,7 @@ function KpiStrip() {
             href={c.href}
             linkLabel={c.points.length ? 'Improve' : 'Start'}
             empty={c.empty}
+            note={c.note}
           />
         ))}
       </div>

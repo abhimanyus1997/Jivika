@@ -15,12 +15,33 @@ import {
   textareaCls,
   toast,
 } from '../components/ui'
-import { api, useAction, useAiReady, type Profile } from '../lib/api'
+import { api, profileExperience, useAction, useAiReady, type Profile } from '../lib/api'
 import { pushHistory, useProfile, useResume } from '../lib/store'
 
-const EMPTY: Profile = { name: '', headline: '', current_role: '', years_experience: 0, location: '', skills: [], summary: '' }
+const EMPTY: Profile = {
+  name: '',
+  headline: '',
+  current_role: '',
+  experience_years: 0,
+  experience_months: 0,
+  years_experience: 0,
+  location: '',
+  skills: [],
+  summary: '',
+}
 
-const yearsOf = (p: Profile | null) => (p ? String(p.years_experience) : '')
+/** Form text for years / months: blank when never set. */
+const experienceText = (p: Profile | null) => {
+  const set = !!p && (p.experience_set || p.experience_years > 0 || p.experience_months > 0)
+  return { years: set ? String(p.experience_years) : '', months: set ? String(p.experience_months) : '' }
+}
+
+/** Validation message for a whole-number field, or '' when valid (blank is allowed). */
+function rangeError(text: string, max: number, unit: string) {
+  if (!text.trim()) return ''
+  const n = Number(text)
+  return Number.isInteger(n) && n >= 0 && n <= max ? '' : `${unit} must be a whole number from 0 to ${max}.`
+}
 const uniq = (items: string[]) => [...new Set(items.map((s) => s.trim()).filter(Boolean))]
 
 function ProfileSummary({ profile }: { profile: Profile | null }) {
@@ -47,9 +68,7 @@ function ProfileSummary({ profile }: { profile: Profile | null }) {
             )}
             <div>
               <dt className="t-overline">Experience</dt>
-              <dd className="t-num text-ink">
-                {p.years_experience} {p.years_experience === 1 ? 'year' : 'years'}
-              </dd>
+              <dd className="t-num text-ink">{profileExperience(p) || 'Not set'}</dd>
             </div>
             <div>
               <dt className="t-overline">Skills</dt>
@@ -67,13 +86,13 @@ export default function ProfilePage() {
   const [profile, setProfile] = useProfile()
   const key = useAiReady()
   const [draft, setDraft] = useState<Profile>(profile ?? EMPTY)
-  const [yearsText, setYearsText] = useState(yearsOf(profile))
+  const [exp, setExp] = useState(() => experienceText(profile))
   const [skillInput, setSkillInput] = useState('')
   const extract = useAction(api.profile)
 
   useEffect(() => {
     setDraft(profile ?? EMPTY)
-    setYearsText(yearsOf(profile))
+    setExp(experienceText(profile))
   }, [profile])
 
   function commit(next: Profile, message: string) {
@@ -85,7 +104,7 @@ export default function ProfilePage() {
   async function runExtract() {
     if (!resume?.text) return
     const result = await extract.run(resume.text)
-    if (result) commit(result, 'Profile extracted from resume')
+    if (result) commit({ ...result, experience_set: false }, 'Profile extracted from resume')
   }
 
   function addSkills(text: string) {
@@ -98,8 +117,24 @@ export default function ProfilePage() {
     // Include a skill that was typed but not yet added.
     const skills = uniq([...draft.skills, ...skillInput.split(',')])
     setSkillInput('')
-    commit({ ...draft, skills, years_experience: Number(yearsText) || 0 }, 'Profile saved')
+    const years = Number(exp.years) || 0
+    const months = Number(exp.months) || 0
+    commit(
+      {
+        ...draft,
+        skills,
+        experience_years: years,
+        experience_months: months,
+        years_experience: Math.round((years + months / 12) * 100) / 100,
+        experience_set: !!(exp.years.trim() || exp.months.trim()),
+      },
+      'Profile saved',
+    )
   }
+
+  const yearsError = rangeError(exp.years, 60, 'Years')
+  const monthsError = rangeError(exp.months, 11, 'Months')
+  const expError = yearsError || monthsError
 
   const set = <K extends keyof Profile>(k: K, v: Profile[K]) => setDraft((d) => ({ ...d, [k]: v }))
 
@@ -135,6 +170,7 @@ export default function ProfilePage() {
                   value={resume?.text ?? ''}
                   onChange={(e) =>
                     setResume({
+                      ...resume,
                       text: e.target.value,
                       pages: resume?.pages ?? 0,
                       characters: e.target.value.length,
@@ -163,17 +199,63 @@ export default function ProfilePage() {
               <Field label="Current role">
                 <input className={inputCls} value={draft.current_role} onChange={(e) => set('current_role', e.target.value)} />
               </Field>
-              <Field label="Years of experience">
-                <input
-                  type="number"
-                  min={0}
-                  step={0.5}
-                  className={`${inputCls} t-num`}
-                  value={yearsText}
-                  placeholder="e.g. 4"
-                  onChange={(e) => setYearsText(e.target.value)}
-                />
-              </Field>
+              <fieldset aria-describedby={expError ? 'experience-error' : undefined}>
+                <legend className="t-label mb-1.5 block">Experience</legend>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="relative block">
+                    <span className="sr-only">Years</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={60}
+                      step={1}
+                      inputMode="numeric"
+                      className={`${inputCls} t-num pr-12`}
+                      value={exp.years}
+                      placeholder="0"
+                      aria-invalid={!!yearsError || undefined}
+                      onChange={(e) => setExp({ ...exp, years: e.target.value })}
+                      onBlur={() => {
+                        // '5.3' is common shorthand for 5 yrs 3 mos; same rule as the server (a 1-11 decimal
+                        // without a leading zero is months, anything else a fraction of a year).
+                        const m = /^(\d{1,2})\.(\d{1,2})$/.exec(exp.years.trim())
+                        if (!m) return
+                        const asMonths = m[2][0] !== '0' && +m[2] >= 1 && +m[2] <= 11
+                        const total = +m[1] * 12 + (asMonths ? +m[2] : Math.round(+`0.${m[2]}` * 12))
+                        setExp({ years: String(Math.floor(total / 12)), months: String(total % 12) })
+                      }}
+                    />
+                    <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-faint" aria-hidden="true">
+                      yrs
+                    </span>
+                  </label>
+                  <label className="relative block">
+                    <span className="sr-only">Months</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={11}
+                      step={1}
+                      inputMode="numeric"
+                      className={`${inputCls} t-num pr-12`}
+                      value={exp.months}
+                      placeholder="0"
+                      aria-invalid={!!monthsError || undefined}
+                      onChange={(e) => setExp({ ...exp, months: e.target.value })}
+                    />
+                    <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-faint" aria-hidden="true">
+                      mos
+                    </span>
+                  </label>
+                </div>
+                {expError ? (
+                  <span id="experience-error" className="mt-1.5 block text-xs leading-4 text-danger">
+                    {expError}
+                  </span>
+                ) : (
+                  <span className="mt-1.5 block text-xs leading-4 text-faint">Years 0 to 60, months 0 to 11.</span>
+                )}
+              </fieldset>
               <Field label="Location">
                 <input className={inputCls} value={draft.location} onChange={(e) => set('location', e.target.value)} />
               </Field>
@@ -224,7 +306,9 @@ export default function ProfilePage() {
             </Field>
 
             <div className="flex justify-end border-t border-line pt-4">
-              <Button type="submit">Save profile</Button>
+              <Button type="submit" disabled={!!expError}>
+                Save profile
+              </Button>
             </div>
           </form>
         </Card>

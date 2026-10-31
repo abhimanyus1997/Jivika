@@ -20,15 +20,17 @@ const PROVIDER_ICONS = Object.fromEntries(
   ),
 )
 
+// Black marks (OpenAI, Anthropic, xAI) use the ink token so they stay visible on dark surfaces.
 export const PROVIDER_COLORS: Record<string, string> = {
   gemini: '#8E75B2',
-  openai: '#000000',
-  anthropic: '#191919',
+  openai: 'var(--color-ink)',
+  anthropic: 'var(--color-ink)',
   groq: '#F55036',
   mistral: '#FA520F',
   deepseek: '#4D6BFE',
-  xai: '#000000',
+  xai: 'var(--color-ink)',
   openrouter: '#6467F2',
+  qwen: '#6950EF',
 }
 
 /**
@@ -58,7 +60,7 @@ export function ProviderIcon({ id, brand = false, className = 'size-4', label }:
 /* ---------- Form controls ---------- */
 
 const control =
-  'w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink placeholder:text-faint transition-[border-color,box-shadow] duration-150 ease-out hover:border-line-strong focus-visible:border-brand-500 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-500/15 disabled:cursor-not-allowed disabled:bg-subtle disabled:text-muted'
+  'w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink placeholder:text-faint transition-[border-color,box-shadow] duration-150 ease-out hover:border-line-strong focus-visible:border-brand-500 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-500/15 disabled:cursor-not-allowed disabled:bg-subtle disabled:text-muted aria-[invalid=true]:border-danger aria-[invalid=true]:focus-visible:ring-danger/15'
 
 /** Text input / select class. 32px tall. */
 export const inputCls = `${control} h-8 py-1 leading-5`
@@ -299,7 +301,7 @@ export function Badge({
           type="button"
           onClick={onRemove}
           aria-label={`${removeLabel} ${typeof children === 'string' ? children : ''}`.trim()}
-          className="-mr-1 rounded p-0.5 opacity-60 hover:bg-black/5 hover:opacity-100"
+          className="-mr-1 rounded p-0.5 opacity-60 hover:bg-ink/5 hover:opacity-100"
         >
           <X className="size-3" aria-hidden="true" />
         </button>
@@ -379,7 +381,7 @@ export function Segmented<T extends string>({
             onClick={() => onChange(o.value)}
             className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 font-medium whitespace-nowrap transition-colors duration-150 ${
               size === 'sm' ? 'h-6 text-xs' : 'h-7 text-[13px]'
-            } ${active ? 'bg-surface text-ink shadow-[0_1px_2px_rgba(28,27,25,0.08)] ring-1 ring-line' : 'text-muted hover:text-ink'}`}
+            } ${active ? 'bg-surface text-ink shadow-card ring-1 ring-line' : 'text-muted hover:text-ink'}`}
           >
             {o.label}
             {o.count !== undefined && <span className={`t-num text-[11px] ${active ? 'text-muted' : 'text-faint'}`}>{o.count}</span>}
@@ -488,6 +490,7 @@ export function StatCell({
   href,
   linkLabel = 'Improve',
   empty,
+  note,
 }: {
   label: string
   /** null/undefined renders the empty text instead of a number. */
@@ -502,6 +505,8 @@ export function StatCell({
   linkLabel?: string
   /** Shown when value is missing, e.g. "Run a CV review". */
   empty?: ReactNode
+  /** Secondary line under the value, e.g. "Roadmap 40% complete". */
+  note?: ReactNode
 }) {
   const has = value !== null && value !== undefined && value !== ''
   return (
@@ -537,17 +542,18 @@ export function StatCell({
         </div>
         {has && chart && <div className="hidden shrink-0 sm:block">{chart}</div>}
       </div>
+      {note && <p className="text-xs leading-4 text-muted">{note}</p>}
     </div>
   )
 }
 
 /** Vertical career timeline: current, next, future. Used on Dashboard and Career Path. */
-export function CareerTimeline({ path }: { path: CareerPath }) {
+export function CareerTimeline({ path, extra }: { path: CareerPath; extra?: (title: string) => ReactNode }) {
   const steps = [
     { label: 'You are here', title: path.current.title, salary: path.current.salary_range, dot: 'bg-brand-500' },
     { label: 'Next target', title: path.next.title, salary: path.next.salary_range, timeframe: path.next.timeframe, dot: 'bg-surface ring-2 ring-brand-500' },
     { label: 'Future potential', title: path.future.title, salary: path.future.salary_range, timeframe: path.future.timeframe, dot: 'bg-surface border border-dashed border-line-strong' },
-  ]
+  ].filter((s) => s.title?.trim()) // the model occasionally leaves a role empty
   return (
     <ol className="ml-[5px] border-l border-line">
       {steps.map((s) => (
@@ -564,6 +570,7 @@ export function CareerTimeline({ path }: { path: CareerPath }) {
               <Badge>Estimated</Badge>
             </div>
           )}
+          {extra && s.title && extra(s.title)}
         </li>
       ))}
     </ol>

@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import type {
+  AtsResult,
   CareerPath,
   CoverLetterTone,
   CVReview,
@@ -8,6 +9,7 @@ import type {
   LinkedInReview,
   MatchResult,
   Profile,
+  ResumeMeta,
 } from './api'
 
 // All user data lives in the browser. Every key is namespaced so "Clear all" can find it.
@@ -125,10 +127,23 @@ export interface StoredResume {
   pages: number
   characters: number
   fileName: string
+  /** Layout details from the PDF, for the ATS checker. Absent for pasted text. */
+  meta?: ResumeMeta
 }
 
 export const useResume = () => useStored<StoredResume | null>('resume', null)
-export const useProfile = () => useStored<Profile | null>('profile', null)
+
+/** Profiles stored before years + months existed only have years_experience (e.g. 4.5). */
+export function migrateProfile(p: Profile): Profile {
+  if (typeof p.experience_years === 'number' && typeof p.experience_months === 'number') return p
+  const total = Math.round((Number(p.years_experience) || 0) * 12)
+  return { ...p, experience_years: Math.floor(total / 12), experience_months: total % 12 }
+}
+
+export function useProfile(): [Profile | null, Setter<Profile | null>] {
+  const [profile, setProfile] = useStored<Profile | null>('profile', null)
+  return [useMemo(() => profile && migrateProfile(profile), [profile]), setProfile]
+}
 
 /** The job description is shared between Job Match, Interview Prep and Cover Letter. */
 export const useJobDescription = () => useStored<string>('jd', '')
@@ -140,12 +155,15 @@ export interface Point {
   value: number
 }
 
-export type Metric = 'career' | 'skills' | 'cv' | 'linkedin'
+export type Metric = 'career' | 'skills' | 'cv' | 'linkedin' | 'ats'
 export type History = Record<Metric, Point[]>
 
-const EMPTY_HISTORY: History = { career: [], skills: [], cv: [], linkedin: [] }
+const EMPTY_HISTORY: History = { career: [], skills: [], cv: [], linkedin: [], ats: [] }
 
-export const useHistory = () => useStored<History>('history', EMPTY_HISTORY)
+export function useHistory(): [History] {
+  const [history] = useStored<History>('history', EMPTY_HISTORY)
+  return [{ ...EMPTY_HISTORY, ...history }] // older stored histories lack newer metrics
+}
 
 export function pushHistory(metric: Metric, value: number) {
   const history = { ...EMPTY_HISTORY, ...read<History>('history', EMPTY_HISTORY) }
@@ -169,6 +187,26 @@ export const useLastMatchJd = () => useStored<string>('lastMatchJd', '')
 export const useCvReview = () => useStored<CVReview | null>('cvReview', null)
 export const useLinkedInReview = () => useStored<LinkedInReview | null>('linkedinReview', null)
 export const useCareerPath = () => useStored<CareerPath | null>('careerPath', null)
+
+/** Roadmap items marked done, by item id (ids come from the skill, so they survive regenerating the plan). */
+export const useRoadmapDone = () => useStored<Record<string, boolean>>('roadmapDone', {})
+
+/** Done / total over the given items. 'have' items count as done until the user unticks them. */
+export function roadmapProgress(items: { id: string; status: string }[], done: Record<string, boolean>) {
+  const count = items.filter((i) => done[i.id] ?? i.status === 'have').length
+  return { done: count, total: items.length, pct: items.length ? Math.round((count / items.length) * 100) : 0 }
+}
+
+export interface AtsRun {
+  id: string
+  date: string
+  fileName: string
+  job: string
+  result: AtsResult
+}
+
+/** Most recent first, capped at 20. */
+export const useAtsHistory = () => useStored<AtsRun[]>('atsHistory', [])
 
 export interface InterviewSession {
   questions: InterviewQuestion[]

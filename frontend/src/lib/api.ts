@@ -21,7 +21,29 @@ export const FALLBACK_PROVIDERS: Provider[] = [
   { id: 'deepseek', name: 'DeepSeek', default_model: 'deepseek-flash', key_url: 'https://platform.deepseek.com/api_keys', json_mode: true },
   { id: 'xai', name: 'xAI Grok', default_model: 'grok-4.20-0309-non-reasoning', key_url: 'https://console.x.ai', json_mode: true },
   { id: 'openrouter', name: 'OpenRouter', default_model: 'openai/gpt-6-luna', key_url: 'https://openrouter.ai/keys', json_mode: true },
+  { id: 'qwen', name: 'Qwen (Alibaba Cloud)', default_model: 'qwen3.8-flash', key_url: 'https://modelstudio.console.alibabacloud.com/model/settings/api-key', json_mode: true },
 ]
+
+/* ---------- Live model lists ---------- */
+
+export interface ModelInfo {
+  id: string
+  name?: string
+  context_length?: number
+  created?: number
+  /** USD per million tokens. */
+  input_price?: number
+  output_price?: number
+}
+
+export interface ModelList {
+  models: ModelInfo[]
+  recommended: string
+  source: 'live' | 'fallback'
+  fetched_at: string
+  error?: string
+  demo?: boolean
+}
 
 export interface DemoStatus {
   enabled: boolean
@@ -76,17 +98,34 @@ export interface JobSearchParams {
   page?: number
 }
 
+export interface ResumeMeta {
+  pages: number
+  images: number
+  fonts: number
+  has_text_layer: boolean
+  avg_chars_per_page: number
+  suspected_columns: boolean
+  suspected_tables: boolean
+  file_name?: string | null
+}
+
 export interface ParsedResume {
   text: string
   pages: number
   characters: number
+  meta?: ResumeMeta
 }
 
 export interface Profile {
   name: string
   headline: string
   current_role: string
+  experience_years: number
+  experience_months: number
+  /** years + months / 12, kept for older stored profiles. */
   years_experience: number
+  /** Client-only: the user entered experience themselves, so 0 / 0 means "less than a month". */
+  experience_set?: boolean
   location: string
   skills: string[]
   summary: string
@@ -133,6 +172,24 @@ export interface LinkedInReview {
   tips: string[]
 }
 
+export type RoadmapStatus = 'have' | 'next' | 'later'
+
+export interface RoadmapItem {
+  id: string
+  skill: string
+  status: RoadmapStatus
+  why: string
+  project: string
+  estimate: string
+  roadmap_sh_url?: string | null
+}
+
+export interface Roadmap {
+  title: string
+  roadmap_sh: { slug: string; name: string; url: string } | null
+  stages: { name: string; items: RoadmapItem[] }[]
+}
+
 export interface CareerPath {
   current: { title: string; salary_range: string }
   next: { title: string; salary_range: string; timeframe: string }
@@ -140,6 +197,72 @@ export interface CareerPath {
   skills_to_build: { skill: string; why: string; resource: string }[]
   career_score: number
   rationale: string
+  /** Missing on paths saved before roadmaps existed. */
+  roadmap?: Roadmap
+}
+
+/* ---------- Job import ---------- */
+
+export type ImportSource = 'linkedin' | 'naukri' | 'jsonld' | 'text'
+
+export interface ImportedJob {
+  title: string
+  company: string
+  location: string
+  employment_type: string
+  experience_required: string
+  salary: string
+  description: string
+  url: string
+  source: ImportSource
+  posted_at?: string | null
+}
+
+/* ---------- ATS checker ---------- */
+
+export type AtsCategory = 'parsing' | 'sections' | 'contact' | 'formatting' | 'keywords' | 'content'
+export type AtsStatus = 'pass' | 'warn' | 'fail'
+
+export interface AtsResult {
+  score: number
+  grade: 'Excellent' | 'Good' | 'Fair' | 'Needs work'
+  summary: string
+  checks: { id: string; category: AtsCategory; label: string; status: AtsStatus; detail: string; fix?: string | null }[]
+  keywords: null | {
+    title_match: boolean
+    required_found: string[]
+    required_missing: string[]
+    preferred_found: string[]
+    preferred_missing: string[]
+    top_terms: { term: string; jd_count: number; resume_count: number }[]
+  }
+  fixes: { priority: 'high' | 'medium' | 'low'; text: string }[]
+  categories?: Partial<Record<AtsCategory, number>>
+  note?: string | null
+}
+
+/* ---------- Market salary data ---------- */
+
+export interface SalaryRange {
+  source: string
+  source_name: string
+  label: string
+  min: number
+  max: number
+  median?: number | null
+  currency: string
+  period: 'year'
+  sample_size?: number | null
+  as_of?: string | null
+  url?: string | null
+  research: boolean
+}
+
+export interface SalaryResult {
+  query: { title: string; location: string; company: string; currency: string }
+  ranges: SalaryRange[]
+  sources: { id: string; name: string; enabled: boolean; ok: boolean; error?: string; research: boolean }[]
+  levels_url: string
 }
 
 export type QuestionType = 'behavioral' | 'technical' | 'situational'
@@ -227,15 +350,22 @@ export function useAiReady(): boolean {
   return !!key || !!d?.enabled
 }
 
-async function request<T>(path: string, init: { body?: unknown; form?: FormData; ai?: boolean } = {}): Promise<T> {
-  const headers: Record<string, string> = {}
+/**
+ * ai: true sends the user's key and needs a key or demo mode; 'optional' sends the key when there is one
+ * (the endpoint also works without a model). POST is used whenever there is a body or `ai: true`.
+ */
+async function request<T>(
+  path: string,
+  init: { body?: unknown; form?: FormData; ai?: boolean | 'optional'; headers?: Record<string, string> } = {},
+): Promise<T> {
+  const headers: Record<string, string> = { ...init.headers }
   if (init.ai) {
     const { provider, model, key } = getCredentials()
     if (key) {
       headers['X-LLM-Provider'] = provider
       headers['X-LLM-Key'] = key
       if (model.trim()) headers['X-LLM-Model'] = model.trim()
-    } else if (!demo?.enabled) {
+    } else if (init.ai === true && !demo?.enabled) {
       throw new ApiError(401, 'Add your API key in Settings to use this tool.')
     }
     // With no key the server uses its demo model and ignores provider/model, so none are sent.
@@ -246,7 +376,7 @@ async function request<T>(path: string, init: { body?: unknown; form?: FormData;
     headers['Content-Type'] = 'application/json'
     body = JSON.stringify(init.body)
   }
-  const method = body || init.ai ? 'POST' : 'GET'
+  const method = body || init.ai === true ? 'POST' : 'GET'
 
   let res: Response
   try {
@@ -301,6 +431,43 @@ export const api = {
     }),
   coverLetter: (resume: string, job_description: string, tone: CoverLetterTone) =>
     request<{ cover_letter: string }>('/cover-letter', { ai: true, body: { resume, job_description, tone } }),
+  importJob: (url: string) => request<ImportedJob>('/jobs/import', { ai: 'optional', body: { url } }),
+  atsCheck: (resume: string, job_description: string, meta?: ResumeMeta) =>
+    request<AtsResult>('/ats/check', { ai: 'optional', body: { resume, job_description, meta } }),
+  salary: (p: { title: string; location?: string; company?: string; currency?: Currency }) => {
+    const qs = new URLSearchParams({ title: p.title.trim().slice(0, 100), currency: p.currency ?? 'INR' })
+    if (p.location?.trim()) qs.set('location', p.location.trim().slice(0, 80))
+    if (p.company?.trim()) qs.set('company', p.company.trim().slice(0, 80))
+    return request<SalaryResult>(`/salary?${qs}`)
+  },
+  /** Live chat models. With no key, only OpenRouter (public list) and Groq in demo mode are listable. */
+  models: (provider: string, key: string) =>
+    request<ModelList>(`/providers/${encodeURIComponent(provider)}/models`, { headers: key ? { 'X-LLM-Key': key } : {} }),
+}
+
+/* ---------- Formatting ---------- */
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
+
+/** '5 yrs 3 mos', '1 yr', '3 mos'. 0 / 0 is 'Less than a month' when the user set it, else empty. */
+export function formatExperience(years: number, months: number, explicit = false): string {
+  const parts = [years > 0 && plural(years, 'yr', 'yrs'), months > 0 && plural(months, 'mo', 'mos')].filter(Boolean)
+  return parts.length ? parts.join(' ') : explicit ? 'Less than a month' : ''
+}
+
+export const profileExperience = (p: Profile | null | undefined) =>
+  p ? formatExperience(p.experience_years, p.experience_months, p.experience_set) : ''
+
+/** The JD text an imported job fills in: a short header the model can read, then the description. */
+export function importedJobText(j: ImportedJob): string {
+  const header = [
+    j.title,
+    [j.company, j.location].filter(Boolean).join(', '),
+    j.employment_type && `Employment type: ${j.employment_type}`,
+    j.experience_required && `Experience: ${j.experience_required}`,
+    j.salary && `Salary: ${j.salary}`,
+  ].filter(Boolean)
+  return [header.join('\n'), j.description.trim()].filter(Boolean).join('\n\n')
 }
 
 /** Wraps an async call with loading and error state. Resolves to undefined on failure. */

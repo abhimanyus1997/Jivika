@@ -13,6 +13,7 @@ import {
   PanelLeftOpen,
   Play,
   Route,
+  ScanText,
   Search,
   SearchCheck,
   Settings as SettingsIcon,
@@ -27,6 +28,7 @@ import { FALLBACK_PROVIDERS, loadDemo, useDemoActive } from './lib/api'
 import { useApiKey, useKeyVerified, useProfile, useSettings, useStored } from './lib/store'
 import { Avatar, Badge, Dialog, Logo, ProviderIcon, ShortcutHint, Toaster } from './components/ui'
 import { CommandPalette, useCtrlK, type Command } from './components/CommandPalette'
+import { ThemeToggle } from './components/ThemeToggle'
 import Dashboard from './pages/Dashboard'
 import ProfilePage from './pages/Profile'
 import JobMatch from './pages/JobMatch'
@@ -36,6 +38,7 @@ import CareerPathPage from './pages/CareerPath'
 import Interview from './pages/Interview'
 import CoverLetter from './pages/CoverLetter'
 import Applications from './pages/Applications'
+import Ats from './pages/Ats'
 import JobSearch from './pages/JobSearch'
 import Settings from './pages/Settings'
 
@@ -47,6 +50,7 @@ const PAGES: Page[] = [
   { id: 'jobs', title: 'Job search', icon: SearchCheck, component: JobSearch, group: 'Workspace' },
   { id: 'applications', title: 'Applications', icon: BriefcaseBusiness, component: Applications, group: 'Workspace' },
   { id: 'match', title: 'Job match', icon: Target, component: JobMatch, group: 'Analyze' },
+  { id: 'ats', title: 'ATS checker', icon: ScanText, component: Ats, group: 'Analyze' },
   { id: 'cv', title: 'CV review', icon: FileCheck2, component: CvReview, group: 'Analyze' },
   { id: 'linkedin', title: 'LinkedIn', icon: Contact, component: LinkedIn, group: 'Analyze' },
   { id: 'career', title: 'Career path', icon: Route, component: CareerPathPage, group: 'Plan' },
@@ -61,7 +65,8 @@ const COMMANDS: Command[] = [
   { id: 'a-upload', label: 'Upload resume', group: 'Actions', icon: Upload, href: '#profile', keywords: 'cv pdf' },
   { id: 'a-add', label: 'Add application', group: 'Actions', icon: FilePlus2, href: '#applications?new', keywords: 'track job' },
   { id: 'a-jobs', label: 'Search jobs', group: 'Actions', icon: SearchCheck, href: '#jobs', keywords: 'find listings openings roles' },
-  { id: 'a-match', label: 'Run job match', group: 'Actions', icon: Play, href: '#match', keywords: 'analyze description' },
+  { id: 'a-match', label: 'Run job match', group: 'Actions', icon: Play, href: '#match', keywords: 'analyze description import link url' },
+  { id: 'a-ats', label: 'Check ATS score', group: 'Actions', icon: ScanText, href: '#ats', keywords: 'applicant tracking resume keywords' },
   { id: 'a-settings', label: 'Open settings', group: 'Actions', icon: SettingsIcon, href: '#settings', keywords: 'api key model' },
 ]
 
@@ -399,6 +404,7 @@ export default function App() {
             Search
             <ShortcutHint />
           </button>
+          <ThemeToggle className="shrink-0" />
           <KeyPill />
           <a href="#profile" aria-label="Profile" title={profile?.name || 'Profile'} className="rounded-full">
             <Avatar name={profile?.name} size="sm" />
