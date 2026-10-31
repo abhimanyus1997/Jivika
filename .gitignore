@@ -35,3 +35,6 @@ Thumbs.db
 
 # Local database (waitlist emails)
 /data/
+
+.vercel
+.env.local
