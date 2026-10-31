@@ -21,6 +21,7 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY main.py ./
+COPY jivika/ ./jivika/
 COPY --from=frontend /src/frontend/dist ./frontend/dist
 
 RUN useradd --system --uid 10001 --no-create-home jivika \

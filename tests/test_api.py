@@ -54,9 +54,10 @@ def test_health():
 
 def test_providers():
     data = client.get("/api/providers").json()
-    assert [p["id"] for p in data] == ["gemini", "openai", "groq", "openrouter"]
-    assert data[0]["default_model"] == "gemini-2.5-flash"
-    assert all(set(p) == {"id", "name", "default_model", "key_url"} for p in data)
+    assert [p["id"] for p in data] == ["gemini", "openai", "anthropic", "groq", "mistral", "deepseek", "xai", "openrouter"]
+    assert data[0]["default_model"] == main.PROVIDERS["gemini"]["default_model"]
+    assert all({"id", "name", "default_model", "key_url"} <= set(p) for p in data)
+    assert all("base_url" not in p for p in data)
 
 
 # --- BYOK headers -----------------------------------------------------------
@@ -76,7 +77,7 @@ def test_verify_uses_default_model_and_never_echoes_key(fake_llm):
     payloads, calls = fake_llm
     payloads["Ping"] = {"ok": True}
     r = client.post("/api/providers/verify", headers=HEADERS)
-    assert r.json() == {"ok": True, "model": "gemini-2.5-flash"}
+    assert r.json() == {"ok": True, "model": main.PROVIDERS["gemini"]["default_model"]}
     assert "test-key" not in r.text
     assert calls[0]["key"] == "test-key"
 
@@ -306,3 +307,19 @@ def test_complete_json_maps_provider_errors(fake_openai, exc, status, text):
     with pytest.raises(main.HTTPException) as e:
         call()
     assert e.value.status_code == status and text in e.value.detail
+
+
+def test_provider_capabilities_shape_the_request(fake_openai):
+    fake_openai.responses = ['{"score": 1}', '{"score": 2}']
+    main.complete_json("anthropic", "k", "claude-haiku-5-5", "sys", "user", main.LinkedInReview)
+    sent = fake_openai.seen[0]
+    assert "response_format" not in sent and "temperature" not in sent  # Anthropic rejects json_object and temperature
+    assert sent["max_completion_tokens"] == 16000
+    main.complete_json("mistral", "k", "m", "sys", "user", main.LinkedInReview)
+    assert fake_openai.seen[1]["response_format"] == {"type": "json_object"} and fake_openai.seen[1]["temperature"] == 0.3
+
+
+def test_every_provider_declares_capabilities():
+    for spec in main.PROVIDERS.values():
+        assert spec["base_url"].startswith("https://") and spec["default_model"]
+        assert isinstance(spec["json_mode"], bool) and isinstance(spec["temperature"], bool)

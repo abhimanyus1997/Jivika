@@ -2,8 +2,11 @@
 
 The server never stores API keys or resume data. Every AI request carries the
 caller's provider, key and (optional) model in headers and is forwarded to an
-OpenAI-compatible endpoint. The only server-side state is the Pro waitlist
-(email, plan, source) in SQLite, or in Upstash Redis when its REST credentials are set.
+OpenAI-compatible endpoint. Without a key, an optional owner-supplied Groq key
+(demo mode) serves a limited number of requests. Server-side state is the Pro
+waitlist and demo counters (SQLite or Upstash Redis, else memory) plus short-lived
+job search caches. Providers, schemas and prompts live in jivika/schemas.py, job
+search in jivika/jobs.py.
 """
 
 import csv
@@ -11,11 +14,11 @@ import hmac
 import io
 import json
 import logging
-import math
 import mimetypes
 import os
 import re
 import sqlite3
+import threading
 import time
 import http.client
 import urllib.request
@@ -26,21 +29,56 @@ from typing import Annotated, Literal
 
 import openai
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from openai import OpenAI
-from pydantic import AfterValidator, BaseModel, BeforeValidator, Field, ValidationError
+from pydantic import AfterValidator, BaseModel, Field, ValidationError
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
+
+from jivika import jobs
+from jivika.schemas import (  # noqa: F401  (re-exported for tests and callers)
+    BASE_RULES,
+    BulletRewrite,
+    CVReview,
+    CVReviewRequest,
+    CareerPath,
+    CareerPathRequest,
+    CoverLetter,
+    CoverLetterRequest,
+    CurrentRole,
+    FutureRole,
+    InterviewFeedback,
+    InterviewFeedbackRequest,
+    InterviewQuestion,
+    InterviewQuestions,
+    InterviewQuestionsRequest,
+    LinkedInRequest,
+    LinkedInReview,
+    MatchAnalysis,
+    MatchRequest,
+    MatchResult,
+    PROMPTS,
+    PROVIDERS,
+    Ping,
+    Profile,
+    ProfileRequest,
+    RequiredText,
+    Score,
+    SectionScore,
+    SkillToBuild,
+    Text,
+    TransitionStep,
+    MAX_TEXT_CHARS,
+)
 
 load_dotenv()
 mimetypes.add_type("text/javascript", ".js")  # Windows registry may map .js to text/plain
 
 log = logging.getLogger("jivika")
 
-MAX_TEXT_CHARS = 30_000
 MAX_UPLOAD_BYTES = int(float(os.getenv("JIVIKA_MAX_UPLOAD_MB", "10")) * 1024 * 1024)
 MAX_BODY_OVERHEAD = 64 * 1024  # multipart framing on top of the file itself
 DIST_DIR = Path(__file__).parent / "frontend" / "dist"
@@ -48,273 +86,6 @@ DIST_DIR = Path(__file__).parent / "frontend" / "dist"
 
 def upload_too_large() -> str:
     return f"The PDF is larger than {MAX_UPLOAD_BYTES / (1024 * 1024):g} MB."
-
-
-PROVIDERS = {
-    "gemini": {
-        "name": "Google Gemini",
-        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
-        "default_model": "gemini-2.5-flash",
-        "key_url": "https://aistudio.google.com/apikey",
-    },
-    "openai": {
-        "name": "OpenAI",
-        "base_url": "https://api.openai.com/v1",
-        "default_model": "gpt-4.1-mini",
-        "key_url": "https://platform.openai.com/api-keys",
-    },
-    "groq": {
-        "name": "Groq",
-        "base_url": "https://api.groq.com/openai/v1",
-        "default_model": "llama-3.3-70b-versatile",
-        "key_url": "https://console.groq.com/keys",
-    },
-    "openrouter": {
-        "name": "OpenRouter",
-        "base_url": "https://openrouter.ai/api/v1",
-        "default_model": "openai/gpt-4.1-mini",
-        "key_url": "https://openrouter.ai/keys",
-    },
-}
-
-
-# ---------------------------------------------------------------------------
-# Schemas
-# ---------------------------------------------------------------------------
-
-
-def _clamp_score(value):
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return 0
-    if not math.isfinite(number):
-        return 0
-    return max(0, min(100, round(number)))
-
-
-def _first_number(value):
-    """Accept '5+', '3 years' or 4.5 from the model; fall back to 0."""
-    if isinstance(value, (int, float)):
-        return value if math.isfinite(value) else 0
-    found = re.search(r"\d+(?:\.\d+)?", str(value or ""))
-    return float(found.group()) if found else 0
-
-
-Score = Annotated[int, BeforeValidator(_clamp_score)]
-Text = Annotated[str, AfterValidator(lambda s: s.strip()[:MAX_TEXT_CHARS])]
-RequiredText = Annotated[Text, Field(min_length=1)]
-
-
-# Responses (also the schemas the model must follow). Defaults keep validation
-# tolerant of a model omitting an optional list or string.
-class Profile(BaseModel):
-    name: str = ""
-    headline: str = ""
-    current_role: str = ""
-    years_experience: Annotated[float, BeforeValidator(_first_number)] = 0
-    location: str = ""
-    skills: list[str] = []
-    summary: str = ""
-
-
-class TransitionStep(BaseModel):
-    step: str
-    detail: str = ""
-    timeframe: str = ""
-
-
-class MatchResult(BaseModel):
-    job_title: str = ""
-    company: str = ""
-    location: str = ""
-    employment_type: str = ""
-    experience_required: str = ""
-    salary_range: str = ""
-    match_score: Score
-    keyword_coverage: Score = 0
-    matched_skills: list[str] = []
-    missing_skills: list[str] = []
-    strengths: list[str] = []
-    gaps: list[str] = []
-    challenges: list[str] = []
-    opportunities: list[str] = []
-    transition_plan: list[TransitionStep] = []
-    summary: str = ""
-
-
-class MatchAnalysis(MatchResult):
-    """What the model returns; keyword_coverage is computed server-side."""
-
-    required_skills: list[str] = []
-
-
-class SectionScore(BaseModel):
-    name: str
-    score: Score
-    feedback: str = ""
-
-
-class BulletRewrite(BaseModel):
-    original: str
-    improved: str
-
-
-class CVReview(BaseModel):
-    ats_score: Score
-    overall: str = ""
-    sections: list[SectionScore] = []
-    bullet_rewrites: list[BulletRewrite] = []
-    quick_wins: list[str] = []
-
-
-class LinkedInReview(BaseModel):
-    score: Score
-    headline_suggestions: list[str] = []
-    about_rewrite: str = ""
-    keyword_suggestions: list[str] = []
-    tips: list[str] = []
-
-
-class CurrentRole(BaseModel):
-    title: str = ""
-    salary_range: str = ""
-
-
-class FutureRole(CurrentRole):
-    timeframe: str = ""
-
-
-class SkillToBuild(BaseModel):
-    skill: str
-    why: str = ""
-    resource: str = ""
-
-
-class CareerPath(BaseModel):
-    current: CurrentRole
-    next: FutureRole
-    future: FutureRole
-    skills_to_build: list[SkillToBuild] = []
-    career_score: Score
-    rationale: str = ""
-
-
-class InterviewQuestion(BaseModel):
-    question: str
-    type: Annotated[
-        Literal["behavioral", "technical", "situational"],
-        BeforeValidator(lambda v: str(v).strip().lower()),
-    ]
-    what_they_look_for: str = ""
-
-
-class InterviewQuestions(BaseModel):
-    questions: list[InterviewQuestion]
-
-
-class InterviewFeedback(BaseModel):
-    score: Score
-    strengths: list[str] = []
-    improvements: list[str] = []
-    improved_answer: str = ""
-
-
-class CoverLetter(BaseModel):
-    cover_letter: str
-
-
-class Ping(BaseModel):
-    ok: bool
-
-
-# Requests
-class ProfileRequest(BaseModel):
-    resume: RequiredText
-
-
-class MatchRequest(BaseModel):
-    resume: RequiredText
-    job_description: RequiredText
-
-
-class CVReviewRequest(BaseModel):
-    resume: RequiredText
-    target_role: Text = ""
-
-
-class LinkedInRequest(BaseModel):
-    headline: Text = ""
-    about: Text = ""
-    experience: Text = ""
-
-
-class CareerPathRequest(BaseModel):
-    resume: RequiredText
-    current_role: Text = ""
-    target_role: Text = ""
-    location: Text = ""
-    currency: Literal["INR", "USD", "GBP", "EUR"] = "INR"
-
-
-class InterviewQuestionsRequest(BaseModel):
-    resume: RequiredText
-    job_description: RequiredText
-    count: int = Field(8, ge=1, le=15)
-
-
-class InterviewFeedbackRequest(BaseModel):
-    question: RequiredText
-    answer: RequiredText
-    job_description: Text = ""
-
-
-class CoverLetterRequest(BaseModel):
-    resume: RequiredText
-    job_description: RequiredText
-    tone: Literal["professional", "enthusiastic", "concise"] = "professional"
-
-
-# ---------------------------------------------------------------------------
-# Prompts
-# ---------------------------------------------------------------------------
-
-BASE_RULES = (
-    "You are a precise career advisor. Be concise and factual. Ground every statement "
-    "only in the text provided. Never invent employers, job titles, dates, degrees, "
-    "certifications or other credentials. If information is not present, use an empty "
-    "string or empty list. Scores are integers from 0 to 100."
-)
-
-PROMPTS = {
-    "verify": "Reply with the JSON object {\"ok\": true}.",
-    "profile": "Extract a candidate profile from the resume. years_experience is a number "
-    "estimated from the listed roles. skills is a deduplicated list of concrete skills.",
-    "match": "Compare the resume against the job description. Extract job details from the "
-    "job description (salary_range is an empty string if not stated). match_score reflects "
-    "overall fit. required_skills lists the concrete skills and tools the job requires. "
-    "matched_skills and missing_skills compare those against the resume. challenges and "
-    "opportunities describe the candidate's position for this role. transition_plan gives "
-    "3 to 5 practical steps to close the gaps.",
-    "cv_review": "Review the resume for ATS compatibility and impact. ats_score rates "
-    "parseability, keywords and structure. Score each major section present. Provide up to "
-    "5 bullet_rewrites quoting original bullets verbatim and improving them without adding "
-    "facts. quick_wins are short, actionable fixes.",
-    "linkedin": "Review the LinkedIn profile text. Provide 3 headline_suggestions, an "
-    "improved about_rewrite using only facts given, relevant keyword_suggestions and "
-    "practical tips.",
-    "career_path": "Suggest a realistic career path from the candidate's current role. "
-    "Salary ranges are rough market estimates in the requested currency for the given "
-    "location. career_score rates how well positioned the candidate is to progress. "
-    "skills_to_build lists 3 to 6 skills with a reason and a type of learning resource.",
-    "interview_questions": "Generate interview questions for this candidate and job. Mix "
-    "behavioral, technical and situational types. what_they_look_for explains what a strong "
-    "answer demonstrates.",
-    "interview_feedback": "Evaluate the candidate's answer to the interview question. "
-    "improved_answer rewrites it in a stronger structure without inventing experience.",
-    "cover_letter": "Write a cover letter of at most 350 words for this job using only "
-    "experience from the resume. Use plain paragraphs with no placeholders in brackets.",
-}
 
 
 # ---------------------------------------------------------------------------
@@ -329,11 +100,18 @@ class LLMConfig(BaseModel):
 
 
 def byok(
+    request: Request,
+    response: Response,
     x_llm_provider: Annotated[str, Header()] = "",
     x_llm_key: Annotated[str, Header()] = "",
     x_llm_model: Annotated[str, Header()] = "",
 ) -> LLMConfig:
     if not x_llm_key.strip():
+        if key := demo_key():
+            # Demo mode: the owner's Groq key and model, whatever provider or model the client sent.
+            remaining = use_demo(client_ip(request))
+            response.headers.update({"X-Jivika-Demo": "1", "X-Jivika-Demo-Remaining": str(remaining)})
+            return LLMConfig(provider=DEMO_PROVIDER, key=key, model=demo_model())
         raise HTTPException(401, "An API key is required. Add one in Settings.")
     provider = x_llm_provider.strip().lower()
     if provider not in PROVIDERS:
@@ -357,8 +135,14 @@ def _is_auth_error(exc: openai.APIError) -> bool:
 
 def complete_json(provider: str, key: str, model: str, system: str, user: str, schema_model):
     """Call the provider once (plus one retry on invalid output) and return a validated model."""
-    name = PROVIDERS[provider]["name"]
-    client = OpenAI(api_key=key, base_url=PROVIDERS[provider]["base_url"], timeout=60, max_retries=1)  # worst case ~240 s with the JSON retry, under Vercel's 300 s
+    spec = PROVIDERS[provider]
+    name = spec["name"]
+    client = OpenAI(api_key=key, base_url=spec["base_url"], timeout=60, max_retries=1)  # worst case ~240 s with the JSON retry, under Vercel's 300 s
+    options = dict(spec.get("extra", {}))
+    if spec["json_mode"]:
+        options["response_format"] = {"type": "json_object"}
+    if spec["temperature"]:
+        options["temperature"] = 0.3
     schema = json.dumps(schema_model.model_json_schema())
     messages = [
         {
@@ -370,12 +154,7 @@ def complete_json(provider: str, key: str, model: str, system: str, user: str, s
     ]
     for _ in range(2):
         try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                response_format={"type": "json_object"},
-                temperature=0.3,
-            )
+            response = client.chat.completions.create(model=model, messages=messages, **options)
         except openai.APIError as exc:
             if _is_auth_error(exc):
                 raise HTTPException(401, f"The API key was rejected by {name}.") from None
@@ -401,6 +180,91 @@ def _strip_fences(text: str) -> str:
 def ask(cfg: LLMConfig, task: str, schema_model, **sections: str):
     user = "\n\n".join(f"## {label.replace('_', ' ').title()}\n{value}" for label, value in sections.items() if value)
     return complete_json(cfg.provider, cfg.key, cfg.model, PROMPTS[task], user, schema_model)
+
+
+# ---------------------------------------------------------------------------
+# Demo mode: the owner's Groq key for visitors without a key, with usage limits
+# ---------------------------------------------------------------------------
+
+DEMO_PROVIDER = "groq"
+DEMO_LIMIT_REACHED = "Demo limit reached. Add your own API key in Settings to keep going."
+DEMO_MAX_KEYS = 10_000
+_demo_counts: dict[str, int] = {}
+_demo_lock = threading.Lock()
+
+
+def demo_key() -> str:
+    return os.getenv("JIVIKA_DEMO_GROQ_KEY", "").strip()
+
+
+def demo_model() -> str:
+    return os.getenv("JIVIKA_DEMO_MODEL", "").strip() or PROVIDERS[DEMO_PROVIDER]["default_model"]
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return max(0, int(os.getenv(name, "")))
+    except ValueError:
+        return default
+
+
+def demo_limits() -> tuple[int, int]:
+    """(per-IP hourly, global daily) demo request limits."""
+    return _env_int("JIVIKA_DEMO_HOURLY_LIMIT", 20), _env_int("JIVIKA_DEMO_DAILY_LIMIT", 500)
+
+
+def _demo_windows(ip: str) -> tuple[str, str]:
+    """Fixed-window counter keys: this clock hour for the IP, this UTC day for everyone."""
+    now = int(time.time())
+    return f"jivika:demo:ip:{ip}:{now // 3600}", f"jivika:demo:day:{now // 86400}"
+
+
+def _demo_count(key: str, ttl: int, increment: bool) -> int | None:
+    """INCR (+EXPIRE on first hit) in Upstash Redis when configured, else in-process memory. None if unknown."""
+    if config := redis_config():
+        try:
+            if not increment:
+                return int(redis_http(*config, ["GET", key]).get("result") or 0)
+            count = int(redis_http(*config, ["INCR", key])["result"])
+            if count == 1:
+                redis_http(*config, ["EXPIRE", key, str(ttl)])
+            return count
+        except (OSError, ValueError, KeyError, TypeError, AttributeError, http.client.HTTPException) as exc:
+            log.warning("Demo limiter store error: %s; using memory", type(exc).__name__)
+            if not increment:
+                return None
+    # ponytail: per-process memory; Redis (above) is what keeps limits shared across instances
+    with _demo_lock:
+        if not increment:
+            return _demo_counts.get(key, 0)
+        count = _demo_counts.pop(key, 0) + 1
+        _demo_counts[key] = count  # re-inserted last, so the oldest windows are evicted first
+        while len(_demo_counts) > DEMO_MAX_KEYS:
+            del _demo_counts[next(iter(_demo_counts))]
+        return count
+
+
+def use_demo(ip: str) -> int:
+    """Count one demo request; 429 when over a limit. Returns the runs left for this IP this hour."""
+    hourly, daily = demo_limits()
+    ip_key, day_key = _demo_windows(ip)
+    over = HTTPException(429, DEMO_LIMIT_REACHED, headers={"X-Jivika-Demo": "1", "X-Jivika-Demo-Remaining": "0"})
+    used = _demo_count(ip_key, 3600, True)
+    if used > hourly:
+        raise over
+    used_today = _demo_count(day_key, 86400, True)
+    if used_today > daily:
+        raise over
+    return max(0, min(hourly - used, daily - used_today))
+
+
+def demo_remaining(ip: str) -> int | None:
+    hourly, daily = demo_limits()
+    ip_key, day_key = _demo_windows(ip)
+    used, used_today = _demo_count(ip_key, 3600, False), _demo_count(day_key, 86400, False)
+    if used is None or used_today is None:
+        return None
+    return max(0, min(hourly - used, daily - used_today))
 
 
 # ---------------------------------------------------------------------------
@@ -556,13 +420,39 @@ def health():
 @app.get("/api/providers")
 def providers():
     return [
-        {"id": pid, "name": p["name"], "default_model": p["default_model"], "key_url": p["key_url"]}
+        {"id": pid, "name": p["name"], "default_model": p["default_model"], "key_url": p["key_url"], "json_mode": p["json_mode"]}
         for pid, p in PROVIDERS.items()
     ]
 
 
+@app.get("/api/demo")
+def demo(request: Request, response: Response):
+    hourly, daily = demo_limits()
+    enabled = bool(demo_key())
+    response.headers["Cache-Control"] = "no-store"
+    return {
+        "enabled": enabled,
+        "provider": DEMO_PROVIDER,
+        "provider_name": PROVIDERS[DEMO_PROVIDER]["name"],
+        "model": demo_model(),
+        "hourly_limit": hourly,
+        "daily_limit": daily,
+        "remaining_hourly": demo_remaining(client_ip(request)) if enabled else None,
+    }
+
+
 @app.post("/api/providers/verify")
-def verify(cfg: BYOK):
+def verify(
+    request: Request,
+    response: Response,
+    x_llm_provider: Annotated[str, Header()] = "",
+    x_llm_key: Annotated[str, Header()] = "",
+    x_llm_model: Annotated[str, Header()] = "",
+):
+    if not x_llm_key.strip() and demo_key():
+        # Report demo status instead of calling Groq with the shared key (and spending quota) on every check.
+        return {"ok": True, "model": demo_model(), "demo": True, "provider": DEMO_PROVIDER, "remaining_hourly": demo_remaining(client_ip(request))}
+    cfg = byok(request, response, x_llm_provider, x_llm_key, x_llm_model)
     complete_json(cfg.provider, cfg.key, cfg.model, PROMPTS["verify"], "Ping", Ping)
     return {"ok": True, "model": cfg.model}
 
@@ -704,17 +594,22 @@ def client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-async def rate_limit(request: Request):
-    """RATE_LIMIT (default 5) requests per IP per 10 minutes, in memory. Async, so it runs on the event loop without a lock."""
+def _limit(hits: dict[str, list[float]], ip: str, limit: int, message: str):
+    """Sliding window: at most `limit` requests per IP per RATE_WINDOW (10 minutes), in memory."""
     # ponytail: per-process memory; use a shared store if running several workers
-    ip, now = client_ip(request), time.monotonic()
-    recent = [t for t in _rate_hits.pop(ip, []) if now - t < RATE_WINDOW]
-    if len(recent) >= RATE_LIMIT:
-        _rate_hits[ip] = recent
-        raise HTTPException(429, "Too many requests. Please try again later.")
-    _rate_hits[ip] = [*recent, now]  # re-inserted last, so dict order is least recently seen first
-    while len(_rate_hits) > RATE_MAX_IPS:
-        del _rate_hits[next(iter(_rate_hits))]
+    now = time.monotonic()
+    recent = [t for t in hits.pop(ip, []) if now - t < RATE_WINDOW]
+    if len(recent) >= limit:
+        hits[ip] = recent
+        raise HTTPException(429, message)
+    hits[ip] = [*recent, now]  # re-inserted last, so dict order is least recently seen first
+    while len(hits) > RATE_MAX_IPS:
+        del hits[next(iter(hits))]
+
+
+async def rate_limit(request: Request):
+    """Waitlist: RATE_LIMIT (default 5) per IP per 10 minutes. Async, so it runs on the event loop without a lock."""
+    _limit(_rate_hits, client_ip(request), RATE_LIMIT, "Too many requests. Please try again later.")
 
 
 WAITLIST_UNAVAILABLE = "The waitlist is temporarily unavailable."
@@ -828,6 +723,43 @@ def export_waitlist(authorization: Annotated[str, Header()] = ""):
         media_type="text/csv",
         headers={"Content-Disposition": 'attachment; filename="waitlist.csv"', "Cache-Control": "no-store"},
     )
+
+
+# ---------------------------------------------------------------------------
+# Live job search (sources and parsing in jivika/jobs.py)
+# ---------------------------------------------------------------------------
+
+JOBS_RATE_LIMIT = int(os.getenv("JIVIKA_JOBS_RATE_LIMIT", "30"))
+_job_hits: dict[str, list[float]] = {}
+
+
+async def jobs_rate_limit(request: Request):
+    _limit(_job_hits, client_ip(request), JOBS_RATE_LIMIT, "Too many searches. Please wait a few minutes and try again.")
+
+
+@app.get("/api/jobs/search", dependencies=[Depends(jobs_rate_limit)])
+def jobs_search(
+    q: Annotated[str, Query(max_length=100)],
+    location: Annotated[str, Query(max_length=80)] = "",
+    remote: Literal["any", "remote", "onsite"] = "any",
+    sources: Annotated[str, Query(max_length=200)] = "",
+    page: Annotated[int, Query(ge=1, le=5)] = 1,
+):
+    if not q.strip():
+        raise HTTPException(422, "Enter a role or keywords to search.")
+    return jobs.search(q, location, remote, sources, page)
+
+
+@app.get("/api/jobs/detail", dependencies=[Depends(jobs_rate_limit)])
+def jobs_detail(source: Annotated[str, Query(max_length=20)], id: Annotated[str, Query(max_length=64)]):
+    try:
+        return jobs.detail(source.strip().lower(), id.strip())
+    except KeyError:
+        raise HTTPException(404, "Details are not available for this source.") from None
+    except ValueError:
+        raise HTTPException(422, "Invalid job id.") from None
+    except jobs.SourceError as exc:
+        raise HTTPException(502, str(exc)) from None
 
 
 # ---------------------------------------------------------------------------
