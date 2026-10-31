@@ -54,7 +54,7 @@ def test_health():
 
 def test_providers():
     data = client.get("/api/providers").json()
-    assert [p["id"] for p in data] == ["gemini", "openai", "anthropic", "groq", "mistral", "deepseek", "xai", "openrouter"]
+    assert [p["id"] for p in data] == ["gemini", "openai", "anthropic", "groq", "mistral", "deepseek", "xai", "openrouter", "qwen"]
     assert data[0]["default_model"] == main.PROVIDERS["gemini"]["default_model"]
     assert all({"id", "name", "default_model", "key_url"} <= set(p) for p in data)
     assert all("base_url" not in p for p in data)
@@ -143,7 +143,9 @@ def test_profile(fake_llm):
     fake_llm[0]["Profile"] = {"name": "Jane", "years_experience": 4.5, "skills": ["Python"]}
     r = client.post("/api/resume/profile", headers=HEADERS, json={"resume": "Jane, Python dev"})
     assert r.status_code == 200
-    assert r.json()["name"] == "Jane" and r.json()["years_experience"] == 4.5
+    body = r.json()
+    assert body["name"] == "Jane" and (body["experience_years"], body["experience_months"]) == (4, 6)  # legacy decimal years
+    assert body["years_experience"] == 4.5
 
 
 def test_text_inputs_are_truncated(fake_llm):
@@ -193,7 +195,7 @@ def test_infinite_score_from_model_is_clamped():
     assert main.InterviewFeedback.model_validate_json('{"score": 1e999}').score == 0
 
 
-@pytest.mark.parametrize("raw, expected", [("5+", 5), ("3.5 years", 3.5), ("unknown", 0), (4, 4)])
+@pytest.mark.parametrize("raw, expected", [("5+", 5), ("3.5 years", 3.42), ("unknown", 0), (4, 4)])
 def test_years_experience_is_lenient(raw, expected):
     assert main.Profile(years_experience=raw).years_experience == expected
 
@@ -213,7 +215,7 @@ def test_linkedin_review(fake_llm):
 
 
 def test_career_path_defaults_to_inr(fake_llm):
-    fake_llm[0]["CareerPath"] = {"current": {}, "next": {}, "future": {}, "career_score": 70}
+    fake_llm[0]["CareerPath"] = {"current": {}, "next": {"title": "Senior Analyst"}, "future": {}, "career_score": 70}
     r = client.post("/api/career/path", headers=HEADERS, json={"resume": "cv", "current_role": "Analyst"})
     assert r.status_code == 200 and r.json()["career_score"] == 70
     assert "INR" in fake_llm[1][0]["user"]
