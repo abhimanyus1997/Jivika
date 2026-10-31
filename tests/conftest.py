@@ -1,13 +1,13 @@
 import pytest
 
 import main
-from jivika import importer, jobs, models, salary
+from jivika import importer, jobs, models, resources, salary
 
 ENV = (
     "JIVIKA_DEMO_GROQ_KEY", "JIVIKA_DEMO_MODEL", "JIVIKA_DEMO_HOURLY_LIMIT", "JIVIKA_DEMO_DAILY_LIMIT",
     "JIVIKA_JOB_SOURCES", "JIVIKA_ATS_BOARDS", "JIVIKA_ADZUNA_APP_ID", "JIVIKA_ADZUNA_APP_KEY", "JIVIKA_ADZUNA_COUNTRY",
     "KV_REST_API_URL", "KV_REST_API_TOKEN", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN", "JIVIKA_TRUST_PROXY",
-    "JIVIKA_URL_IMPORT", "JIVIKA_SALARY_SOURCES",
+    "JIVIKA_URL_IMPORT", "JIVIKA_SALARY_SOURCES", "JIVIKA_RESOURCE_SOURCES", "JIVIKA_PARSER", "JIVIKA_DOCLING_URL",
 )
 
 
@@ -27,7 +27,9 @@ def clean_state(monkeypatch):
     monkeypatch.setattr(importer, "resolve", no_network)
     monkeypatch.setattr(importer, "_request", no_network)
     monkeypatch.setattr(models, "_request", models_offline)
+    monkeypatch.setattr(resources, "DDG_INTERVAL", 0)
+    resources._ddg_state.update(dict.fromkeys(resources._ddg_state, 0.0))
     for store in (main._demo_counts, main._job_hits, main._rate_hits, main._import_hits, main._salary_hits, main._models_hits, main._ats_hits,
-                  jobs._cache, jobs._searches, models._cache, salary._cache):
+                  main._resource_hits, resources._cache, jobs._cache, jobs._searches, models._cache, salary._cache):
         store.clear()
     yield

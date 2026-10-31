@@ -239,9 +239,10 @@ def test_interview_feedback(fake_llm):
 
 
 def test_cover_letter(fake_llm):
-    fake_llm[0]["CoverLetter"] = {"cover_letter": "Dear team"}
+    fake_llm[0]["CoverLetterDraft"] = {"paragraphs": ["I am applying.", "Thank you."]}
     body = {"resume": "cv", "job_description": "jd", "tone": "concise"}
-    assert client.post("/api/cover-letter", headers=HEADERS, json=body).json() == {"cover_letter": "Dear team"}
+    out = client.post("/api/cover-letter", headers=HEADERS, json=body).json()
+    assert out["cover_letter"] == "Dear Hiring Manager,\n\nI am applying.\n\nThank you.\n\nYours sincerely,"
     body["tone"] = "angry"
     assert client.post("/api/cover-letter", headers=HEADERS, json=body).status_code == 422
 
@@ -328,3 +329,20 @@ def test_every_provider_declares_capabilities():
     for spec in main.PROVIDERS.values():
         assert spec["base_url"].startswith("https://") and spec["default_model"]
         assert isinstance(spec["json_mode"], bool) and isinstance(spec["temperature"], bool)
+
+
+def test_complete_json_retries_provider_json_validation_failures(fake_openai):
+    bad = main.openai.BadRequestError("Failed to validate JSON. Please adjust your prompt.", response=httpx.Response(400, request=httpx.Request("POST", "https://example.test")), body=None)
+    fake_openai.responses = [bad, '{"score": 70}']
+    assert call().score == 70 and len(fake_openai.seen) == 2
+    fake_openai.responses = [bad, bad]
+    with pytest.raises(main.HTTPException) as e:
+        call()
+    assert e.value.status_code == 502
+
+
+def test_complete_json_output_budget_is_dropped_when_rejected(fake_openai):
+    too_big = main.openai.BadRequestError("max_completion_tokens must be less than or equal to 8192", response=httpx.Response(400, request=httpx.Request("POST", "https://example.test")), body=None)
+    fake_openai.responses = [too_big, '{"score": 70}']
+    assert main.complete_json("groq", "k", "m", "sys", "user", main.LinkedInReview, max_tokens=16000).score == 70
+    assert fake_openai.seen[0]["max_completion_tokens"] == 16000 and "max_completion_tokens" not in fake_openai.seen[1]

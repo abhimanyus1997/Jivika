@@ -7,8 +7,9 @@ OpenAI-compatible endpoint. Without a key, an optional owner-supplied Groq key
 waitlist and demo counters (SQLite or Upstash Redis, else memory) plus short-lived
 job search, model list and salary caches. Providers, schemas and prompts live in
 jivika/schemas.py, job search in jivika/jobs.py, job import from links in
-jivika/importer.py, ATS checks in jivika/ats.py, live model lists in jivika/models.py
-and market salary data in jivika/salary.py.
+jivika/importer.py, ATS checks in jivika/ats.py, live model lists in jivika/models.py,
+market salary data in jivika/salary.py, verified learning resources in jivika/resources.py,
+coding practice problems in jivika/coding.py and resume file parsing in jivika/parsing.py.
 """
 
 import csv
@@ -39,10 +40,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from openai import OpenAI
 from pydantic import AfterValidator, BaseModel, Field, ValidationError
-from pypdf import PdfReader
-from pypdf.errors import PdfReadError
-
-from jivika import ats, importer, jobs, salary
+from jivika import ats, coding, importer, jobs, parsing, resources, salary
 from jivika import models as model_lists
 from jivika.ats import STOPWORDS, tokens as _tokens  # noqa: F401  (keyword coverage shares the ATS tokenizer)
 from jivika.schemas import (  # noqa: F401  (re-exported for tests and callers)
@@ -55,8 +53,15 @@ from jivika.schemas import (  # noqa: F401  (re-exported for tests and callers)
     CVReviewRequest,
     CareerPath,
     CareerPathRequest,
+    CodingDraft,
+    CodingProblems,
+    CodingRequest,
+    CodingReview,
+    CodingReviewRequest,
     CoverLetter,
+    CoverLetterDraft,
     CoverLetterRequest,
+    Letter,
     CurrentRole,
     FutureRole,
     InterviewFeedback,
@@ -79,6 +84,7 @@ from jivika.schemas import (  # noqa: F401  (re-exported for tests and callers)
     ProfileRequest,
     ROADMAP_SH,
     RequiredText,
+    ResolveRequest,
     ResumeMeta,
     Roadmap,
     Score,
@@ -169,8 +175,14 @@ def _is_auth_error(exc: openai.APIError) -> bool:
     return isinstance(exc, openai.BadRequestError) and "api key" in str(exc).lower()
 
 
-def complete_json(provider: str, key: str, model: str, system: str, user: str, schema_model):
-    """Call the provider once (plus one retry on invalid output) and return a validated model."""
+# Output budgets for tasks with long answers; provider defaults (often 8k tokens with reasoning) truncate them.
+TASK_MAX_TOKENS = {"coding_problems": 16_000}
+_JSON_FAILED = re.compile(r"failed to (?:validate|generate) json", re.I)
+
+
+def complete_json(provider: str, key: str, model: str, system: str, user: str, schema_model, max_tokens: int | None = None):
+    """Call the provider once (plus one retry on invalid output) and return a validated model. max_tokens raises
+    the output budget; a model that rejects it is retried once without it."""
     spec = PROVIDERS[provider]
     name = spec["name"]
     client = OpenAI(api_key=key, base_url=spec["base_url"], timeout=60, max_retries=1)  # worst case ~240 s with the JSON retry, under Vercel's 300 s
@@ -179,6 +191,8 @@ def complete_json(provider: str, key: str, model: str, system: str, user: str, s
         options["response_format"] = {"type": "json_object"}
     if spec["temperature"]:
         options["temperature"] = 0.3
+    if max_tokens:
+        options["max_completion_tokens"] = max_tokens
     schema = json.dumps(schema_model.model_json_schema())
     messages = [
         {
@@ -196,6 +210,14 @@ def complete_json(provider: str, key: str, model: str, system: str, user: str, s
                 raise HTTPException(401, f"The API key was rejected by {name}.") from None
             if isinstance(exc, openai.RateLimitError):
                 raise HTTPException(429, f"Rate limit reached at {name}. Please wait and retry.") from None
+            if isinstance(exc, openai.BadRequestError) and _JSON_FAILED.search(str(exc)):
+                log.info("Provider %s rejected its own JSON, retrying once", provider)  # Groq json_validate_failed
+                continue
+            if isinstance(exc, openai.BadRequestError) and max_tokens and "token" in str(exc).lower():
+                log.info("Provider %s rejected the output budget, retrying without it", provider)
+                options.pop("max_completion_tokens", None)
+                max_tokens = None
+                continue
             log.warning("Provider %s error: %s", provider, type(exc).__name__)
             raise HTTPException(502, "The model provider returned an error.") from None
         content = (response.choices[0].message.content or "") if response.choices else ""
@@ -215,13 +237,14 @@ def _strip_fences(text: str) -> str:
 
 def ask(cfg: LLMConfig, task: str, schema_model, **sections: str):
     user = "\n\n".join(f"## {label.replace('_', ' ').title()}\n{value}" for label, value in sections.items() if value)
+    budget = {"max_tokens": TASK_MAX_TOKENS[task]} if task in TASK_MAX_TOKENS else {}
     if cfg.demo_ip is None:
-        return complete_json(cfg.provider, cfg.key, cfg.model, PROMPTS[task], user, schema_model)
+        return complete_json(cfg.provider, cfg.key, cfg.model, PROMPTS[task], user, schema_model, **budget)
     remaining = use_demo(cfg.demo_ip)
     if cfg.response is not None:
         cfg.response.headers.update({"X-Jivika-Demo": "1", "X-Jivika-Demo-Remaining": str(remaining)})
     try:
-        return complete_json(cfg.provider, cfg.key, cfg.model, PROMPTS[task], user, schema_model)
+        return complete_json(cfg.provider, cfg.key, cfg.model, PROMPTS[task], user, schema_model, **budget)
     except HTTPException as exc:
         if exc.status_code != 401:
             raise
@@ -415,11 +438,25 @@ SECURITY_HEADERS = [
     (b"x-frame-options", b"DENY"),
     (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
 ]
-CSP = (
-    b"content-security-policy",
-    b"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
-    b"font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+_CSP_REST = (
+    b"style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; "
+    b"frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 )
+CSP = (b"content-security-policy", b"default-src 'self'; script-src 'self'; " + _CSP_REST)
+# The app (/app/*) runs the coding playground in Web Workers. Its pages may compile WebAssembly
+# ('wasm-unsafe-eval', for Pyodide and sql.js) and start same-origin or blob: workers; plain eval stays blocked.
+CSP_APP = (b"content-security-policy", b"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; " + _CSP_REST)
+# A dedicated worker script is governed by the CSP of its own response, not the page's. Only worker bundles
+# (built files named *worker*.js under assets/) may eval, which the JavaScript runner needs for new Function;
+# workers have no DOM, cookies or storage access, and each run's worker is terminated afterwards.
+CSP_WORKER = (b"content-security-policy", b"default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; " + _CSP_REST)
+_WORKER_SCRIPT = re.compile(r"/assets/(?:[\w.-]+/)*[\w.-]*worker[\w.-]*\.m?js$", re.I)
+
+
+def csp_for(path: str) -> tuple[bytes, bytes]:
+    if _WORKER_SCRIPT.search(path):
+        return CSP_WORKER
+    return CSP_APP if path == "/app" or path.startswith("/app/") else CSP
 HSTS = (b"strict-transport-security", b"max-age=31536000")
 
 
@@ -433,8 +470,9 @@ class SecurityHeaders:
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
         extra = list(SECURITY_HEADERS)
-        if not scope["path"].removeprefix(base_path()).startswith("/api/docs"):
-            extra.append(CSP)
+        path = scope["path"].removeprefix(base_path())
+        if not path.startswith("/api/docs"):
+            extra.append(csp_for(path))
         if os.getenv("JIVIKA_HSTS") == "1":
             extra.append(HSTS)
 
@@ -497,41 +535,54 @@ def verify(
     return {"ok": True, "model": cfg.model}
 
 
+@app.get("/api/parser")
+def parser_info():
+    """Which resume parser is active and the file types it accepts (Docling adds DOCX, PNG and JPG)."""
+    return parsing.info()
+
+
 @app.post("/api/resume/parse")
 async def parse_resume(file: UploadFile = File(...)):
-    """Text plus layout metadata for the ATS checker (see jivika/ats.py for the heuristics)."""
-    # Some browsers send PDFs as octet-stream or untyped; the magic-byte check decides.
-    content_type = (file.content_type or "").lower()
-    if content_type not in ("", "application/octet-stream") and not content_type.endswith("/pdf"):
-        raise HTTPException(415, "Please upload a PDF file.")
+    """Text plus layout metadata for the ATS checker (jivika/parsing.py; heuristics in jivika/ats.py)."""
     data = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(413, upload_too_large())
-    if not data.startswith(b"%PDF"):
-        raise HTTPException(400, "The file is not a valid PDF.")
-    # PDF parsing is CPU-bound; keep it off the event loop.
-    text, meta = await run_in_threadpool(_extract_pdf_text, data)
-    if not text:
-        raise HTTPException(422, "No text found in the PDF. Scanned documents are not supported.")
-    text = text[:MAX_TEXT_CHARS]
     name = re.split(r"[\\/]", file.filename or "")[-1].strip()[:255]
-    meta = ResumeMeta(**meta, file_name=name or None).model_dump()
-    return {"text": text, "pages": meta["pages"], "characters": len(text), "meta": meta}
-
-
-def _extract_pdf_text(data: bytes) -> tuple[str, dict]:
     try:
-        reader = PdfReader(io.BytesIO(data))
-        if reader.is_encrypted:
-            raise HTTPException(400, "Password-protected PDFs are not supported.")
-        return ats.pdf_text_and_meta(reader)
-    except (PdfReadError, ValueError, KeyError, TypeError, AttributeError):
-        raise HTTPException(400, "The PDF could not be read.") from None
+        # Parsing is CPU-bound; keep it off the event loop. The magic bytes decide the type, since some
+        # browsers send PDFs as octet-stream or untyped.
+        parsed = await run_in_threadpool(parsing.parse, data, name, file.content_type or "")
+    except parsing.ParseError as exc:
+        raise HTTPException(exc.status, str(exc)) from None
+    text = parsed["text"].strip()
+    if not text:
+        detail = "No text found in the PDF. Scanned documents are not supported." if parsed["parser"] == "pypdf" else "No text found in the file."
+        raise HTTPException(422, detail)
+    text = text[:MAX_TEXT_CHARS]
+    meta = ResumeMeta(**parsed["meta"], file_name=name or None).model_dump()
+    return {"text": text, "pages": meta["pages"], "characters": len(text), "meta": meta, "parser": parsed["parser"]}
+
+
+def _squash(text: str) -> str:
+    return re.sub(r"[\s().-]+", "", text.lower())
+
+
+def _from_resume(resume: str, value: str, pattern: re.Pattern) -> str:
+    """The model's contact detail only if the resume contains it, else the first match of pattern (or '')."""
+    value = value.strip()
+    if value and _squash(value) in _squash(resume):
+        return value
+    found = pattern.search(resume)
+    return found.group(0).strip() if found else ""
 
 
 @app.post("/api/resume/profile", response_model=Profile)
 def resume_profile(body: ProfileRequest, cfg: BYOK):
-    return ask(cfg, "profile", Profile, resume=body.resume)
+    profile = ask(cfg, "profile", Profile, resume=body.resume)
+    profile.email = _from_resume(body.resume, profile.email, ats.EMAIL)
+    profile.phone = _from_resume(body.resume, profile.phone, ats.PHONE)
+    profile.linkedin = _from_resume(body.resume, profile.linkedin, ats.LINKEDIN)
+    return profile
 
 
 @app.post("/api/match", response_model=MatchResult)
@@ -596,9 +647,65 @@ def interview_feedback(body: InterviewFeedbackRequest, cfg: BYOK):
     )
 
 
+_DASHES = str.maketrans({c: "-" for c in "‐‑‒–—−"} | {"’": "'"})  # Unicode dashes, curly apostrophe
+
+
+def _grounded(value: str, source: str) -> str:
+    """value when the source text states it (case, spacing and dash style ignored), else ''. Recipient details are never invented."""
+    value = " ".join(value.split())
+    norm = lambda text: " ".join(text.split()).translate(_DASHES).lower()  # noqa: E731
+    return value if value and norm(value) in norm(source) else ""
+
+
 @app.post("/api/cover-letter", response_model=CoverLetter)
 def cover_letter(body: CoverLetterRequest, cfg: BYOK):
-    return ask(cfg, "cover_letter", CoverLetter, tone=body.tone, job_description=body.job_description, resume=body.resume)
+    given = "\n".join(f"{label}: {value}" for label, value in (
+        ("Company", body.company), ("Recipient name", body.recipient_name), ("Recipient title", body.recipient_title)) if value)
+    draft = ask(cfg, "cover_letter", CoverLetterDraft, tone=body.tone, provided_details=given,
+                job_description=body.job_description, resume=body.resume)
+    jd = body.job_description
+    contact = ", ".join(filter(None, (_grounded(part, jd) for part in re.split(r"[,;|\n]+", draft.recipient_contact))))
+    name = body.recipient_name or _grounded(draft.recipient_name, jd)
+    paragraphs = [" ".join(p.split()) for p in draft.paragraphs if p.strip()]
+    if len(paragraphs) > 4:
+        paragraphs = [*paragraphs[:3], " ".join(paragraphs[3:])]
+    sign_off = " ".join(draft.sign_off.split())[:40].rstrip(",.") or "Yours sincerely"
+    letter = Letter(
+        recipient_name=name,
+        recipient_title=body.recipient_title or _grounded(draft.recipient_title, jd),
+        company=body.company or _grounded(draft.company, jd),
+        recipient_contact=contact,
+        job_reference=" ".join(draft.job_reference.split())[:160],
+        salutation=f"Dear {name}," if name else "Dear Hiring Manager,",
+        paragraphs=paragraphs,
+        sign_off=sign_off + ",",
+    )
+    signature = body.sender.name if body.sender and body.sender.name else ""
+    text = "\n\n".join([letter.salutation, *letter.paragraphs, "\n".join(filter(None, [letter.sign_off, signature]))])
+    return CoverLetter(cover_letter=text, letter=letter)
+
+
+@app.post("/api/interview/coding", response_model=CodingProblems)
+def interview_coding(body: CodingRequest, cfg: BYOK):
+    """Practice problems with tests and a reference solution. Validated here; never executed on the server."""
+    focus = coding.focus(body.job_description)
+    languages = list(dict.fromkeys(body.languages or (["python", "javascript", "sql"] if focus == "data" else ["python", "javascript"])))
+    draft = ask(cfg, "coding_problems", CodingDraft, problem_mix=coding.focus_brief(focus, languages, body.count),
+                job_description=body.job_description, resume=body.resume)
+    problems = coding.build(draft.problems, languages, body.count)
+    if not problems:
+        raise HTTPException(502, "The model returned no usable problems. Please try again.")
+    return {"problems": problems}
+
+
+@app.post("/api/interview/coding/review", response_model=CodingReview)
+def interview_coding_review(body: CodingReviewRequest, cfg: BYOK):
+    results = body.results
+    lines = [f"Passed {results.passed} of {results.total} tests."] + [
+        f"Failed: args {f.args} expected {f.expected} actual {f.actual}" for f in results.failures]
+    fence = "~~~~"
+    return ask(cfg, "coding_review", CodingReview, problem=body.title, statement=body.statement, language=body.language,
+               test_results="\n".join(lines), candidate_code=f"{fence}{body.language}\n{body.code}\n{fence}")
 
 
 # ---------------------------------------------------------------------------
@@ -808,6 +915,7 @@ _import_hits: dict[str, list[float]] = {}
 _salary_hits: dict[str, list[float]] = {}
 _models_hits: dict[str, list[float]] = {}
 _ats_hits: dict[str, list[float]] = {}
+_resource_hits: dict[str, list[float]] = {}
 
 
 async def import_enabled():
@@ -869,6 +977,16 @@ def ats_check(body: ATSRequest, cfg: OptionalLLM):
         "categories": categories,
         "note": note,
     }
+
+
+async def resources_rate_limit(request: Request):
+    _limit(_resource_hits, client_ip(request), 30, "Too many resource lookups. Please wait a few minutes and try again.")
+
+
+@app.post("/api/resources/resolve", dependencies=[Depends(resources_rate_limit)])
+def resources_resolve(body: ResolveRequest):
+    """Real, checked links for resource_queries (jivika/resources.py). Deterministic: no model is called."""
+    return resources.resolve([item.model_dump() for item in body.items], body.max_per_item)
 
 
 async def salary_rate_limit(request: Request):
