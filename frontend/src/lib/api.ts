@@ -247,7 +247,19 @@ export interface CareerPath {
 
 /* ---------- Job import ---------- */
 
-export type ImportSource = 'linkedin' | 'naukri' | 'jsonld' | 'text'
+export type ImportSource = 'linkedin' | 'naukri' | 'indeed' | 'instahyre' | 'wellfound' | 'foundit' | 'jsonld' | 'text' | 'page'
+
+export const SOURCE_LABEL: Record<ImportSource, string> = {
+  linkedin: 'LinkedIn',
+  naukri: 'Naukri',
+  indeed: 'Indeed',
+  instahyre: 'Instahyre',
+  wellfound: 'Wellfound',
+  foundit: 'foundit',
+  jsonld: 'Structured data',
+  text: 'Page text',
+  page: 'Page text',
+}
 
 export interface ImportedJob {
   title: string

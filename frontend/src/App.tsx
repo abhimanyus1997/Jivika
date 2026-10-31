@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useState, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
 import { FALLBACK_PROVIDERS, loadDemo, useAnswered, useDemoActive } from './lib/api'
+import { receiveClip } from './lib/clip'
 import { useApiKey, useKeyVerified, useProfile, useSettings, useStored } from './lib/store'
 import { AnsweredBy, Avatar, Badge, Dialog, Logo, ProviderIcon, ShortcutHint, Toaster } from './components/ui'
 import { CommandPalette, useCtrlK, type Command } from './components/CommandPalette'
@@ -316,6 +317,12 @@ export default function App() {
   }, [])
   useCtrlK(openPalette)
   useEffect(loadDemo, [])
+  useEffect(() => {
+    const onHash = () => void receiveClip()
+    onHash()
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
 
   useEffect(() => {
     document.title = `${page.title} - Jivika`

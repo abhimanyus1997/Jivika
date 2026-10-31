@@ -1,13 +1,16 @@
 import { Link2 } from 'lucide-react'
 import { useId, useState } from 'react'
-import { api, ApiError, importedJobText, useAction, type ImportedJob, type ImportSource } from '../lib/api'
+import { api, ApiError, importedJobText, SOURCE_LABEL, useAction, type ImportedJob } from '../lib/api'
+import { useStored } from '../lib/store'
 import { Badge, Button, ErrorMessage, inputCls } from './ui'
 
-const SOURCE_LABEL: Record<ImportSource, string> = {
-  linkedin: 'LinkedIn',
-  naukri: 'Naukri',
-  jsonld: 'Structured data',
-  text: 'Page text',
+const BLOCKING_HOSTS = /(^|\.)(naukri|linkedin)\.com$/i
+const host = (link: string) => {
+  try {
+    return new URL(/^https?:\/\//i.test(link.trim()) ? link.trim() : `https://${link.trim()}`).hostname
+  } catch {
+    return ''
+  }
 }
 
 const importJob = async (url: string) => {
@@ -27,10 +30,15 @@ const importJob = async (url: string) => {
 export function JobImport({ onImport }: { onImport: (text: string, job: ImportedJob) => void }) {
   const id = useId()
   const [url, setUrl] = useState('')
-  const [job, setJob] = useState<ImportedJob | null>(null)
+  const [imported, setJob] = useState<ImportedJob | null>(null)
+  // Set by the Jivika Clipper receiver (lib/clip.ts); a link import replaces it.
+  const [clipped, setClipped] = useStored<ImportedJob | null>('clip', null)
+  const job = imported ?? clipped
   const action = useAction(importJob)
+  const blocked = !!action.error && (action.error.includes('Blocked by the source') || BLOCKING_HOSTS.test(host(url)))
   async function run() {
     setJob(null)
+    setClipped(null)
     // Links are often pasted without a scheme (linkedin.com/jobs/view/123).
     const link = /^https?:\/\//i.test(url.trim()) ? url.trim() : `https://${url.trim()}`
     if (!/^https?:\/\/\S+\.\S+/i.test(link)) {
@@ -79,6 +87,15 @@ export function JobImport({ onImport }: { onImport: (text: string, job: Imported
         </Button>
       </form>
       <ErrorMessage message={action.error} />
+      {blocked && (
+        <p className="text-xs leading-4 text-muted">
+          This site blocks server imports.{' '}
+          <a href={`${import.meta.env.BASE_URL}clipper/`} className="font-medium text-brand-600 hover:underline">
+            Use Jivika Clipper
+          </a>{' '}
+          to send this job from your browser.
+        </p>
+      )}
       {job && !action.loading ? (
         <div role="status" className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
           <Badge tone="brand" dot>
