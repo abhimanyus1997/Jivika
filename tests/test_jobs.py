@@ -77,7 +77,59 @@ NAUKRI = {"jobDetails": [{
     "jobDescription": "<p>Reports</p>", "createdDate": 1793400000000, "tagsAndSkills": "sql,excel",
 }, {"jobId": "9", "title": "Offsite", "companyName": "Evil", "jdURL": "https://evil.example/job"}, {"jobId": "10", "title": "Lookalike", "companyName": "Evil", "jdURL": "https://evilnaukri.com/job"}]}
 
+HIMALAYAS = {"jobs": [{
+    "title": "Data Analyst", "companyName": "Pontoon", "employmentType": "Full Time", "minSalary": 600000, "maxSalary": 1200000,
+    "currency": "INR", "salaryPeriod": "annual", "locationRestrictions": ["India"], "categories": ["Data-Analyst"],
+    "description": "<p>SQL</p>", "pubDate": 1791993757, "guid": "https://himalayas.app/companies/pontoon/jobs/data-analyst",
+    "applicationLink": "https://himalayas.app/companies/pontoon/jobs/data-analyst?utm_source=api",
+}, {"title": "Data Analyst", "companyName": "UsCo", "locationRestrictions": ["United States"], "guid": "g2",
+    "applicationLink": "https://himalayas.app/companies/usco/jobs/x"}]}
+JOBICY = {"jobs": [
+    {"id": 1, "url": "https://jobicy.com/jobs/1-data-analyst", "jobTitle": "Data Analyst", "companyName": "Apac Co",
+     "jobGeo": "APAC", "jobType": ["Full-Time"], "jobDescription": "<p>x</p>", "pubDate": "2026-10-31T10:57:37+00:00",
+     "salaryMin": 100, "salaryMax": 200, "salaryCurrency": "USD", "salaryPeriod": "yearly"},
+    {"id": 2, "url": "https://jobicy.com/jobs/2", "jobTitle": "Data Analyst", "companyName": "Ph Co", "jobGeo": "Philippines"},
+]}
+REMOTEOK = [{"legal": "API Terms of Service: link back"}, {
+    "id": "77", "position": "Senior Data Analyst", "company": "Okco", "location": "", "tags": ["sql"], "date": "2026-10-30T16:00:15+00:00",
+    "url": "https://remoteOK.com/remote-jobs/77", "description": "<p>Hi</p>", "salary_min": 0, "salary_max": 0,
+}, {"id": "78", "position": "Chef", "company": "Food", "url": "https://remoteOK.com/remote-jobs/78"}]
+WWR = """<?xml version="1.0"?><rss version="2.0"><channel>
+<item><title>Databricks: Data Analyst</title><region>Anywhere in the World</region><category>Data</category>
+<description>&lt;p&gt;Remote - India&lt;/p&gt;</description><pubDate>Wed, 14 Oct 2026 07:31:00 +0000</pubDate>
+<link>https://weworkremotely.com/remote-jobs/databricks-data-analyst</link></item>
+<item><title>Acme: Data Analyst</title><region>USA Only</region><link>https://weworkremotely.com/remote-jobs/acme-da</link></item>
+</channel></rss>"""
+WORKABLE = {"name": "Apna", "jobs": [{
+    "title": "Data Analyst", "shortcode": "E47", "employment_type": "Full-time", "telecommuting": True, "department": "Data",
+    "url": "https://apply.workable.com/j/E47", "published_on": "2026-10-15", "country": "India",
+    "locations": [{"country": "India", "city": "Mumbai", "region": None}], "description": "<p>Excel</p>",
+}]}
+SMARTRECRUITERS = {"content": [{
+    "id": "600", "name": "Data Analyst", "company": {"name": "SWIGGY"}, "releasedDate": "2026-10-30T14:12:46.858Z",
+    "location": {"city": "Bengaluru", "country": "in", "remote": False, "fullLocation": "Bengaluru, KA, India"},
+    "typeOfEmployment": {"label": "Full-time"}, "function": {"label": "Analytics"},
+}]}
+RECRUITEE = {"offers": [{
+    "id": 9, "title": "Data Analyst", "company_name": "Channable", "careers_url": "https://jobs.channable.com/o/da",
+    "location": "Pune, India", "remote": False, "description": "<p>a</p>", "requirements": "<p>b</p>",
+    "employment_type_code": "fulltime_permanent", "published_at": "2026-10-22 12:11:23 UTC", "department": "Data",
+}]}
+FRESHTEAM = {"branches": [{"id": 5, "location": "Chennai, India"}], "job_roles": [{"id": 7, "name": "Analytics"}], "jobs": [
+    {"id": 1, "title": "Data Analyst", "url": "https://ninjacart.freshteam.com/jobs/x/da", "branch_id": 5, "job_role_id": 7,
+     "remote": False, "description": "<p>d</p>", "created_at": "2025-08-05T06:25:40.000Z", "deleted": False},
+    {"id": 2, "title": "Data Analyst old", "url": "https://ninjacart.freshteam.com/jobs/y", "deleted": True},
+]}
+
 ROUTES = {
+    "himalayas.app/jobs/api/search": HIMALAYAS,
+    "jobicy.com/api/v2": JOBICY,
+    "remoteok.com/api": REMOTEOK,
+    "weworkremotely.com/remote-jobs.rss": WWR,
+    "apply.workable.com/api/v1/widget/accounts/apna": WORKABLE,
+    "api.smartrecruiters.com/v1/companies/Swiggy/": SMARTRECRUITERS,
+    "channable.recruitee.com/api/offers/": RECRUITEE,
+    "ninjacart.freshteam.com/hire/widgets/jobs.json": FRESHTEAM,
     "remotive.com/api/remote-jobs": REMOTIVE,
     "arbeitnow.com/api/job-board-api": ARBEITNOW,
     "api.adzuna.com": ADZUNA,
@@ -270,8 +322,11 @@ def test_fetch_maps_errors_without_leaking_urls(monkeypatch):
 def test_default_sources_and_gating(net):
     result = jobs.search("data analyst", "India")
     sources = by_source(result)
-    assert [s["id"] for s in result["sources"]] == ["remotive", "arbeitnow", "adzuna", "ats", "linkedin", "naukri"]
-    assert {k for k, s in sources.items() if s["enabled"]} == {"remotive", "arbeitnow", "ats"}  # adzuna needs keys
+    assert [s["id"] for s in result["sources"]] == ["remotive", "arbeitnow", "adzuna", "ats", "himalayas", "jobicy", "remoteok",
+                                                   "weworkremotely", "linkedin", "naukri"]
+    assert {k for k, s in sources.items() if s["enabled"]} == {"remotive", "arbeitnow", "ats", "himalayas", "jobicy", "remoteok",
+                                                              "weworkremotely"}  # adzuna needs keys
+    assert all(sources[k]["ok"] and sources[k]["count"] for k in ("himalayas", "jobicy", "remoteok", "weworkremotely"))
     assert sources["linkedin"]["research"] and sources["naukri"]["research"] and not sources["ats"]["research"]
     assert not any("linkedin" in u or "naukri" in u or "adzuna" in u for u, _ in net[0])
     assert result["query"] == "data analyst"
@@ -400,3 +455,78 @@ def test_fetch_refuses_redirects(monkeypatch):
 ])
 def test_location_aliases(have, wanted, ok):
     assert jobs.location_ok({"location": have}, wanted) is ok
+
+
+# --- India-focused public sources ----------------------------------------------
+
+
+def test_himalayas_parser(net):
+    [item] = jobs.himalayas("data analyst", "Bengaluru", "any", 2)  # the US-only role is filtered out
+    url = net[0][-1][0]
+    assert url.startswith("https://himalayas.app/jobs/api/search?") and "q=data+analyst" in url and "country=India" in url and "page=2" in url
+    assert item["url"].endswith("utm_source=api") and item["remote"] is True and item["salary"] == "INR 600,000 - 1,200,000 annual"
+    assert item["location"] == "India" and item["posted_at"].startswith("2026-")
+    jobs.himalayas("x", "Berlin", "any", 1)
+    assert "country=" not in net[0][-1][0]
+    assert jobs.himalayas("x", "", "onsite", 1) == []
+
+
+def test_jobicy_parser(net):
+    [item] = jobs.jobicy("data analyst", "India", "remote", 1)  # APAC passes for India, Philippines-only does not
+    assert item["id"] == "jobicy:1" and item["salary"] == "USD 100 - 200 yearly" and item["employment_type"] == "Full-Time"
+    assert "tag=data+analyst" in net[0][-1][0]
+
+
+def test_remoteok_parser_skips_legal_notice_and_caches(net):
+    [item] = jobs.remoteok("data analyst", "India", "any", 1)
+    assert item["url"] == "https://remoteOK.com/remote-jobs/77" and item["location"] == "Worldwide" and "salary" not in item
+    jobs.remoteok("chef", "", "any", 1)
+    assert sum("remoteok.com" in u for u, _ in net[0]) == 1
+    assert by_source(jobs.search("data analyst", "", sources="remoteok"))["remoteok"]["name"] == "Remote OK"
+
+
+def test_weworkremotely_rss(net):
+    [item] = jobs.weworkremotely("data analyst", "Pune", "any", 1)
+    assert item["company"] == "Databricks" and item["title"] == "Data Analyst" and item["remote"] is True
+    assert item["id"] == "weworkremotely:databricks-data-analyst" and item["posted_at"] == "2026-10-14T07:31:00+00:00"
+    net[1]["weworkremotely"] = "x"
+    jobs._cache.clear()
+    with pytest.raises(jobs.SourceError):
+        jobs.weworkremotely("x", "", "any", 1)
+
+
+def test_new_ats_types(net, monkeypatch):
+    monkeypatch.setenv("JIVIKA_ATS_BOARDS", "workable:apna,smartrecruiters:Swiggy,recruitee:channable,freshteam:ninjacart")
+    items = {i["id"]: i for i in jobs.ats("data analyst", "India", "any", 1)}
+    assert set(items) == {"ats:workable/apna/E47", "ats:smartrecruiters/Swiggy/600", "ats:recruitee/channable/9", "ats:freshteam/ninjacart/1"}
+    wk, sr = items["ats:workable/apna/E47"], items["ats:smartrecruiters/Swiggy/600"]
+    assert wk["remote"] is True and wk["location"] == "Mumbai, India" and wk["company"] == "Apna"
+    assert sr["url"] == "https://jobs.smartrecruiters.com/Swiggy/600" and sr["company"] == "SWIGGY" and sr["remote"] is None
+    assert items["ats:recruitee/channable/9"]["posted_at"] == "2026-10-22T12:11:23+00:00"
+    assert items["ats:freshteam/ninjacart/1"]["location"] == "Chennai, India"
+    urls = [u for u, _ in net[0]]
+    assert "https://api.smartrecruiters.com/v1/companies/Swiggy/postings?country=in&limit=100" in urls
+    assert "https://channable.recruitee.com/api/offers/" in urls
+
+
+def test_subdomain_ats_slugs_are_strict(monkeypatch):
+    monkeypatch.setenv("JIVIKA_ATS_BOARDS", "recruitee:evil.com#,freshteam:a.b,freshteam:-x,recruitee:ok-co,workable:a.b")
+    assert jobs.ats_boards() == [("recruitee", "ok-co"), ("workable", "a.b")]
+
+
+def test_dedupe_across_new_sources(net, monkeypatch):
+    monkeypatch.setitem(ROUTES, "jobicy.com/api/v2", {"jobs": [{**JOBICY["jobs"][0], "companyName": "PONTOON"}]})
+    result = jobs.search("data analyst", "India", sources="himalayas,jobicy")
+    assert sum(j["company"].lower() == "pontoon" for j in result["jobs"]) == 1
+
+
+@pytest.mark.parametrize("have, remote, wanted, ok", [
+    ("Remote (India)", True, "Bengaluru", True),
+    ("India", False, "Bengaluru", False),
+    ("APAC", True, "Hyderabad", True),
+    ("APAC", True, "Berlin", False),
+    ("Anywhere in the World", True, "Bangalore", True),
+    ("Philippines", True, "India", False),
+])
+def test_india_location_filter(have, remote, wanted, ok):
+    assert jobs.location_ok({"location": have, "remote": remote}, wanted) is ok

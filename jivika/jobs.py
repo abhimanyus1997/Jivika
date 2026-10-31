@@ -5,6 +5,7 @@ parameters (or a validated path segment), never the host, so requests cannot be 
 elsewhere. All network access goes through fetch(), which the tests replace.
 """
 
+import email.utils
 import http.client
 import json
 import logging
@@ -15,6 +16,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
@@ -31,12 +33,15 @@ SEARCH_TTL, SEARCH_MAX = 600, 50  # an entry can hold ~1 MB of descriptions
 BOARD_TTL, FEED_TTL = 1800, 900
 USER_AGENT = "Mozilla/5.0 (compatible; Jivika/1.0; +https://abhimanyu.fyi/jivika)"
 
-DEFAULT_SOURCES = "remotive,arbeitnow,adzuna,ats"
+DEFAULT_SOURCES = "remotive,arbeitnow,adzuna,ats,himalayas,jobicy,remoteok,weworkremotely"
 # Verified live (HTTP 200, India roles, response under the size cap) on 2026-10-31.
 DEFAULT_ATS_BOARDS = (
     "greenhouse:groww,greenhouse:inmobi,greenhouse:hackerrank,greenhouse:druva,greenhouse:observeai,"
-    "greenhouse:turing,lever:cred,lever:meesho,lever:mindtickle,lever:fampay,lever:hevodata,lever:nium,"
-    "lever:pocketfm,ashby:sarvam,ashby:atlan,ashby:composio"
+    "greenhouse:turing,greenhouse:newrelic,lever:cred,lever:meesho,lever:mindtickle,lever:fampay,lever:hevodata,"
+    "lever:nium,lever:pocketfm,lever:zeta,ashby:sarvam,ashby:atlan,ashby:composio,workable:apna,"
+    "smartrecruiters:Freshworks,smartrecruiters:ServiceNow,smartrecruiters:LinkedIn3,smartrecruiters:BoschGroup,"
+    "smartrecruiters:Swiggy,smartrecruiters:Sutherland,smartrecruiters:Experian,smartrecruiters:NielsenIQ,"
+    "smartrecruiters:Continental,smartrecruiters:Eurofins,smartrecruiters:Unacademy,freshteam:ninjacart,freshteam:zolve"
 )
 INDIA_CITIES = (
     "india", "bengaluru", "bangalore", "mumbai", "delhi", "gurgaon", "gurugram", "noida", "pune",
@@ -233,6 +238,9 @@ def location_ok(item: dict, location: str) -> bool:
     have = _aliased(item["location"].lower())
     if any(word in have for word in ANYWHERE):
         return True
+    # India-wide remote roles ("Remote (India)", "APAC") are open to someone in any Indian city.
+    if any(p in INDIA_CITIES for p in parts) and (re.search(r"\b(apac|asia)\b", have) or (item.get("remote") is True and "india" in have)):
+        return True
     # ponytail: only India gets a city list (the default audience); add a country table if needed
     return any(part in have or (part == "india" and any(city in have for city in INDIA_CITIES)) for part in parts)
 
@@ -296,6 +304,102 @@ def arbeitnow(q, location, remote, page):
     return [i for i in items if i and matches(i, q, location)]
 
 
+def _wants_india(location: str) -> bool:
+    return any(_aliased(p.strip()) in INDIA_CITIES for p in location.lower().split(","))
+
+
+def _pay(low, high, currency="", period="") -> str:
+    try:
+        low, high = float(low or 0), float(high or 0)
+    except (TypeError, ValueError):
+        return ""
+    if not low and not high:
+        return ""
+    amount = f"{low:,.0f}" if not high or low == high else f"{low:,.0f} - {high:,.0f}"
+    return " ".join(p for p in (str(currency or ""), amount, str(period or "")) if p)
+
+
+def himalayas(q, location, remote, page):
+    """Himalayas search API. Terms: every Apply link must be the supplied applicationLink (kept as url)."""
+    if remote == "onsite":
+        return []
+    params = {"q": q, "page": page}
+    if _wants_india(location):
+        params["country"] = "India"  # also returns roles open worldwide
+    data = fetch_json("https://himalayas.app/jobs/api/search?" + urllib.parse.urlencode(params))
+    items = (
+        job("himalayas", j.get("guid"), j.get("title"), j.get("companyName"), j.get("applicationLink"),
+            location=", ".join(map(str, j.get("locationRestrictions") or [])) or "Worldwide", remote=True,
+            text=html_text(j.get("description")), employment_type=j.get("employmentType"),
+            salary=_pay(j.get("minSalary"), j.get("maxSalary"), j.get("currency"), j.get("salaryPeriod")),
+            posted_at=j.get("pubDate"), tags=" ".join(map(str, [*(j.get("categories") or []), *(j.get("parentCategories") or [])])))
+        for j in (data.get("jobs") or [] if isinstance(data, dict) else [])
+    )
+    return [i for i in items if i and location_ok(i, location)]
+
+
+def jobicy(q, location, remote, page):
+    """Jobicy API. Terms: credit Jobicy with a link and apply via the original job URL (kept as url)."""
+    if remote == "onsite":
+        return []
+    # ponytail: Jobicy has no India geo slug, so location is filtered here (APAC/Anywhere pass for India)
+    data = fetch_json("https://jobicy.com/api/v2/remote-jobs?" + urllib.parse.urlencode({"count": 50, "tag": q}))
+    items = (
+        job("jobicy", j.get("id"), html_text(j.get("jobTitle")), html_text(j.get("companyName")), j.get("url"),
+            location=j.get("jobGeo") or "Anywhere", remote=True, text=html_text(j.get("jobDescription")),
+            employment_type=", ".join(map(str, j.get("jobType") or [])),
+            salary=_pay(j.get("salaryMin"), j.get("salaryMax"), j.get("salaryCurrency"), j.get("salaryPeriod")),
+            posted_at=j.get("pubDate"), tags=" ".join(map(str, j.get("jobIndustry") or [])))
+        for j in (data.get("jobs") or [] if isinstance(data, dict) else [])
+    )
+    return [i for i in items if i and location_ok(i, location)]
+
+
+def remoteok(q, location, remote, page):
+    """Remote OK feed. Terms: link back to the Remote OK listing (url) and name Remote OK as the source."""
+    if remote == "onsite":
+        return []
+    data = cached("remoteok", FEED_TTL, lambda: fetch_json("https://remoteok.com/api", cap=FEED_MAX_BYTES))
+    items = (
+        job("remoteok", j.get("id"), j.get("position"), j.get("company"), j.get("url"),
+            location=j.get("location") or "Worldwide", remote=True, text=html_text(j.get("description")),
+            salary=_pay(j.get("salary_min"), j.get("salary_max"), "USD"), posted_at=j.get("date"),
+            tags=" ".join(map(str, j.get("tags") or [])))
+        for j in (data if isinstance(data, list) else []) if isinstance(j, dict) and j.get("id")  # item 0 is the legal notice
+    )
+    return [i for i in items if i and matches(i, q, location)]
+
+
+def weworkremotely(q, location, remote, page):
+    """We Work Remotely all-jobs RSS feed (every category in one feed)."""
+    if remote == "onsite":
+        return []
+
+    def load():
+        try:
+            root = ET.fromstring(fetch("https://weworkremotely.com/remote-jobs.rss", cap=FEED_MAX_BYTES))
+        except ET.ParseError:
+            raise SourceError("The source returned an invalid response.") from None
+        out = []
+        for it in root.iter("item"):
+            company, _, title = (it.findtext("title") or "").partition(": ")
+            link = it.findtext("link") or ""
+            out.append(job("weworkremotely", link.rstrip("/").rsplit("/", 1)[-1], title or company, company if title else "",
+                           link, location=it.findtext("region") or "Anywhere", remote=True,
+                           text=html_text(it.findtext("description")), posted_at=_rfc822(it.findtext("pubDate")),
+                           tags=it.findtext("category")))
+        return [i for i in out if i]
+
+    return [i for i in cached("weworkremotely", FEED_TTL, load) if matches(i, q, location)]
+
+
+def _rfc822(value):
+    try:
+        return email.utils.parsedate_to_datetime(value).isoformat()
+    except (TypeError, ValueError):
+        return None
+
+
 ADZUNA_SYMBOLS = {"in": "₹", "gb": "£", "us": "$", "ca": "$", "au": "$", "sg": "$", "nz": "$", "de": "€", "fr": "€", "nl": "€", "it": "€", "es": "€", "at": "€", "be": "€"}
 
 
@@ -333,7 +437,13 @@ ATS_URLS = {
     "greenhouse": "https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true",
     "lever": "https://api.lever.co/v0/postings/{slug}?mode=json",
     "ashby": "https://api.ashbyhq.com/posting-api/job-board/{slug}?includeCompensation=true",
+    "workable": "https://apply.workable.com/api/v1/widget/accounts/{slug}?details=true",
+    # ponytail: India-only (country=in) keeps big global boards under the size cap; drop it to go global
+    "smartrecruiters": "https://api.smartrecruiters.com/v1/companies/{slug}/postings?country=in&limit=100",
+    "recruitee": "https://{slug}.recruitee.com/api/offers/",
+    "freshteam": "https://{slug}.freshteam.com/hire/widgets/jobs.json",
 }
+SUBDOMAIN_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")  # slugs that become a host label
 
 
 def ats_boards() -> list[tuple[str, str]]:
@@ -342,7 +452,8 @@ def ats_boards() -> list[tuple[str, str]]:
     for entry in raw.split(","):
         kind, _, slug = entry.strip().partition(":")
         kind, slug = kind.strip().lower(), slug.strip()
-        if kind in ATS_URLS and SLUG_RE.fullmatch(slug) and (kind, slug) not in boards:
+        label_ok = not ATS_URLS.get(kind, "").startswith("https://{slug}") or SUBDOMAIN_RE.fullmatch(slug)
+        if kind in ATS_URLS and SLUG_RE.fullmatch(slug) and label_ok and (kind, slug) not in boards:
             boards.append((kind, slug))
         elif entry.strip():
             log.warning("Ignoring invalid JIVIKA_ATS_BOARDS entry %r", entry.strip()[:80])
@@ -392,7 +503,52 @@ def ashby_jobs(slug, data):
                   posted_at=j.get("publishedAt"), tags=f"{j.get('department') or ''} {j.get('team') or ''}")
 
 
-ATS_PARSERS = {"greenhouse": greenhouse_jobs, "lever": lever_jobs, "ashby": ashby_jobs}
+def workable_jobs(slug, data):
+    for j in data.get("jobs") or [] if isinstance(data, dict) else []:
+        places = [", ".join(str(p) for p in (l.get("city"), l.get("region"), l.get("country")) if p)
+                  for l in j.get("locations") or [] if isinstance(l, dict)]
+        yield job("ats", f"workable/{slug}/{j.get('shortcode')}", j.get("title"), data.get("name") or _company(slug), j.get("url"),
+                  location="; ".join(p for p in places if p) or j.get("country"),
+                  remote=j.get("telecommuting") if isinstance(j.get("telecommuting"), bool) else None,
+                  text=html_text(j.get("description")), employment_type=j.get("employment_type"),
+                  posted_at=j.get("published_on"), tags=f"{j.get('department') or ''} {j.get('function') or ''}")
+
+
+def smartrecruiters_jobs(slug, data):
+    for j in data.get("content") or [] if isinstance(data, dict) else []:
+        place = j.get("location") or {}
+        yield job("ats", f"smartrecruiters/{slug}/{j.get('id')}", j.get("name"), (j.get("company") or {}).get("name") or _company(slug),
+                  f"https://jobs.smartrecruiters.com/{urllib.parse.quote(slug, safe='')}/{urllib.parse.quote(str(j.get('id') or ''), safe='')}",
+                  location=place.get("fullLocation") or place.get("city"),
+                  remote=True if place.get("remote") is True else None,
+                  employment_type=(j.get("typeOfEmployment") or {}).get("label"), posted_at=j.get("releasedDate"),
+                  tags=f"{(j.get('function') or {}).get('label') or ''} {(j.get('department') or {}).get('label') or ''}")
+
+
+def recruitee_jobs(slug, data):
+    for j in data.get("offers") or [] if isinstance(data, dict) else []:
+        yield job("ats", f"recruitee/{slug}/{j.get('id')}", j.get("title"), j.get("company_name") or _company(slug), j.get("careers_url"),
+                  location=j.get("location"), remote=j.get("remote") if isinstance(j.get("remote"), bool) else None,
+                  text=html_text(f"{j.get('description') or ''}{j.get('requirements') or ''}"),
+                  employment_type=humanize(j.get("employment_type_code")),
+                  posted_at=str(j.get("published_at") or "").replace(" UTC", "+00:00"), tags=j.get("department"))
+
+
+def freshteam_jobs(slug, data):
+    if not isinstance(data, dict):
+        return
+    branches = {b.get("id"): b.get("location") or b.get("city") for b in data.get("branches") or [] if isinstance(b, dict)}
+    roles = {r.get("id"): r.get("name") for r in data.get("job_roles") or [] if isinstance(r, dict)}
+    for j in data.get("jobs") or []:
+        if j.get("deleted"):
+            continue
+        yield job("ats", f"freshteam/{slug}/{j.get('id')}", j.get("title"), _company(slug), j.get("url"),
+                  location=branches.get(j.get("branch_id")) or "", remote=True if j.get("remote") is True else None,
+                  text=html_text(j.get("description")), posted_at=j.get("created_at"), tags=roles.get(j.get("job_role_id")))
+
+
+ATS_PARSERS = {"greenhouse": greenhouse_jobs, "lever": lever_jobs, "ashby": ashby_jobs, "workable": workable_jobs,
+               "smartrecruiters": smartrecruiters_jobs, "recruitee": recruitee_jobs, "freshteam": freshteam_jobs}
 
 
 def board(kind: str, slug: str) -> list[dict]:
@@ -539,6 +695,10 @@ SOURCES = {
     "arbeitnow": ("Arbeitnow", arbeitnow, False, False),
     "adzuna": ("Adzuna", adzuna, False, True),
     "ats": ("Company career pages", ats, False, False),
+    "himalayas": ("Himalayas", himalayas, False, True),
+    "jobicy": ("Jobicy", jobicy, False, False),
+    "remoteok": ("Remote OK", remoteok, False, False),
+    "weworkremotely": ("We Work Remotely", weworkremotely, False, False),
     "linkedin": ("LinkedIn", linkedin, True, True),
     "naukri": ("Naukri", naukri, True, True),
 }
