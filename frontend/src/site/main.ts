@@ -16,6 +16,25 @@ if (toggle && panel) {
   document.addEventListener('keydown', (e) => e.key === 'Escape' && !panel.hidden && (set(false), toggle.focus()))
 }
 
+// Theme toggle: cycles light -> dark -> system. State lives in public/theme.js (shared with the app and other tabs).
+const themeButton = document.querySelector<HTMLButtonElement>('[data-theme-toggle]')
+const themeApi = window.jivikaTheme
+if (themeButton && themeApi) {
+  const order = ['light', 'dark', 'system'] as const
+  const names = { light: 'Light', dark: 'Dark', system: 'System' }
+  const sync = () => {
+    const mode = themeApi.get()
+    const next = order[(order.indexOf(mode) + 1) % order.length]
+    themeButton.dataset.mode = mode
+    themeButton.setAttribute('aria-label', `Theme: ${names[mode]}. Switch to ${names[next].toLowerCase()}`)
+    themeButton.title = `Theme: ${names[mode]}`
+  }
+  themeButton.addEventListener('click', () => themeApi.set(order[(order.indexOf(themeApi.get()) + 1) % order.length]))
+  window.addEventListener('jivika-theme', sync)
+  sync()
+  themeButton.hidden = false
+}
+
 // Footer year
 for (const el of document.querySelectorAll('[data-year]')) el.textContent = String(new Date().getFullYear())
 
@@ -75,4 +94,49 @@ for (const form of document.querySelectorAll<HTMLFormElement>('form[data-waitlis
       button.textContent = label
     }
   })
+}
+
+// Scroll reveal. Content stays visible unless motion is allowed and IntersectionObserver exists (see site.css).
+const motion = window.matchMedia('(prefers-reduced-motion: no-preference)')
+if (motion.matches && 'IntersectionObserver' in window) {
+  for (const group of document.querySelectorAll<HTMLElement>('[data-stagger]')) {
+    ;[...group.children].forEach((el, i) => {
+      const child = el as HTMLElement
+      child.dataset.reveal = ''
+      child.style.setProperty('--reveal-i', String(Math.min(i, 8)))
+    })
+  }
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue
+        const el = entry.target as HTMLElement
+        observer.unobserve(el)
+        el.classList.add('is-visible')
+        // Hand the element back to its own styles (e.g. card hover transitions) once the reveal has finished.
+        setTimeout(() => el.removeAttribute('data-reveal'), 1200)
+      }
+    },
+    { rootMargin: '0px 0px -8% 0px' },
+  )
+  document.querySelectorAll('[data-reveal]').forEach((el) => observer.observe(el))
+  document.documentElement.classList.add('motion-ok')
+}
+
+// Hero clip: one <video> per theme (index.html), shown by the .theme-*-only CSS. Only the visible one plays,
+// and only when motion is allowed; without JS, or with reduced motion, its poster shows instead. No source
+// swapping or load() calls, so a theme change cannot race a pending play().
+const heroVideos = [...document.querySelectorAll<HTMLVideoElement>('[data-hero-video]')]
+if (heroVideos.length) {
+  const update = () => {
+    const dark = document.documentElement.dataset.theme === 'dark'
+    for (const video of heroVideos) {
+      const visible = video.classList.contains(dark ? 'theme-dark-only' : 'theme-light-only') || heroVideos.length === 1
+      if (visible && motion.matches) video.play().catch(() => undefined)
+      else video.pause()
+    }
+  }
+  window.addEventListener('jivika-theme', update)
+  motion.addEventListener('change', update)
+  update()
 }
