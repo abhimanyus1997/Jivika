@@ -14,6 +14,7 @@ import {
   Play,
   Route,
   Search,
+  SearchCheck,
   Settings as SettingsIcon,
   Target,
   Upload,
@@ -22,9 +23,9 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useCallback, useEffect, useState, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
-import { FALLBACK_PROVIDERS } from './lib/api'
+import { FALLBACK_PROVIDERS, loadDemo, useDemoActive } from './lib/api'
 import { useApiKey, useKeyVerified, useProfile, useSettings, useStored } from './lib/store'
-import { Avatar, Badge, Dialog, Logo, ShortcutHint, Toaster } from './components/ui'
+import { Avatar, Badge, Dialog, Logo, ProviderIcon, ShortcutHint, Toaster } from './components/ui'
 import { CommandPalette, useCtrlK, type Command } from './components/CommandPalette'
 import Dashboard from './pages/Dashboard'
 import ProfilePage from './pages/Profile'
@@ -35,6 +36,7 @@ import CareerPathPage from './pages/CareerPath'
 import Interview from './pages/Interview'
 import CoverLetter from './pages/CoverLetter'
 import Applications from './pages/Applications'
+import JobSearch from './pages/JobSearch'
 import Settings from './pages/Settings'
 
 type Page = { id: string; title: string; icon: LucideIcon; component: ComponentType; group: string }
@@ -42,6 +44,7 @@ type Page = { id: string; title: string; icon: LucideIcon; component: ComponentT
 const PAGES: Page[] = [
   { id: 'dashboard', title: 'Dashboard', icon: LayoutDashboard, component: Dashboard, group: 'Overview' },
   { id: 'profile', title: 'Profile', icon: UserRound, component: ProfilePage, group: 'Workspace' },
+  { id: 'jobs', title: 'Job search', icon: SearchCheck, component: JobSearch, group: 'Workspace' },
   { id: 'applications', title: 'Applications', icon: BriefcaseBusiness, component: Applications, group: 'Workspace' },
   { id: 'match', title: 'Job match', icon: Target, component: JobMatch, group: 'Analyze' },
   { id: 'cv', title: 'CV review', icon: FileCheck2, component: CvReview, group: 'Analyze' },
@@ -57,6 +60,7 @@ const COMMANDS: Command[] = [
   ...PAGES.map((p) => ({ id: p.id, label: p.title, group: 'Pages' as const, icon: p.icon, href: `#${p.id}` })),
   { id: 'a-upload', label: 'Upload resume', group: 'Actions', icon: Upload, href: '#profile', keywords: 'cv pdf' },
   { id: 'a-add', label: 'Add application', group: 'Actions', icon: FilePlus2, href: '#applications?new', keywords: 'track job' },
+  { id: 'a-jobs', label: 'Search jobs', group: 'Actions', icon: SearchCheck, href: '#jobs', keywords: 'find listings openings roles' },
   { id: 'a-match', label: 'Run job match', group: 'Actions', icon: Play, href: '#match', keywords: 'analyze description' },
   { id: 'a-settings', label: 'Open settings', group: 'Actions', icon: SettingsIcon, href: '#settings', keywords: 'api key model' },
 ]
@@ -86,19 +90,32 @@ function useIsWide(minPx = 1024) {
 const KEY_STATES = {
   connected: { dot: 'bg-brand-500', label: 'Connected' },
   unverified: { dot: 'bg-accent-500', label: 'Not verified' },
+  demo: { dot: 'bg-info', label: 'Demo' },
   none: { dot: 'bg-faint', label: 'No key' },
 }
 
 function useKeyState() {
   const key = useApiKey()
   const verified = useKeyVerified()
+  const demo = useDemoActive()
   const [settings] = useSettings()
+  if (demo) {
+    return {
+      ...KEY_STATES.demo,
+      providerId: demo.provider,
+      provider: `Demo · ${demo.provider_name}`,
+      model: demo.model,
+      remaining: demo.remaining_hourly,
+    }
+  }
   const provider = FALLBACK_PROVIDERS.find((p) => p.id === settings.provider)
   const state = !key ? 'none' : verified ? 'connected' : 'unverified'
   return {
     ...KEY_STATES[state],
+    providerId: settings.provider,
     provider: provider?.name ?? settings.provider,
     model: settings.model || provider?.default_model || 'Default model',
+    remaining: null,
   }
 }
 
@@ -107,11 +124,12 @@ function KeyPill() {
   return (
     <a
       href="#settings"
-      aria-label={`Model key: ${s.label}. Open settings`}
+      aria-label={`Model key: ${s.label}, ${s.provider}. Open settings`}
       title={`${s.provider}: ${s.label}`}
       className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-line bg-surface px-2 text-xs font-medium text-muted hover:bg-subtle hover:text-ink"
     >
       <span className={`size-1.5 rounded-full ${s.dot}`} aria-hidden="true" />
+      <ProviderIcon id={s.providerId} className="size-3.5 text-ink" />
       {s.label}
     </a>
   )
@@ -125,9 +143,10 @@ function ModelCard({ compact }: { compact: boolean }) {
         href="#settings"
         title={`${s.provider}, ${s.model}: ${s.label}`}
         aria-label={`Model: ${s.provider}, ${s.label}. Open settings`}
-        className="mx-auto flex size-8 items-center justify-center rounded-lg hover:bg-subtle"
+        className="relative mx-auto flex size-8 items-center justify-center rounded-lg text-ink hover:bg-subtle"
       >
-        <span className={`size-2 rounded-full ${s.dot}`} aria-hidden="true" />
+        <ProviderIcon id={s.providerId} />
+        <span className={`absolute right-1 bottom-1 size-1.5 rounded-full ring-2 ring-surface ${s.dot}`} aria-hidden="true" />
       </a>
     )
   }
@@ -140,9 +159,22 @@ function ModelCard({ compact }: { compact: boolean }) {
           {s.label}
         </span>
       </div>
-      <div className="mt-1 truncate text-[13px] font-medium text-ink">{s.provider}</div>
+      <div className="mt-1 flex items-center gap-1.5 text-[13px] font-medium text-ink">
+        <ProviderIcon id={s.providerId} />
+        <span className="truncate">{s.provider}</span>
+      </div>
       <div className="truncate font-mono text-[11px] text-faint">{s.model}</div>
-      <div className="mt-1.5 border-t border-line pt-1.5 text-[11px] leading-4 text-faint">Your key and data stay in this browser.</div>
+      <div className="mt-1.5 border-t border-line pt-1.5 text-[11px] leading-4 text-faint">
+        {s.remaining !== null && s.remaining !== undefined ? (
+          <>
+            <span className="t-num text-muted">{s.remaining}</span> demo {s.remaining === 1 ? 'run' : 'runs'} left this hour.
+          </>
+        ) : s.label === 'Demo' ? (
+          'Shared demo model. Add your key for unlimited use.'
+        ) : (
+          'Your key and data stay in this browser.'
+        )}
+      </div>
     </a>
   )
 }
@@ -270,6 +302,7 @@ export default function App() {
     setPalette(true)
   }, [])
   useCtrlK(openPalette)
+  useEffect(loadDemo, [])
 
   useEffect(() => {
     document.title = `${page.title} - Jivika`

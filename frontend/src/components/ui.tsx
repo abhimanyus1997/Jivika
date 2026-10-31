@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, CircleAlert, Check, Copy, KeyRound, LoaderCircle, UserRound, X, type LucideIcon } from 'lucide-react'
+import { ChevronDown, ChevronUp, CircleAlert, Check, Copy, KeyRound, LoaderCircle, Sparkles, UserRound, X, type LucideIcon } from 'lucide-react'
 import {
   useEffect,
   useRef,
@@ -8,8 +8,52 @@ import {
   type ButtonHTMLAttributes,
   type ReactNode,
 } from 'react'
-import type { CareerPath } from '../lib/api'
+import { isDemoLimit, useDemoActive, type CareerPath } from '../lib/api'
 import { useApiKey, type Status } from '../lib/store'
+
+/* ---------- Provider marks ---------- */
+
+// ponytail: glob picks up any new <id>.svg; small files are inlined as data URIs by Vite.
+const PROVIDER_ICONS = Object.fromEntries(
+  Object.entries(import.meta.glob<string>('../assets/providers/*.svg', { eager: true, query: '?url', import: 'default' })).map(
+    ([path, url]) => [path.split('/').pop()!.replace('.svg', ''), url],
+  ),
+)
+
+export const PROVIDER_COLORS: Record<string, string> = {
+  gemini: '#8E75B2',
+  openai: '#000000',
+  anthropic: '#191919',
+  groq: '#F55036',
+  mistral: '#FA520F',
+  deepseek: '#4D6BFE',
+  xai: '#000000',
+  openrouter: '#6467F2',
+}
+
+/**
+ * Provider brand mark, monochrome in currentColor by default (`brand` uses the brand color).
+ * Rendered as a CSS mask so the SVG file stays a plain asset. Unknown ids fall back to a monogram tile.
+ */
+export function ProviderIcon({ id, brand = false, className = 'size-4', label }: { id: string; brand?: boolean; className?: string; label?: string }) {
+  const url = PROVIDER_ICONS[id]
+  const a11y = label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true as const }
+  if (!url) {
+    return (
+      <span {...a11y} className={`inline-flex shrink-0 items-center justify-center rounded-[5px] bg-current ${className}`}>
+        <span className="text-[0.6em] leading-none font-bold text-surface uppercase">{id.slice(0, 1)}</span>
+      </span>
+    )
+  }
+  const mask = `url("${url}") center / contain no-repeat`
+  return (
+    <span
+      {...a11y}
+      className={`inline-block shrink-0 ${className}`}
+      style={{ mask, WebkitMask: mask, backgroundColor: brand ? (PROVIDER_COLORS[id] ?? 'currentColor') : 'currentColor' }}
+    />
+  )
+}
 
 /* ---------- Form controls ---------- */
 
@@ -572,7 +616,16 @@ export function ErrorMessage({ message }: { message: string }) {
   return (
     <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-bg px-3 py-2 text-[13px] leading-5 text-danger">
       <CircleAlert className="mt-0.5 size-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-      <span>{message}</span>
+      <div className="min-w-0 flex-1">
+        <span>{message}</span>
+        {isDemoLimit(message) && (
+          <div className="mt-2">
+            <ButtonLink href="#settings" size="sm" variant="secondary" icon={KeyRound}>
+              Add your API key
+            </ButtonLink>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -603,10 +656,21 @@ export function Note({
   )
 }
 
-/** Inline prompt shown in place of AI actions when no API key is configured. */
+/** Inline prompt shown in place of AI actions when no API key is configured; a demo note when the shared model is in use. */
 export function KeyNotice() {
   const key = useApiKey()
+  const demo = useDemoActive()
   if (key) return null
+  if (demo) {
+    return (
+      <Note icon={Sparkles}>
+        You are using the shared demo model. Add your own key for unlimited use.{' '}
+        <a href="#settings" className="font-medium text-ink underline underline-offset-2">
+          Open settings
+        </a>
+      </Note>
+    )
+  }
   return (
     <Note tone="warning" icon={KeyRound}>
       Add a model API key to use this tool. It stays in this browser.{' '}

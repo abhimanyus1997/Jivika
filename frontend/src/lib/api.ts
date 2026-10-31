@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react'
-import { getCredentials } from './store'
+import { useCallback, useState, useSyncExternalStore } from 'react'
+import { getCredentials, useApiKey } from './store'
 
 /* ---------- Contract types (mirror the FastAPI schemas) ---------- */
 
@@ -8,15 +8,73 @@ export interface Provider {
   name: string
   default_model: string
   key_url: string
+  json_mode?: boolean
 }
 
 /** Used until /api/providers responds, and if it cannot be reached. */
 export const FALLBACK_PROVIDERS: Provider[] = [
   { id: 'gemini', name: 'Google Gemini', default_model: 'gemini-2.5-flash', key_url: 'https://aistudio.google.com/apikey' },
   { id: 'openai', name: 'OpenAI', default_model: 'gpt-4.1-mini', key_url: 'https://platform.openai.com/api-keys' },
+  { id: 'anthropic', name: 'Anthropic Claude', default_model: 'claude-haiku-4-5', key_url: 'https://console.anthropic.com/settings/keys' },
   { id: 'groq', name: 'Groq', default_model: 'llama-3.3-70b-versatile', key_url: 'https://console.groq.com/keys' },
+  { id: 'mistral', name: 'Mistral AI', default_model: 'mistral-small-latest', key_url: 'https://console.mistral.ai/api-keys' },
+  { id: 'deepseek', name: 'DeepSeek', default_model: 'deepseek-chat', key_url: 'https://platform.deepseek.com/api_keys' },
+  { id: 'xai', name: 'xAI Grok', default_model: 'grok-3-mini', key_url: 'https://console.x.ai' },
   { id: 'openrouter', name: 'OpenRouter', default_model: 'openai/gpt-4.1-mini', key_url: 'https://openrouter.ai/keys' },
 ]
+
+export interface DemoStatus {
+  enabled: boolean
+  provider: string
+  provider_name: string
+  model: string
+  hourly_limit: number
+  daily_limit: number
+  remaining_hourly: number | null
+}
+
+/* ---------- Live job search ---------- */
+
+export type RemoteFilter = 'any' | 'remote' | 'onsite'
+
+export interface Job {
+  id: string
+  source: string
+  title: string
+  company: string
+  location: string
+  remote: boolean | null
+  employment_type?: string
+  salary?: string
+  posted_at?: string
+  url: string
+  snippet: string
+  description?: string
+}
+
+export interface JobSource {
+  id: string
+  name: string
+  enabled: boolean
+  ok: boolean
+  count: number
+  error?: string
+  research: boolean
+}
+
+export interface JobSearchResult {
+  jobs: Job[]
+  sources: JobSource[]
+  query: string
+}
+
+export interface JobSearchParams {
+  q: string
+  location?: string
+  remote?: RemoteFilter
+  sources?: string[]
+  page?: number
+}
 
 export interface ParsedResume {
   text: string
@@ -114,6 +172,9 @@ export class ApiError extends Error {
   }
 }
 
+/** The server's 429 text when the shared demo quota runs out. */
+export const isDemoLimit = (message: string) => /demo limit/i.test(message)
+
 const UNREACHABLE = 'Cannot reach the Jivika server. Make sure it is running and try again.'
 
 function errorMessage(status: number, body: unknown): string {
@@ -130,14 +191,54 @@ function errorMessage(status: number, body: unknown): string {
   return `Request failed (${status}).`
 }
 
+/* ---------- Demo mode (shared server-side key, used when the browser has no key) ---------- */
+
+let demo: DemoStatus | null = null
+const demoSubs = new Set<() => void>()
+function setDemo(next: DemoStatus | null) {
+  demo = next
+  demoSubs.forEach((f) => f())
+}
+const subscribeDemo = (cb: () => void) => {
+  demoSubs.add(cb)
+  return () => {
+    demoSubs.delete(cb)
+  }
+}
+
+/** Fetches /api/demo once per page load. */
+export function loadDemo() {
+  request<DemoStatus>('/demo').then(setDemo, () => undefined)
+}
+
+export const useDemo = () => useSyncExternalStore(subscribeDemo, () => demo)
+
+/** The demo status when demo mode is in use (enabled and no key of the user's own), else null. */
+export function useDemoActive(): DemoStatus | null {
+  const key = useApiKey()
+  const d = useDemo()
+  return !key && d?.enabled ? d : null
+}
+
+/** True when AI actions can run: the user has a key, or the demo model is available. */
+export function useAiReady(): boolean {
+  const key = useApiKey()
+  const d = useDemo()
+  return !!key || !!d?.enabled
+}
+
 async function request<T>(path: string, init: { body?: unknown; form?: FormData; ai?: boolean } = {}): Promise<T> {
   const headers: Record<string, string> = {}
   if (init.ai) {
     const { provider, model, key } = getCredentials()
-    if (!key) throw new ApiError(401, 'Add your API key in Settings to use this tool.')
-    headers['X-LLM-Provider'] = provider
-    headers['X-LLM-Key'] = key
-    if (model.trim()) headers['X-LLM-Model'] = model.trim()
+    if (key) {
+      headers['X-LLM-Provider'] = provider
+      headers['X-LLM-Key'] = key
+      if (model.trim()) headers['X-LLM-Model'] = model.trim()
+    } else if (!demo?.enabled) {
+      throw new ApiError(401, 'Add your API key in Settings to use this tool.')
+    }
+    // With no key the server uses its demo model and ignores provider/model, so none are sent.
   }
   let body: BodyInit | undefined
   if (init.form) body = init.form
@@ -153,13 +254,26 @@ async function request<T>(path: string, init: { body?: unknown; form?: FormData;
   } catch {
     throw new ApiError(0, UNREACHABLE)
   }
+  const remaining = res.headers.get('X-Jivika-Demo-Remaining')
+  if (res.headers.get('X-Jivika-Demo') === '1' && demo && remaining !== null && remaining !== '' && !Number.isNaN(Number(remaining))) {
+    setDemo({ ...demo, remaining_hourly: Number(remaining) })
+  }
   const data: unknown = await res.json().catch(() => null)
+  if (res.status === 429 && demo && isDemoLimit(errorMessage(res.status, data))) setDemo({ ...demo, remaining_hourly: 0 })
   if (!res.ok) throw new ApiError(res.status, errorMessage(res.status, data))
   return data as T
 }
 
 export const api = {
   providers: () => request<Provider[]>('/providers'),
+  jobSearch: (p: JobSearchParams) => {
+    const qs = new URLSearchParams({ q: p.q, remote: p.remote ?? 'any', page: String(p.page ?? 1) })
+    if (p.location?.trim()) qs.set('location', p.location.trim())
+    if (p.sources?.length) qs.set('sources', p.sources.join(','))
+    return request<JobSearchResult>(`/jobs/search?${qs}`)
+  },
+  jobDetail: (source: string, id: string) =>
+    request<{ description: string; url: string }>(`/jobs/detail?${new URLSearchParams({ source, id })}`),
   verify: () => request<{ ok: boolean; model: string }>('/providers/verify', { ai: true }),
   parseResume: (file: File) => {
     const form = new FormData()
