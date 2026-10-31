@@ -5,6 +5,8 @@ import type { Application, Point } from '../lib/store'
  * Chart palette, validated for CVD separation in this stacking order
  * (evergreen | marigold | rose). Marigold is below 3:1 on white, so the
  * trends chart always ships a legend and a table view.
+ * Colors are CSS variables: index.css swaps in dark steps (#3FA672 | #C4821C | #D9586F),
+ * validated separately against the dark surface #1A1A18 (all checks pass, worst CVD dE 8.2).
  */
 export const SERIES = [
   { key: 'awaiting', label: 'Awaiting response', color: 'var(--color-series-1)' },
