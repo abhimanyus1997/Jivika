@@ -1,5 +1,8 @@
 // Marketing site behaviour. Loaded as an external module so it works under CSP script-src 'self'.
 import '@fontsource-variable/geist'
+// Footer wordmark and About verses. unicode-range subsets mean the files load only where these glyphs appear.
+import '@fontsource/tiro-devanagari-sanskrit/400.css'
+import '@fontsource/tiro-devanagari-sanskrit/400-italic.css'
 import './site.css'
 
 // Mobile navigation

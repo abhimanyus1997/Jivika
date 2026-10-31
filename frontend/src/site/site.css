@@ -1,6 +1,10 @@
 /* Marketing site styles: shared tokens from the app, plus a few site-only components. */
 @import '../index.css';
 
+@theme {
+  --font-sanskrit: 'Tiro Devanagari Sanskrit', 'Nirmala UI', 'Noto Serif Devanagari', serif;
+}
+
 @layer components {
   .site-body {
     @apply text-[15px] leading-7;
@@ -343,4 +347,15 @@ html[data-theme='dark'] img[src*='/providers/'] {
   flex-shrink: 0;
   padding-inline-end: 1.5rem;
   white-space: nowrap;
+}
+
+/* About: Sanskrit touches. Devanagari renders larger than Latin at the same size, so line-height is generous. */
+.sa-verse {
+  @apply font-sanskrit text-[26px] leading-[1.5] text-ink sm:text-[30px];
+}
+.sa-iast {
+  @apply font-sanskrit text-[17px] leading-7 text-muted italic;
+}
+.sa-danda {
+  @apply text-accent-500 not-italic;
 }
