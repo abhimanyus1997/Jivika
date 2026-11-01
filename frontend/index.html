@@ -2,14 +2,14 @@
 <html lang="en">
   <head>
     <!--partial:head-->
-    <title>Jivika - Career workspace for job seekers</title>
-    <meta name="description" content="Match your resume to roles, improve your CV and LinkedIn, and prepare for interviews. Free with your own model key; your data stays in your browser." />
+    <title>Jivika - Free, open-source career workspace for job seekers</title>
+    <meta name="description" content="Find roles, tailor your resume to each one, check it against ATS filters and prepare for interviews. Free to try with no sign-up, open source, and your data stays in your browser." />
     <link rel="canonical" href="%VITE_SITE_URL%/" />
-    <meta property="og:title" content="Jivika - Career workspace for job seekers" />
-    <meta property="og:description" content="Match your resume to roles, improve your CV and LinkedIn, and prepare for interviews. Free with your own model key; your data stays in your browser." />
+    <meta property="og:title" content="Jivika - Free, open-source career workspace for job seekers" />
+    <meta property="og:description" content="Find roles, tailor your resume to each one, check it against ATS filters and prepare for interviews. Free to try with no sign-up, and your data stays in your browser." />
     <meta property="og:url" content="%VITE_SITE_URL%/" />
-    <meta name="twitter:title" content="Jivika - Career workspace for job seekers" />
-    <meta name="twitter:description" content="Match your resume to roles, improve your CV and LinkedIn, and prepare for interviews. Free with your own model key; your data stays in your browser." />
+    <meta name="twitter:title" content="Jivika - Free, open-source career workspace for job seekers" />
+    <meta name="twitter:description" content="Find roles, tailor your resume to each one, check it against ATS filters and prepare for interviews. Free to try with no sign-up, and your data stays in your browser." />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -18,7 +18,9 @@
         "applicationCategory": "BusinessApplication",
         "operatingSystem": "Web",
         "url": "%VITE_SITE_URL%/",
-        "description": "A private career workspace for job seekers: resume-to-job matching, CV review, LinkedIn optimization, career path planning, interview prep, cover letters and application tracking.",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "codeRepository": "https://github.com/abhimanyus1997/Jivika",
+        "description": "A free, open-source career workspace for job seekers: job search, resume tailoring, ATS checks, CV and LinkedIn review, career path planning, interview prep, cover letters and application tracking.",
         "offers": { "@type": "Offer", "name": "Free", "price": "0", "priceCurrency": "INR" }
       }
     </script>
@@ -26,216 +28,232 @@
   <body class="site-body">
     <!--partial:header-->
     <main id="main">
-      <section class="pt-16 pb-6 sm:pt-24 sm:pb-10">
-        <div class="wrap hero-stagger text-center">
-          <p class="badge"><svg viewBox="0 0 24 24" class="icon size-3.5 text-brand-600" aria-hidden="true"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>Bring your own key &middot; No sign-up</p>
+      <section class="hero-bg relative overflow-hidden pt-14 pb-16 sm:pt-20 sm:pb-24">
+        <div class="wrap hero-stagger relative text-center">
+          <a href="https://github.com/abhimanyus1997/Jivika" class="badge badge-link" rel="noopener"><span class="size-1.5 rounded-full bg-brand-500" aria-hidden="true"></span>Open source under Apache-2.0<svg viewBox="0 0 24 24" class="icon size-3.5" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
           <!-- Animated headline (site.css): the visible words are aria-hidden; the sr-only copy is the accessible sentence. -->
-          <h1 class="h-display hero-title mx-auto mt-6 max-w-[760px]">
+          <h1 class="h-display hero-title mx-auto mt-6 max-w-[820px]">
             <span class="sr-only">Your job search, organised, sharpened and tracked.</span>
             <span aria-hidden="true"><span class="hero-word">Your</span> <span class="hero-word">job</span> <span class="hero-word">search,</span> <span class="hero-word hero-key"><span class="hero-cycle"><span>organised.</span><span>sharpened.</span><span>tracked.</span></span><svg class="hero-underline" viewBox="0 0 300 16" preserveAspectRatio="none" focusable="false"><path pathLength="1" d="M4 11.5C52 6.5 112 4.2 170 5.6c44 1 88 3.6 126 7.4M38 13.2c60-3.4 140-4.2 214-1.6"/></svg></span></span>
           </h1>
-          <p class="lead mx-auto mt-5 max-w-[640px]">Search live job listings, match your resume to roles, improve your CV and LinkedIn, plan your next move and prepare for interviews, using your own model key with your data kept in your browser.</p>
-          <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-            <a href="%BASE%/app/" class="btn btn-primary h-11 px-5">Open the app <svg viewBox="0 0 24 24" class="icon size-4" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
-            <a href="#waitlist" class="btn btn-secondary h-11 px-5">Join the Pro waitlist</a>
+          <p class="lead lead-lg mx-auto mt-6 max-w-[620px]">Jivika is a free career workspace. Find roles, tailor your resume to each one and prepare for interviews, with your data kept in your browser.</p>
+          <div class="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
+            <a href="%BASE%/app/" class="btn btn-primary btn-lg">Try it free <svg viewBox="0 0 24 24" class="icon size-4" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+            <a href="#how-it-works" class="btn btn-secondary btn-lg">See how it works</a>
           </div>
-          <p class="mt-4 text-[13px] text-muted">Try it instantly with the free demo model, then bring your own key.</p>
-          <div class="browser-frame mx-auto mt-14 max-w-[1100px] text-left">
-            <div class="bar"><span></span><span></span><span></span></div>
-            <!-- One clip per theme, switched by CSS before first paint; main.ts plays the visible one when motion is allowed, otherwise its poster shows. -->
-            <video class="theme-light-only" data-hero-video muted loop playsinline preload="none" poster="/img/dashboard.png" width="1440" height="900" aria-label="Jivika dashboard, then a job match run showing the match score and missing skills">
-              <source src="/img/hero.webm" type="video/webm" />
-              <source src="/img/hero.mp4" type="video/mp4" />
-            </video>
-            <video class="theme-dark-only" data-hero-video muted loop playsinline preload="none" poster="/img/dashboard-dark.png" width="1440" height="900" aria-label="Jivika dashboard, then a job match run showing the match score and missing skills">
-              <source src="/img/hero-dark.webm" type="video/webm" />
-              <source src="/img/hero-dark.mp4" type="video/mp4" />
-            </video>
+          <p class="mt-4 text-[13px] text-muted">Starts on a free demo model. No account, no card.</p>
+          <div class="device mx-auto mt-14 max-w-[1120px] text-left sm:mt-16">
+            <div class="browser-frame">
+              <div class="bar" aria-hidden="true"><span></span><span></span><span></span><b>jivika.abhimanyu.fyi/app</b></div>
+              <!-- One clip per theme, switched by CSS before first paint; main.ts plays the visible one when motion is allowed, otherwise its poster shows. -->
+              <video class="theme-light-only" data-hero-video muted loop playsinline preload="none" poster="/img/dashboard.png" width="1440" height="900" aria-label="Jivika dashboard, then a job match run showing the match score and missing skills">
+                <source src="/img/hero.webm" type="video/webm" />
+                <source src="/img/hero.mp4" type="video/mp4" />
+              </video>
+              <video class="theme-dark-only" data-hero-video muted loop playsinline preload="none" poster="/img/dashboard-dark.png" width="1440" height="900" aria-label="Jivika dashboard, then a job match run showing the match score and missing skills">
+                <source src="/img/hero-dark.webm" type="video/webm" />
+                <source src="/img/hero-dark.mp4" type="video/mp4" />
+              </video>
+            </div>
           </div>
         </div>
       </section>
 
-      <section aria-label="Supported model providers" class="pt-14 pb-4">
-        <div class="wrap flex flex-col items-center gap-4">
-          <span class="t-overline">Works with</span>
+      <section aria-label="At a glance" class="border-y border-line bg-surface">
+        <ul class="wrap trust">
+          <li><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-8-2"/></svg><span><strong>Open source</strong> Apache-2.0 on GitHub</span></li>
+          <li><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m17 8 5 5"/><path d="m22 8-5 5"/></svg><span><strong>No sign-up</strong> Free demo model built in</span></li>
+          <li><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span><strong>Private by design</strong> Your data stays in your browser</span></li>
+          <li><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg><span><strong>9 AI providers</strong> Bring your own key</span></li>
+        </ul>
+      </section>
+
+      <section aria-labelledby="providers-title" class="pt-12 pb-2 sm:pt-14">
+        <div class="wrap flex flex-col items-center gap-5">
+          <h2 id="providers-title" class="t-overline">Bring your own key from</h2>
           <!-- Static wrapped list without JS or with reduced motion; main.ts turns it into a marquee. -->
           <div class="marquee w-full" data-marquee>
             <!--partial:providers-->
           </div>
+          <p class="text-[13px] text-muted">Or run local models when you self-host.</p>
         </div>
       </section>
 
-      <section id="features" class="section scroll-mt-16">
+      <section id="features" class="section scroll-mt-16" aria-labelledby="features-title">
         <div class="wrap">
-          <div class="max-w-[640px]" data-reveal>
+          <div class="mx-auto max-w-[680px] text-center" data-reveal>
             <p class="eyebrow">Product</p>
-            <h2 class="h-section mt-3">Nine tools for every stage of your search.</h2>
-            <p class="lead mt-4">From finding a role to following up on an application, each tool works from the same resume and profile.</p>
+            <h2 id="features-title" class="h-section mt-3">Everything your search needs, from first listing to offer.</h2>
+            <p class="lead mt-4">Every tool works from one structured profile, so the effort you put into your resume carries through to each application.</p>
           </div>
-          <ul class="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3" data-stagger>
-            <li class="card card-hover">
-              <div class="flex size-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="m8 11 2 2 4-4"/><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div>
-              <h3 class="t-title mt-4 text-[15px]">Job search</h3>
-              <p class="mt-1.5 text-sm leading-6 text-muted">Search live listings from job boards and company career pages, see a quick fit for each, then match or track it.</p>
-            </li>
-            <li class="card card-hover">
-              <div class="flex size-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div>
-              <h3 class="t-title mt-4 text-[15px]">Job match</h3>
-              <p class="mt-1.5 text-sm leading-6 text-muted">Paste a job description to get a match score, matched and missing skills, and a plan to close the gaps.</p>
-            </li>
-            <li class="card card-hover">
-              <div class="flex size-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="m9 15 2 2 4-4"/></svg></div>
-              <h3 class="t-title mt-4 text-[15px]">CV review</h3>
-              <p class="mt-1.5 text-sm leading-6 text-muted">An ATS-style score with section-by-section feedback and rewritten bullet points you can reuse.</p>
-            </li>
-            <li class="card card-hover">
-              <div class="flex size-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M16 2v2"/><path d="M7 21v-2a2 2 0 012-2h6a2 2 0 012 2v2"/><path d="M8 2v2"/><circle cx="12" cy="10" r="3"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg></div>
-              <h3 class="t-title mt-4 text-[15px]">LinkedIn optimizer</h3>
-              <p class="mt-1.5 text-sm leading-6 text-muted">Headline suggestions, a rewritten About section and the keywords recruiters search for.</p>
-            </li>
-            <li class="card card-hover">
-              <div class="flex size-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg></div>
-              <h3 class="t-title mt-4 text-[15px]">Career path</h3>
-              <p class="mt-1.5 text-sm leading-6 text-muted">Your likely next role and long-term options, with estimated salary ranges and the skills to build.</p>
-            </li>
-            <li class="card card-hover">
-              <div class="flex size-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M16 10a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 14.286V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/><path d="M20 9a2 2 0 0 1 2 2v10.286a.71.71 0 0 1-1.212.502l-2.202-2.202A2 2 0 0 0 17.172 19H10a2 2 0 0 1-2-2v-1"/></svg></div>
-              <h3 class="t-title mt-4 text-[15px]">Interview prep</h3>
-              <p class="mt-1.5 text-sm leading-6 text-muted">Questions tailored to a specific job description, with feedback on the answers you write.</p>
-            </li>
-            <li class="card card-hover">
-              <div class="flex size-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg></div>
-              <h3 class="t-title mt-4 text-[15px]">Cover letters</h3>
-              <p class="mt-1.5 text-sm leading-6 text-muted">Letters in the tone you choose, grounded in your resume, ready to edit, copy or download.</p>
-            </li>
-            <li class="card card-hover">
-              <div class="flex size-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M12 12h.01"/><path d="M16 6V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><path d="M22 13a18.15 18.15 0 0 1-20 0"/><rect width="20" height="14" x="2" y="6" rx="2"/></svg></div>
-              <h3 class="t-title mt-4 text-[15px]">Application tracker</h3>
-              <p class="mt-1.5 text-sm leading-6 text-muted">Keep every application and its status in one place, so nothing slips through.</p>
-            </li>
-            <li class="card card-hover">
-              <div class="flex size-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></div>
-              <h3 class="t-title mt-4 text-[15px]">Dashboard</h3>
-              <p class="mt-1.5 text-sm leading-6 text-muted">Your scores over time, application trends and top job matches in one view.</p>
-            </li>
-          </ul>
-        </div>
-      </section>
+          <nav aria-label="Feature groups" class="mt-8 flex justify-center">
+            <ul class="segmented">
+              <li><a href="#find">Find</a></li>
+              <li><a href="#apply">Apply</a></li>
+              <li><a href="#prepare">Prepare</a></li>
+              <li><a href="#grow">Grow</a></li>
+            </ul>
+          </nav>
 
-      <section aria-labelledby="feature-details" class="border-y border-line bg-surface">
-        <div class="wrap section space-y-20 sm:space-y-28">
-          <h2 id="feature-details" class="sr-only">Feature details</h2>
-          <div data-reveal class="grid items-center gap-10 lg:grid-cols-[1.25fr_1fr] lg:gap-16">
-            <div class="browser-frame">
-              <div class="bar"><span></span><span></span><span></span></div>
-              <img class="theme-light-only" src="/img/job-match.png" alt="Job match results in Jivika showing a match score, matched and missing skills, and a transition plan" width="1440" height="900" loading="lazy" decoding="async" />
-              <img class="theme-dark-only" src="/img/job-match-dark.png" alt="Job match results in Jivika showing a match score, matched and missing skills, and a transition plan" width="1440" height="900" loading="lazy" decoding="async" />
-            </div>
-            <div>
-              <p class="eyebrow">Job match</p>
-              <h3 class="mt-3 text-[24px] leading-8 font-semibold tracking-[-0.02em] text-ink">See how well you fit a role before you apply.</h3>
-              <p class="mt-3 text-muted">Paste any job description and Jivika compares it with your resume. The score blends the model&#39;s judgement with a deterministic keyword check, so it is harder to inflate.</p>
-              <ul class="mt-5 space-y-2.5 text-sm text-ink">
-                <li class="flex gap-3"><svg viewBox="0 0 24 24" class="icon mt-1 size-4 text-brand-600" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>Matched and missing skills, side by side</span></li>
-                <li class="flex gap-3"><svg viewBox="0 0 24 24" class="icon mt-1 size-4 text-brand-600" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>Strengths, gaps, challenges and opportunities for the role</span></li>
-                <li class="flex gap-3"><svg viewBox="0 0 24 24" class="icon mt-1 size-4 text-brand-600" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>A step-by-step plan to close the gaps</span></li>
-              </ul>
-            </div>
-          </div>
-          <div data-reveal class="grid items-center gap-10 lg:grid-cols-[1fr_1.25fr] lg:gap-16">
-            <div class="browser-frame lg:order-last">
-              <div class="bar"><span></span><span></span><span></span></div>
-              <img class="theme-light-only" src="/img/cv-review.png" alt="CV review in Jivika showing an ATS-style score and per-section feedback" width="1440" height="900" loading="lazy" decoding="async" />
-              <img class="theme-dark-only" src="/img/cv-review-dark.png" alt="CV review in Jivika showing an ATS-style score and per-section feedback" width="1440" height="900" loading="lazy" decoding="async" />
-            </div>
-            <div>
-              <p class="eyebrow">CV review</p>
-              <h3 class="mt-3 text-[24px] leading-8 font-semibold tracking-[-0.02em] text-ink">Find out what a screening system sees in your CV.</h3>
-              <p class="mt-3 text-muted">Get an ATS-style score with specific feedback for each section, instead of generic advice.</p>
-              <ul class="mt-5 space-y-2.5 text-sm text-ink">
-                <li class="flex gap-3"><svg viewBox="0 0 24 24" class="icon mt-1 size-4 text-brand-600" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>Section-by-section feedback</span></li>
-                <li class="flex gap-3"><svg viewBox="0 0 24 24" class="icon mt-1 size-4 text-brand-600" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>Rewritten bullet points with stronger outcomes</span></li>
-                <li class="flex gap-3"><svg viewBox="0 0 24 24" class="icon mt-1 size-4 text-brand-600" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>Scores tracked over time on your dashboard</span></li>
-              </ul>
-            </div>
-          </div>
-          <div data-reveal class="grid items-center gap-10 lg:grid-cols-[1.25fr_1fr] lg:gap-16">
-            <div class="browser-frame">
-              <div class="bar"><span></span><span></span><span></span></div>
-              <img class="theme-light-only" src="/img/applications.png" alt="Application tracker in Jivika listing applications with company, role and status" width="1440" height="900" loading="lazy" decoding="async" />
-              <img class="theme-dark-only" src="/img/applications-dark.png" alt="Application tracker in Jivika listing applications with company, role and status" width="1440" height="900" loading="lazy" decoding="async" />
-            </div>
-            <div>
-              <p class="eyebrow">Application tracker</p>
-              <h3 class="mt-3 text-[24px] leading-8 font-semibold tracking-[-0.02em] text-ink">Keep your search organised as it grows.</h3>
-              <p class="mt-3 text-muted">Record every application with its company, role and status. Your progress feeds the dashboard so you can see what is working.</p>
-              <ul class="mt-5 space-y-2.5 text-sm text-ink">
-                <li class="flex gap-3"><svg viewBox="0 0 24 24" class="icon mt-1 size-4 text-brand-600" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>A status for every application, from applied to offer</span></li>
-                <li class="flex gap-3"><svg viewBox="0 0 24 24" class="icon mt-1 size-4 text-brand-600" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>Application trends on the dashboard</span></li>
-                <li class="flex gap-3"><svg viewBox="0 0 24 24" class="icon mt-1 size-4 text-brand-600" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>Stored in your browser, not on our servers</span></li>
-              </ul>
-            </div>
+          <div class="mt-14 space-y-20 sm:mt-20 sm:space-y-28">
+            <article id="find" class="feature scroll-mt-24" data-reveal>
+              <div class="device">
+                <div class="browser-frame">
+                  <div class="bar" aria-hidden="true"><span></span><span></span><span></span></div>
+                  <img class="theme-light-only" src="/img/job-search.png" alt="Job search in Jivika listing roles from several sources, each with a quick fit score and actions to match or track it" width="1440" height="900" loading="lazy" decoding="async" />
+                  <img class="theme-dark-only" src="/img/job-search-dark.png" alt="Job search in Jivika listing roles from several sources, each with a quick fit score and actions to match or track it" width="1440" height="900" loading="lazy" decoding="async" />
+                </div>
+              </div>
+              <div>
+                <p class="group-label"><span>01</span>Find</p>
+                <h3 class="h-feature mt-3">Find roles worth applying to.</h3>
+                <p class="mt-3 text-muted">Search many public sources at once, bring in any posting you find elsewhere, and see how well you fit before you spend time on it.</p>
+                <ul class="tool-list">
+                  <li><span class="icon-tile"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span><div><h4>Job search</h4><p>Remote job boards, Hacker News hiring threads, Y Combinator startups and career pages of India-based employers, in one search.</p></div></li>
+                  <li><span class="icon-tile"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span><div><h4>Job import</h4><p>Paste a link to a posting, or send the page you are reading with the <a href="%BASE%/clipper/" class="link">Jivika Clipper</a> extension.</p></div></li>
+                  <li><span class="icon-tile"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span><div><h4>Job match</h4><p>A match score, matched and missing skills, and a transition plan with verified learning resources.</p></div></li>
+                </ul>
+              </div>
+            </article>
+
+            <article id="apply" class="feature feature-flip scroll-mt-24" data-reveal>
+              <div class="device">
+                <div class="browser-frame">
+                  <div class="bar" aria-hidden="true"><span></span><span></span><span></span></div>
+                  <img class="theme-light-only" src="/img/ats-checker.png" alt="ATS checker in Jivika showing how a resume is parsed, with scores for sections, formatting, content and keywords" width="1440" height="900" loading="lazy" decoding="async" />
+                  <img class="theme-dark-only" src="/img/ats-checker-dark.png" alt="ATS checker in Jivika showing how a resume is parsed, with scores for sections, formatting, content and keywords" width="1440" height="900" loading="lazy" decoding="async" />
+                </div>
+              </div>
+              <div>
+                <p class="group-label"><span>02</span>Apply</p>
+                <h3 class="h-feature mt-3">Send a resume written for each role.</h3>
+                <p class="mt-3 text-muted">Turn your resume into a structured profile once, then tailor it to every job. Tailoring rewords and reorders what is already there; it never invents experience.</p>
+                <ul class="tool-list">
+                  <li><span class="icon-tile"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg></span><div><h4>Profile and tailored resumes</h4><p>A structured profile, resume themes and a tailored version per job, with every version kept and downloadable as a PDF.</p></div></li>
+                  <li><span class="icon-tile"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8h8"/><path d="M7 12h10"/><path d="M7 16h6"/></svg></span><div><h4>ATS checker</h4><p>See how applicant tracking systems read your resume: parsing, sections, formatting and missing keywords.</p></div></li>
+                  <li><span class="icon-tile"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg></span><div><h4>Cover letters</h4><p>Letters that use only facts from your resume, with templates and PDF export.</p></div></li>
+                </ul>
+              </div>
+            </article>
+
+            <article id="prepare" class="feature scroll-mt-24" data-reveal>
+              <div class="device">
+                <div class="browser-frame">
+                  <div class="bar" aria-hidden="true"><span></span><span></span><span></span></div>
+                  <img class="theme-light-only" src="/img/interview-coding.png" alt="Coding practice in Jivika interview prep: a SQL problem with hints, a code editor and the submitted result" width="1440" height="900" loading="lazy" decoding="async" />
+                  <img class="theme-dark-only" src="/img/interview-coding-dark.png" alt="Coding practice in Jivika interview prep: a SQL problem with hints, a code editor and the submitted result" width="1440" height="900" loading="lazy" decoding="async" />
+                </div>
+              </div>
+              <div>
+                <p class="group-label"><span>03</span>Prepare</p>
+                <h3 class="h-feature mt-3">Walk into interviews prepared.</h3>
+                <p class="mt-3 text-muted">Practise with questions drawn from the job description, and tighten how you present yourself on paper and online.</p>
+                <ul class="tool-list">
+                  <li><span class="icon-tile"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M16 10a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 14.286V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/><path d="M20 9a2 2 0 0 1 2 2v10.286a.71.71 0 0 1-1.212.502l-2.202-2.202A2 2 0 0 0 17.172 19H10a2 2 0 0 1-2-2v-1"/></svg></span><div><h4>Interview prep</h4><p>Questions tailored to a specific role, with feedback on the answers you write.</p></div></li>
+                  <li><span class="icon-tile"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg></span><div><h4>Coding playground</h4><p>Python, JavaScript and SQL problems that run in your browser, with hints, solutions and a code review.</p></div></li>
+                  <li><span class="icon-tile"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="m9 15 2 2 4-4"/></svg></span><div><h4>CV and LinkedIn review</h4><p>Section-by-section CV scores with rewritten bullets, plus headline and About rewrites for LinkedIn.</p></div></li>
+                </ul>
+              </div>
+            </article>
+
+            <article id="grow" class="feature feature-flip scroll-mt-24" data-reveal>
+              <div class="device">
+                <div class="browser-frame">
+                  <div class="bar" aria-hidden="true"><span></span><span></span><span></span></div>
+                  <img class="theme-light-only" src="/img/career-path.png" alt="Career path in Jivika showing the next role, a career timeline with salary ranges and the skills to build" width="1440" height="900" loading="lazy" decoding="async" />
+                  <img class="theme-dark-only" src="/img/career-path-dark.png" alt="Career path in Jivika showing the next role, a career timeline with salary ranges and the skills to build" width="1440" height="900" loading="lazy" decoding="async" />
+                </div>
+              </div>
+              <div>
+                <p class="group-label"><span>04</span>Grow</p>
+                <h3 class="h-feature mt-3">Plan the next move and track every step.</h3>
+                <p class="mt-3 text-muted">See where your experience can take you, and keep every application in view as your search grows.</p>
+                <ul class="tool-list">
+                  <li><span class="icon-tile"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg></span><div><h4>Career path</h4><p>A realistic next role and longer-term options, with roadmaps and market salary data.</p></div></li>
+                  <li><span class="icon-tile"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M12 12h.01"/><path d="M16 6V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><path d="M22 13a18.15 18.15 0 0 1-20 0"/><rect width="20" height="14" x="2" y="6" rx="2"/></svg></span><div><h4>Applications board</h4><p>Every application and its status on one board, with a response funnel and saved searches.</p></div></li>
+                  <li><span class="icon-tile"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg></span><div><h4>Dashboard and export</h4><p>Scores and trends at a glance. Export your workspace to a file and import it in another browser.</p></div></li>
+                </ul>
+              </div>
+            </article>
           </div>
         </div>
       </section>
 
-      <section class="section">
+      <section id="how-it-works" class="section border-y border-line bg-surface scroll-mt-16" aria-labelledby="how-title">
         <div class="wrap">
-          <div class="max-w-[640px]" data-reveal>
+          <div class="mx-auto max-w-[640px] text-center" data-reveal>
             <p class="eyebrow">How it works</p>
-            <h2 class="h-section mt-3">Up and running in a few minutes.</h2>
+            <h2 id="how-title" class="h-section mt-3">From resume to first match in minutes.</h2>
           </div>
-          <ol class="mt-12 grid gap-5 md:grid-cols-3" data-stagger>
-            <li class="card card-hover">
-              <span class="t-num flex size-8 items-center justify-center rounded-full bg-ink text-[13px] font-semibold text-canvas">1</span>
-              <h3 class="t-title mt-4 text-[15px]">Add your model key</h3>
-              <p class="mt-1.5 text-sm leading-6 text-muted">Start right away on the free demo model, or pick Gemini, OpenAI, Claude, Groq, Mistral, DeepSeek, Grok or OpenRouter in Settings and paste your key.</p>
+          <ol class="steps mt-12 sm:mt-16" data-stagger>
+            <li>
+              <span class="step-num t-num">1</span>
+              <h3 class="t-title mt-5 text-[16px]">Open the app</h3>
+              <p class="mt-2 text-sm leading-6 text-muted">No account needed. Start on the free demo model, or add a key from any of nine providers in Settings.</p>
             </li>
-            <li class="card card-hover">
-              <span class="t-num flex size-8 items-center justify-center rounded-full bg-ink text-[13px] font-semibold text-canvas">2</span>
-              <h3 class="t-title mt-4 text-[15px]">Upload your resume</h3>
-              <p class="mt-1.5 text-sm leading-6 text-muted">Upload a PDF. Jivika extracts a structured profile that every tool uses as its starting point.</p>
+            <li>
+              <span class="step-num t-num">2</span>
+              <h3 class="t-title mt-5 text-[16px]">Add your resume</h3>
+              <p class="mt-2 text-sm leading-6 text-muted">Upload a PDF. Jivika builds a structured profile that every tool starts from, and you can edit it at any time.</p>
             </li>
-            <li class="card card-hover">
-              <span class="t-num flex size-8 items-center justify-center rounded-full bg-ink text-[13px] font-semibold text-canvas">3</span>
-              <h3 class="t-title mt-4 text-[15px]">Match, improve and track</h3>
-              <p class="mt-1.5 text-sm leading-6 text-muted">Match against real job descriptions, act on the feedback and track your applications as you go.</p>
+            <li>
+              <span class="step-num t-num">3</span>
+              <h3 class="t-title mt-5 text-[16px]">Find, tailor and track</h3>
+              <p class="mt-2 text-sm leading-6 text-muted">Search or import a job, match against it, tailor your resume and cover letter, and track the application.</p>
             </li>
           </ol>
         </div>
       </section>
 
-      <section class="section bg-brand-900 text-white">
-        <div class="wrap grid gap-12 lg:grid-cols-[1fr_1.4fr]">
-          <div>
+      <section class="section bg-brand-900 text-white" aria-labelledby="privacy-title">
+        <div class="wrap grid gap-12 lg:grid-cols-[1fr_1.4fr] lg:gap-16">
+          <div data-reveal>
             <p class="text-[12px] leading-4 font-medium tracking-[0.06em] text-brand-200 uppercase">Privacy</p>
-            <h2 class="mt-3 text-[28px] leading-[1.15] font-semibold tracking-[-0.025em] text-white sm:text-[36px]">Your key, your data.</h2>
-            <p class="mt-4 text-[17px] leading-7 text-white/70">Jivika is built so that your career details stay with you.</p>
-            <a href="%BASE%/privacy/" class="mt-6 inline-flex items-center gap-2 text-sm font-medium text-white underline decoration-white/30 underline-offset-4 hover:decoration-white">Read the privacy policy <svg viewBox="0 0 24 24" class="icon size-4" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+            <h2 id="privacy-title" class="mt-3 text-[30px] leading-[1.12] font-semibold tracking-[-0.025em] text-balance text-white sm:text-[40px]">Your career details stay with you.</h2>
+            <p class="mt-4 text-[17px] leading-7 text-white/75">There is no account to create and no database of resumes on our side. What you add to Jivika lives in your browser.</p>
+            <a href="%BASE%/privacy/" class="mt-6 inline-flex items-center gap-2 rounded text-sm font-medium text-white underline decoration-white/30 underline-offset-4 hover:decoration-white">Read the privacy policy <svg viewBox="0 0 24 24" class="icon size-4" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
           </div>
-          <ul class="grid gap-5 md:grid-cols-3 lg:grid-cols-1" data-stagger>
-            <li class="flex gap-4 rounded-xl border border-white/10 bg-white/5 p-5">
-              <span class="text-brand-200"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg></span>
-              <p class="text-sm leading-6 text-white/80"><strong class="font-medium text-white">Keys stay in your browser.</strong> Your key is sent with each request and is never stored on our servers.</p>
+          <ul class="grid gap-4 sm:grid-cols-2" data-stagger>
+            <li class="privacy-item">
+              <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <p><strong>Stored locally.</strong> Your resume, analyses and applications are kept in your browser&#39;s storage, and you can clear them at any time.</p>
             </li>
-            <li class="flex gap-4 rounded-xl border border-white/10 bg-white/5 p-5">
-              <span class="text-brand-200"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
-              <p class="text-sm leading-6 text-white/80"><strong class="font-medium text-white">Your data lives locally.</strong> Your resume and history are kept in your browser&#39;s storage and can be cleared at any time.</p>
+            <li class="privacy-item">
+              <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>
+              <p><strong>Keys never saved.</strong> Your model key stays in your browser and is sent only with each request. Our server does not store or log it.</p>
             </li>
-            <li class="flex gap-4 rounded-xl border border-white/10 bg-white/5 p-5">
-              <span class="text-brand-200"><svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg></span>
-              <p class="text-sm leading-6 text-white/80"><strong class="font-medium text-white">You choose the provider.</strong> The model provider you pick processes your prompts under its own terms.</p>
+            <li class="privacy-item">
+              <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+              <p><strong>You choose the provider.</strong> The model provider you pick processes your prompts under its own terms.</p>
+            </li>
+            <li class="privacy-item">
+              <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 6h.01"/><path d="M6 18h.01"/></svg>
+              <p><strong>Open and self-hostable.</strong> Read every line on GitHub, or run Jivika yourself, including with local models.</p>
             </li>
           </ul>
         </div>
       </section>
 
-      <section class="section">
+      <section class="section pb-0" aria-labelledby="clipper-title">
+        <div class="wrap">
+          <div class="callout" data-reveal>
+            <span class="icon-tile size-12 rounded-xl"><svg viewBox="0 0 24 24" class="icon size-6" aria-hidden="true"><circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/></svg></span>
+            <div class="flex-1">
+              <p class="eyebrow">Jivika Clipper</p>
+              <h2 id="clipper-title" class="mt-2 text-[22px] leading-7 font-semibold tracking-[-0.02em] text-balance text-ink">Send the job you are viewing to Jivika in one click.</h2>
+              <p class="mt-2 max-w-[600px] text-muted">A small extension for Chrome, Edge and Brave. It reads only the current tab when you click, and sends nothing to our servers.</p>
+            </div>
+            <a href="%BASE%/clipper/" class="btn btn-secondary btn-lg">Get the Clipper <svg viewBox="0 0 24 24" class="icon size-4" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="pricing-title">
         <div class="wrap">
           <div class="mx-auto max-w-[640px] text-center" data-reveal>
             <p class="eyebrow">Pricing</p>
-            <h2 class="h-section mt-3">Free today. Pro when you want it simpler.</h2>
-            <p class="lead mt-4">Use every tool free with your own key, or join the waitlist for hosted AI.</p>
+            <h2 id="pricing-title" class="h-section mt-3">Free today. Pro when you want it simpler.</h2>
+            <p class="lead mt-4">Use every tool free with the demo model or your own key. Join the waitlist for hosted AI.</p>
           </div>
           <div class="mx-auto mt-12 max-w-[880px]" data-reveal>
             <!--partial:pricing-cards-->
@@ -244,25 +262,29 @@
         </div>
       </section>
 
-      <section class="section border-y border-line bg-surface">
-        <div class="wrap grid gap-10 lg:grid-cols-[1fr_1.6fr]">
+      <section class="section border-y border-line bg-surface" aria-labelledby="faq-title">
+        <div class="wrap grid gap-10 lg:grid-cols-[1fr_1.6fr] lg:gap-16">
           <div>
             <p class="eyebrow">FAQ</p>
-            <h2 class="h-section mt-3">Common questions</h2>
-            <p class="mt-4 text-muted">More answers on the <a href="%BASE%/faq/" class="link">FAQ page</a>.</p>
+            <h2 id="faq-title" class="h-section mt-3">Common questions</h2>
+            <p class="mt-4 text-muted">More answers on the <a href="%BASE%/faq/" class="link">FAQ page</a>, or <a href="%BASE%/contact/" class="link">get in touch</a>.</p>
           </div>
           <div class="faq" data-reveal>
             <details>
               <summary>Is Jivika free?</summary>
-              <div><p>Yes. The Free plan includes every tool. You add your own model key and pay your provider directly for usage, and several providers offer free tiers.</p></div>
+              <div><p>Yes. Every tool is free. You can start on the shared demo model straight away, then add your own model key and pay your provider directly for usage. Several providers offer free tiers.</p></div>
             </details>
             <details>
               <summary>Do I need an account?</summary>
-              <div><p>No. There is no sign-up. Open the app, add a key in Settings and upload your resume.</p></div>
+              <div><p>No. There is no sign-up. Open the app, upload your resume and start; add a key in Settings whenever you like.</p></div>
             </details>
             <details>
               <summary>Where is my data stored?</summary>
-              <div><p>Your resume, analyses and applications are stored in your browser&#39;s local storage. They are not saved on our servers, and you can clear them from Settings at any time.</p></div>
+              <div><p>Your resume, analyses and applications are stored in your browser&#39;s local storage. They are not saved on our servers, and you can export or clear them from Settings at any time.</p></div>
+            </details>
+            <details>
+              <summary>Can I self-host Jivika?</summary>
+              <div><p>Yes. Jivika is open source under the Apache-2.0 licence, and the code is on <a href="https://github.com/abhimanyus1997/Jivika" class="link" rel="noopener">GitHub</a>. Self-hosted installs can also use local models.</p></div>
             </details>
             <details>
               <summary>What is Jivika Pro?</summary>
@@ -272,15 +294,18 @@
         </div>
       </section>
 
-      <section id="waitlist" class="section scroll-mt-16">
+      <section id="waitlist" class="section scroll-mt-16" aria-labelledby="cta-title">
         <div class="wrap">
-          <div data-reveal class="card flex flex-col items-start gap-8 p-8 sm:p-12 lg:flex-row lg:items-center lg:justify-between">
-            <div class="max-w-[520px]">
-              <h2 class="h-section">Start free today, or join the Pro waitlist.</h2>
-              <p class="lead mt-4">Open the app with your own key now. Leave your email to hear when hosted AI is ready.</p>
-              <a href="%BASE%/app/" class="btn btn-secondary mt-6">Open the app <svg viewBox="0 0 24 24" class="icon size-4" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+          <div data-reveal class="cta">
+            <div class="max-w-[540px]">
+              <h2 id="cta-title" class="h-section">Start your search today.</h2>
+              <p class="lead mt-4">Open the app and try it free, no sign-up needed. Want hosted AI instead? Leave your email for the Pro waitlist.</p>
+              <a href="%BASE%/app/" class="btn btn-primary btn-lg mt-7">Try it free <svg viewBox="0 0 24 24" class="icon size-4" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
             </div>
-            <!--partial:waitlist-form-->
+            <div class="w-full max-w-md">
+              <h3 class="t-title mb-3 text-[15px]">Join the Pro waitlist</h3>
+              <!--partial:waitlist-form-->
+            </div>
           </div>
         </div>
       </section>
