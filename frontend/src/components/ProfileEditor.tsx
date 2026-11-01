@@ -1,8 +1,8 @@
 import { ChevronDown, ChevronUp, GripVertical, Pencil, Plus, Trash2 } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { StructuredProfile } from '../lib/api'
 import { moveItem, newId, SECTION_KEYS, type SectionKey } from '../lib/store'
-import { SECTION_TITLES } from './ResumeDoc'
+import { SECTION_TITLES, shownOnResume, type Basics, type ContactKey } from './ResumeDoc'
 import { Button, Card, Field, IconButton, inputCls, ProgressBar, textareaCls } from './ui'
 
 /* ---------- Reorderable list: drag handle plus move buttons for keyboard and screen reader users ---------- */
@@ -188,6 +188,32 @@ function blankItem(section: SectionKey): Item {
   return item
 }
 
+/** Field a term from '+ Add to profile' goes into, per section. */
+/** Field that takes the term from '+ Add to profile'. Experience gets none: a bullet would read as a fact. */
+const PREFILL: Record<SectionKey, string> = {
+  experience: '',
+  projects: 'name',
+  education: 'degree',
+  skills: 'items',
+  languages: 'name',
+  certifications: 'name',
+  publications: 'citation',
+  references: 'name',
+}
+
+/** A new item for the section with the term filled in, for deep links like #profile?section=skills&add=Docker. */
+export function prefilledItem(section: SectionKey, term: string): Item & { id: string } {
+  const item = blankItem(section) as Item & { id: string }
+  const key = PREFILL[section]
+  if (key) item[key] = Array.isArray(item[key]) ? [term] : term
+  return item
+}
+
+/** Items in a section, for the section list (skills count each skill, not each group). */
+export function sectionCount(p: StructuredProfile, k: SectionKey) {
+  return k === 'skills' ? p.skills.reduce((n, g) => n + g.items.filter((x) => x.trim()).length, 0) : p[k].length
+}
+
 function FieldInput({ field, value, onChange }: { field: FieldDef; value: unknown; onChange: (v: unknown) => void }) {
   const cls = field.wide ? 'sm:col-span-2' : ''
   if (field.type === 'check') {
@@ -214,13 +240,24 @@ function FieldInput({ field, value, onChange }: { field: FieldDef; value: unknow
   )
 }
 
-function SectionEditor({ section, items, onChange }: { section: SectionKey; items: Item[]; onChange: (items: Item[]) => void }) {
+function SectionEditor({ section, items, onChange, openItem }: { section: SectionKey; items: Item[]; onChange: (items: Item[]) => void; openItem?: string }) {
   const schema = SCHEMA[section]
-  const [open, setOpen] = useState<Set<string>>(new Set())
+  const [open, setOpen] = useState<Set<string>>(() => new Set(openItem ? [openItem] : []))
+  useEffect(() => {
+    if (!openItem || !items.some((i) => i.id === openItem)) return
+    setOpen((s) => new Set([...s, openItem]))
+    // Wait for the item to expand, then bring it into view and focus its first field.
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`profile-item-${openItem}`)
+      el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      el?.querySelector<HTMLElement>('input, textarea')?.focus({ preventScroll: true })
+    })
+  }, [openItem])
   const toggle = (id: string) => setOpen((s) => new Set(s.has(id) ? [...s].filter((x) => x !== id) : [...s, id]))
   const patch = (i: number, k: string, v: unknown) => onChange(items.map((it, j) => (j === i ? { ...it, [k]: v } : it)))
 
   return (
+    <div id={`profile-section-${section}`} className="scroll-mt-20">
     <Card
       title={SECTION_TITLES[section]}
       action={
@@ -248,7 +285,7 @@ function SectionEditor({ section, items, onChange }: { section: SectionKey; item
           render={(item, i) => {
             const expanded = open.has(item.id!)
             return (
-              <div>
+              <div id={`profile-item-${item.id}`}>
                 <div className="flex min-h-7 items-center gap-2">
                   <button
                     type="button"
@@ -282,18 +319,60 @@ function SectionEditor({ section, items, onChange }: { section: SectionKey; item
         <p className="text-[13px] text-muted">No {SECTION_TITLES[section].toLowerCase()} added yet.</p>
       )}
     </Card>
+    </div>
   )
 }
 
-const BASICS: { key: keyof StructuredProfile['basics']; label: string; wide?: boolean }[] = [
+type BasicKey = Exclude<keyof Basics, 'show' | 'summary'>
+const BASICS: { key: BasicKey; label: string; type?: string; wide?: boolean; hint?: string; contact?: ContactKey }[] = [
   { key: 'name', label: 'Name' },
   { key: 'headline', label: 'Headline' },
-  { key: 'email', label: 'Email' },
-  { key: 'phone', label: 'Phone' },
-  { key: 'location', label: 'Location' },
-  { key: 'linkedin', label: 'LinkedIn' },
-  { key: 'website', label: 'Website', wide: true },
+  { key: 'email', label: 'Email', type: 'email', contact: 'email' },
+  { key: 'phone', label: 'Phone', type: 'tel', contact: 'phone' },
+  { key: 'linkedin', label: 'LinkedIn', contact: 'linkedin' },
+  { key: 'website', label: 'Website', contact: 'website' },
+  { key: 'location', label: 'Location on resume', hint: 'e.g. Pune, India. Left blank, city and country are used.', wide: true, contact: 'location' },
+  { key: 'city', label: 'City' },
+  { key: 'country', label: 'Country' },
+  { key: 'address', label: 'Street address', wide: true, contact: 'address', hint: 'Optional. Most resumes only need a city.' },
+  { key: 'birth_date', label: 'Date of birth', type: 'date', contact: 'birth_date', hint: 'Optional. Many employers do not need it, and some regions advise leaving it out.' },
 ]
+
+function BasicsCard({ value, onChange }: { value: StructuredProfile; onChange: (next: StructuredProfile) => void }) {
+  const b = value.basics as Basics
+  const setBasics = (next: Basics) => onChange({ ...value, basics: next })
+  return (
+    <div id="profile-section-basics" className="scroll-mt-20">
+      <Card title="Basics" description="Personal details. Choose which ones appear on your resume.">
+        <div className="grid gap-3 sm:grid-cols-2">
+          {BASICS.map((f) => (
+            <div key={f.key} className={f.wide ? 'sm:col-span-2' : ''}>
+              <Field label={f.label} hint={f.hint}>
+                <input type={f.type ?? 'text'} className={inputCls} value={b[f.key] ?? ''} onChange={(e) => setBasics({ ...b, [f.key]: e.target.value })} />
+              </Field>
+              {f.contact && (
+                <label className="mt-1.5 flex items-center gap-1.5 text-xs text-muted">
+                  <input
+                    type="checkbox"
+                    className="size-3.5 accent-brand-600"
+                    checked={shownOnResume(b, f.contact)}
+                    onChange={(e) => setBasics({ ...b, show: { ...b.show, [f.contact!]: e.target.checked } })}
+                  />
+                  Show on resume
+                </label>
+              )}
+            </div>
+          ))}
+          <div className="sm:col-span-2">
+            <Field label="A few lines about you" hint="Used as the summary at the top of your resume.">
+              <textarea className={`${textareaCls} field-sizing-content min-h-24`} value={b.summary ?? ''} onChange={(e) => setBasics({ ...b, summary: e.target.value })} />
+            </Field>
+          </div>
+        </div>
+      </Card>
+    </div>
+  )
+}
 
 /** Drag or arrow-key order of resume sections. */
 export function SectionOrder({ order, onChange }: { order: SectionKey[]; onChange: (order: SectionKey[]) => void }) {
@@ -316,35 +395,22 @@ export function ProfileEditor({
   value,
   onChange,
   order = [...SECTION_KEYS],
+  openItem,
 }: {
   value: StructuredProfile
   onChange: (next: StructuredProfile) => void
   order?: SectionKey[]
+  /** Item to expand and scroll to (from a deep link). */
+  openItem?: string
 }) {
-  const b = value.basics
-  const setBasic = (k: keyof typeof b, v: string) => onChange({ ...value, basics: { ...b, [k]: v } })
   return (
     <div className="space-y-4">
-      <Card title="Basics">
-        <div className="grid gap-3 sm:grid-cols-2">
-          {BASICS.map((f) => (
-            <div key={f.key} className={f.wide ? 'sm:col-span-2' : ''}>
-              <Field label={f.label}>
-                <input className={inputCls} value={b[f.key] ?? ''} onChange={(e) => setBasic(f.key, e.target.value)} />
-              </Field>
-            </div>
-          ))}
-          <div className="sm:col-span-2">
-            <Field label="Summary">
-              <textarea className={`${textareaCls} field-sizing-content min-h-24`} value={b.summary ?? ''} onChange={(e) => setBasic('summary', e.target.value)} />
-            </Field>
-          </div>
-        </div>
-      </Card>
+      <BasicsCard value={value} onChange={onChange} />
       {order.map((k) => (
         <SectionEditor
           key={k}
           section={k}
+          openItem={openItem}
           items={value[k] as unknown as Item[]}
           onChange={(items) => onChange({ ...value, [k]: items } as StructuredProfile)}
         />
@@ -381,14 +447,14 @@ export function profileStrength(p: StructuredProfile) {
   return { score, checks, quantified, bullets: bullets.length }
 }
 
-export function StrengthMeter({ profile }: { profile: StructuredProfile }) {
+export function StrengthMeter({ profile, compact = false }: { profile: StructuredProfile; compact?: boolean }) {
   const s = profileStrength(profile)
   const todo = s.checks.filter((c) => !c.ok)
   return (
-    <Card title="Profile strength" description="How complete your profile is for a strong resume.">
+    <Card title="Profile strength" description={compact ? undefined : 'How complete your profile is for a strong resume.'}>
       <div className="space-y-4">
         <ProgressBar value={s.score} label="Strength" suffix="/100" />
-        <ul className="grid gap-1.5 text-[13px] sm:grid-cols-2">
+        <ul className={`grid gap-1.5 text-[13px] ${compact ? '' : 'sm:grid-cols-2'}`}>
           {s.checks.map((c) => (
             <li key={c.label} className="flex items-center gap-2">
               <span className={`size-1.5 shrink-0 rounded-full ${c.ok ? 'bg-brand-500' : 'bg-line-strong'}`} aria-hidden="true" />
@@ -404,9 +470,9 @@ export function StrengthMeter({ profile }: { profile: StructuredProfile }) {
         </ul>
         {todo.length > 0 && (
           <div>
-            <h3 className="t-overline mb-1.5">Tips</h3>
+            <h3 className="t-overline mb-1.5">{compact ? 'Next step' : 'Tips'}</h3>
             <ul className="space-y-1 text-[13px] leading-5 text-muted">
-              {todo.map((c) => (
+              {todo.slice(0, compact ? 1 : undefined).map((c) => (
                 <li key={c.label}>{c.tip}</li>
               ))}
             </ul>

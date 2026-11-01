@@ -1,6 +1,7 @@
-import { FileText, LayoutList, MapPin, Plus, Sparkles, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { ProfileEditor, SectionOrder, StrengthMeter } from '../components/ProfileEditor'
+import { Check, FileText, FileUp, LayoutList, MapPin, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { prefilledItem, ProfileEditor, sectionCount, SectionOrder, StrengthMeter } from '../components/ProfileEditor'
+import { SECTION_TITLES } from '../components/ResumeDoc'
 import { ResumeDropzone, ResumeFileRow } from '../components/Resume'
 import {
   Avatar,
@@ -15,6 +16,7 @@ import {
   inputCls,
   KeyNotice,
   Modal,
+  Note,
   PageHeader,
   textareaCls,
   toast,
@@ -24,12 +26,15 @@ import {
   emptyStructured,
   normalizeStructured,
   pushHistory,
+  SECTION_KEYS,
   syncProfileFromStructured,
   useProfile,
   useResume,
   useResumeSettings,
   useStructuredProfile,
+  type SectionKey,
 } from '../lib/store'
+import type { StructuredProfile } from '../lib/api'
 
 const EMPTY: Profile = {
   name: '',
@@ -105,6 +110,57 @@ function StructuredSection() {
   const [confirm, setConfirm] = useState<'rebuild' | 'remove' | null>(null)
   const key = useAiReady()
   const build = useAction(api.structureProfile)
+  const [saving, setSaving] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const [openItem, setOpenItem] = useState<string>()
+  // An item from '+ Add to profile' stays a draft until the user edits it or saves it, so an untouched
+  // requirement never reaches tailoring as if it were a fact from the profile.
+  const [pending, setPending] = useState<{ section: SectionKey; term: string; item: { id: string } } | null>(null)
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  // Edits are written straight to this browser; the indicator settles once typing pauses, and the simple
+  // profile the other tools read is synced at the same moment.
+  function edit(next: StructuredProfile) {
+    if (pending) {
+      const list = next[pending.section] as unknown as { id: string }[]
+      const cur = list.find((i) => i.id === pending.item.id)
+      // Untouched draft: keep it out of the saved profile. Edited or deleted: it is the user's now.
+      if (cur && JSON.stringify(cur) === JSON.stringify(pending.item)) next = { ...next, [pending.section]: list.filter((i) => i !== cur) } as StructuredProfile
+      else setPending(null)
+    }
+    setStructured(next)
+    setSaving('saving')
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => {
+      syncProfileFromStructured(next)
+      setSaving('saved')
+    }, 600)
+  }
+  useEffect(() => () => clearTimeout(timer.current), [])
+
+  // #profile?section=skills&add=Docker (from '+ Add to profile') opens that section with a new item holding the term.
+  useEffect(() => {
+    function onHash() {
+      const params = new URLSearchParams(location.hash.split('?')[1] ?? '')
+      const section = params.get('section') as SectionKey | null
+      const term = (params.get('add') ?? '').trim().slice(0, 200)
+      if (!section || !SECTION_KEYS.includes(section)) return
+      history.replaceState(null, '', '#profile')
+      if (!term) return document.getElementById(`profile-section-${section}`)?.scrollIntoView({ behavior: 'smooth' })
+      const item = prefilledItem(section, term)
+      setPending({ section, term, item })
+      setOpenItem(item.id)
+    }
+    onHash()
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+
+  const shown = pending
+    ? (() => {
+        const p = normalizeStructured(structured ?? emptyStructured())
+        return { ...p, [pending.section]: [...p[pending.section], pending.item] } as StructuredProfile
+      })()
+    : structured
 
   async function runBuild() {
     setConfirm(null)
@@ -127,7 +183,19 @@ function StructuredSection() {
           </h2>
           <p className="text-[13px] text-muted">Sections for your resume. Edits save in this browser as you type.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {structured && (
+            <span role="status" aria-live="polite" className="inline-flex items-center gap-1 text-xs text-faint">
+              {saving === 'saving' ? (
+                'Saving…'
+              ) : saving === 'saved' ? (
+                <>
+                  <Check className="size-3.5 text-brand-600" strokeWidth={2} aria-hidden="true" />
+                  All changes saved
+                </>
+              ) : null}
+            </span>
+          )}
           {structured && (
             <ButtonLink href="#resume" size="sm" icon={FileText}>
               View resume
@@ -150,16 +218,59 @@ function StructuredSection() {
       </div>
       <ErrorMessage message={build.error} />
 
-      {structured ? (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
-          {/* Name, headline and contact flow into the simple profile when a field loses focus. */}
-          <div onBlur={() => syncProfileFromStructured(structured)}>
-            <ProfileEditor value={structured} onChange={setStructured} order={settings.order} />
+      {pending && (
+        <Note tone="info">
+          <p>
+            {pending.section === 'experience'
+              ? `A new entry is open in ${SECTION_TITLES.experience}. Add the role where you used "${pending.term}", or discard it.`
+              : `"${pending.term}" is ready to add to ${SECTION_TITLES[pending.section]}. Save it only if it describes your real experience.`}
+          </p>
+          <div className="mt-2 flex gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                setPending(null)
+                setStructured(shown)
+                syncProfileFromStructured(shown!)
+                toast('Added to your profile')
+              }}
+            >
+              Save
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setPending(null)}>
+              Discard
+            </Button>
           </div>
-          <div className="space-y-4 lg:sticky lg:top-[76px]">
-            <StrengthMeter profile={structured} />
+        </Note>
+      )}
+
+      {shown ? (
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
+          <div className="space-y-4">
+            <StrengthMeter profile={shown} compact />
+            <nav aria-label="Profile sections" className="rounded-xl border border-line bg-surface p-2 shadow-card">
+              <ul>
+                {(['basics', ...settings.order] as const).map((k) => (
+                  <li key={k}>
+                    <a
+                      href={`#profile?section=${k}`}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        document.getElementById(`profile-section-${k}`)?.scrollIntoView({ behavior: 'smooth' })
+                      }}
+                      className="flex items-center justify-between rounded-md px-2.5 py-1.5 text-[13px] text-ink hover:bg-subtle"
+                    >
+                      {k === 'basics' ? 'Basics' : SECTION_TITLES[k]}
+                      {k !== 'basics' && <span className="t-num text-xs text-faint">{sectionCount(shown, k)}</span>}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
             <SectionOrder order={settings.order} onChange={(order) => setSettings({ ...settings, order })} />
           </div>
+          <ProfileEditor value={shown} onChange={edit} order={settings.order} openItem={openItem} />
         </div>
       ) : (
         <Card>
@@ -283,9 +394,25 @@ export default function ProfilePage() {
         title="Profile"
         description="Upload your resume once. Every tool reuses it, and it only leaves this browser when you run an analysis."
         actions={
-          <Button variant="brand" icon={Sparkles} onClick={runExtract} loading={extract.loading} disabled={!resume?.text || !key}>
-            Extract profile
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              icon={FileUp}
+              onClick={() => {
+                const card = document.getElementById('profile-resume')
+                card?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                card?.querySelector<HTMLInputElement>('input[type="file"]')?.click()
+              }}
+            >
+              Import from a resume
+            </Button>
+            <ButtonLink href="#resume" icon={FileText}>
+              See base resume
+            </ButtonLink>
+            <Button variant="brand" icon={Sparkles} onClick={runExtract} loading={extract.loading} disabled={!resume?.text || !key}>
+              Extract profile
+            </Button>
+          </div>
         }
       />
 
@@ -294,7 +421,7 @@ export default function ProfilePage() {
       <ErrorMessage message={extract.error} />
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
-        <div>
+        <div id="profile-resume" className="scroll-mt-20">
           <Card
             title="Resume"
             description="PDF text is used by every tool."
