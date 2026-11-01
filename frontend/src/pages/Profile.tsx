@@ -1,22 +1,35 @@
-import { MapPin, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { FileText, LayoutList, MapPin, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { ProfileEditor, SectionOrder, StrengthMeter } from '../components/ProfileEditor'
 import { ResumeDropzone, ResumeFileRow } from '../components/Resume'
 import {
   Avatar,
   Badge,
   Button,
+  ButtonLink,
   Card,
+  EmptyState,
   ErrorMessage,
   Field,
   IconButton,
   inputCls,
   KeyNotice,
+  Modal,
   PageHeader,
   textareaCls,
   toast,
 } from '../components/ui'
 import { api, profileExperience, useAction, useAiReady, type Profile } from '../lib/api'
-import { pushHistory, useProfile, useResume } from '../lib/store'
+import {
+  emptyStructured,
+  normalizeStructured,
+  pushHistory,
+  syncProfileFromStructured,
+  useProfile,
+  useResume,
+  useResumeSettings,
+  useStructuredProfile,
+} from '../lib/store'
 
 const EMPTY: Profile = {
   name: '',
@@ -81,6 +94,129 @@ function ProfileSummary({ profile }: { profile: Profile | null }) {
         )}
       </div>
     </Card>
+  )
+}
+
+/** Structured profile: built from the resume by the model, then edited here. Feeds the Resume page. */
+function StructuredSection() {
+  const [resume] = useResume()
+  const [structured, setStructured] = useStructuredProfile()
+  const [settings, setSettings] = useResumeSettings()
+  const [confirm, setConfirm] = useState<'rebuild' | 'remove' | null>(null)
+  const key = useAiReady()
+  const build = useAction(api.structureProfile)
+
+  async function runBuild() {
+    setConfirm(null)
+    if (!resume?.text) return
+    const r = await build.run(resume.text)
+    if (!r) return
+    const sp = normalizeStructured(r)
+    setStructured(sp)
+    syncProfileFromStructured(sp)
+    pushHistory('skills', new Set(sp.skills.flatMap((g) => g.items)).size)
+    toast('Structured profile built from resume')
+  }
+
+  return (
+    <section aria-labelledby="structured-title" className="space-y-4">
+      <div className="flex flex-col gap-3 border-t border-line pt-6 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 id="structured-title" className="text-base leading-6 font-semibold text-ink">
+            Structured profile
+          </h2>
+          <p className="text-[13px] text-muted">Sections for your resume. Edits save in this browser as you type.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {structured && (
+            <ButtonLink href="#resume" size="sm" icon={FileText}>
+              View resume
+            </ButtonLink>
+          )}
+          <Button
+            size="sm"
+            variant={structured ? 'secondary' : 'brand'}
+            icon={Sparkles}
+            loading={build.loading}
+            disabled={!resume?.text || !key}
+            onClick={() => (structured ? setConfirm('rebuild') : runBuild())}
+          >
+            {structured ? 'Rebuild from resume' : 'Build structured profile from resume'}
+          </Button>
+          {structured && (
+            <IconButton icon={Trash2} size="sm" label="Remove structured profile" className="hover:bg-danger-bg hover:text-danger" onClick={() => setConfirm('remove')} />
+          )}
+        </div>
+      </div>
+      <ErrorMessage message={build.error} />
+
+      {structured ? (
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
+          {/* Name, headline and contact flow into the simple profile when a field loses focus. */}
+          <div onBlur={() => syncProfileFromStructured(structured)}>
+            <ProfileEditor value={structured} onChange={setStructured} order={settings.order} />
+          </div>
+          <div className="space-y-4 lg:sticky lg:top-[76px]">
+            <StrengthMeter profile={structured} />
+            <SectionOrder order={settings.order} onChange={(order) => setSettings({ ...settings, order })} />
+          </div>
+        </div>
+      ) : (
+        <Card>
+          <EmptyState
+            icon={<LayoutList />}
+            title="No structured profile yet"
+            text={
+              resume?.text
+                ? 'Build one from your resume to edit experience, projects and education as separate entries, and render them as a resume.'
+                : 'Upload your resume above to build one, or start from a blank profile.'
+            }
+            action={
+              <Button variant="secondary" icon={Plus} onClick={() => setStructured(emptyStructured())}>
+                Start from scratch
+              </Button>
+            }
+          />
+        </Card>
+      )}
+
+      <Modal
+        open={!!confirm}
+        onClose={() => setConfirm(null)}
+        title={confirm === 'remove' ? 'Remove structured profile?' : 'Rebuild from resume?'}
+        width="max-w-md"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirm(null)}>
+              Cancel
+            </Button>
+            {confirm === 'remove' ? (
+              <Button
+                variant="danger"
+                icon={Trash2}
+                onClick={() => {
+                  setStructured(null)
+                  setConfirm(null)
+                  toast('Structured profile removed')
+                }}
+              >
+                Remove
+              </Button>
+            ) : (
+              <Button variant="brand" icon={Sparkles} onClick={runBuild}>
+                Rebuild
+              </Button>
+            )}
+          </>
+        }
+      >
+        <p className="text-sm text-ink">
+          {confirm === 'remove'
+            ? 'Your structured entries will be deleted from this browser. Tailored resumes you already made are kept.'
+            : 'This replaces your structured entries, including edits, with a fresh read of your resume.'}
+        </p>
+      </Modal>
+    </section>
   )
 }
 
@@ -327,6 +463,8 @@ export default function ProfilePage() {
           </form>
         </Card>
       </div>
+
+      <StructuredSection />
     </>
   )
 }
