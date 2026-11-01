@@ -282,7 +282,7 @@ Baked in at build time. Defaults live in `frontend/.env`; override them with env
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `VITE_SITE_URL` | `https://jivika.app` | Canonical URLs, Open Graph tags and sitemap. Include any sub-path, without a trailing slash |
+| `VITE_SITE_URL` | `https://jivika.abhimanyu.fyi` | Canonical URLs, Open Graph tags and sitemap. Include any sub-path, without a trailing slash |
 | `VITE_BASE_PATH` | `/` | Sub-path the site is served from, such as `/jivika/`; links, assets and API calls are prefixed with it |
 | `VITE_CONTACT_EMAIL` | `abhimanyus1997@gmail.com` | Contact links |
 | `VITE_COMPANY_NAME` | `Jivika` | Footer and legal pages |

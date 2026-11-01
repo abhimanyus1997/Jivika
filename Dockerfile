@@ -7,7 +7,7 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
 # Build-time values baked into the HTML (defaults match frontend/.env).
-ARG VITE_SITE_URL=https://jivika.app
+ARG VITE_SITE_URL=https://jivika.abhimanyu.fyi
 ARG VITE_CONTACT_EMAIL=abhimanyus1997@gmail.com
 ARG VITE_COMPANY_NAME=Jivika
 ENV VITE_SITE_URL=$VITE_SITE_URL VITE_CONTACT_EMAIL=$VITE_CONTACT_EMAIL VITE_COMPANY_NAME=$VITE_COMPANY_NAME
