@@ -1,4 +1,4 @@
-import { BookmarkPlus, Briefcase, Check, ListPlus, MapPin, Target } from 'lucide-react'
+import { BookmarkPlus, Briefcase, Check, FileUser, ListPlus, MapPin, Target } from 'lucide-react'
 import { useState } from 'react'
 import { JobImport } from '../components/JobImport'
 import { MarketData } from '../components/MarketData'
@@ -25,7 +25,19 @@ import {
   toast,
 } from '../components/ui'
 import { api, profileExperience, useAction, useAiReady, type MatchResult } from '../lib/api'
-import { newId, today, useApplications, useJobDescription, useLastMatch, useLastMatchJd, useMatches, useProfile, useResume } from '../lib/store'
+import {
+  newId,
+  today,
+  useApplications,
+  useJobDescription,
+  useLastMatch,
+  useLastMatchJd,
+  useMatches,
+  useProfile,
+  useResume,
+  useTailoredResumes,
+} from '../lib/store'
+import { requestTailor } from './Resume'
 
 type Tab = 'skills' | 'insights' | 'plan'
 
@@ -62,7 +74,7 @@ function Insight({ title, items }: { title: string; items: string[] }) {
 function MatchResults({ result: r, jd }: { result: MatchResult; jd: string }) {
   const [tab, setTab] = useState<Tab>('skills')
   const [matches, setMatches] = useMatches()
-  const [, setApplications] = useApplications()
+  const [applications, setApplications] = useApplications()
   const [profile] = useProfile()
   const yours = profileExperience(profile)
   const resources = useResources(
@@ -76,10 +88,26 @@ function MatchResults({ result: r, jd }: { result: MatchResult; jd: string }) {
     toast('Saved to top picks')
   }
 
+  const [tailored, setTailored] = useTailoredResumes()
+  const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
+  const tracked = applications.find((a) => same(a.company, r.company) && same(a.role, r.job_title))
+  const existing = Object.values(tailored).find((t) => t.job.description === jd)
+
   function track() {
-    setApplications((a) => [{ id: newId(), company: r.company, role: r.job_title, date: today(), status: 'Applied', link: '', notes: '' }, ...a])
+    const id = newId()
+    setApplications((a) => [
+      { id, company: r.company, role: r.job_title, date: today(), status: 'Applied', link: '', notes: '', description: jd, match: r.match_score, history: [{ status: 'Applied', date: today() }] },
+      ...a,
+    ])
+    // A resume already tailored to this job description becomes the application's resume.
+    if (existing && !existing.appId) setTailored((all) => ({ ...all, [existing.id]: { ...existing, appId: id } }))
     toast('Added to applications')
     location.hash = 'applications'
+  }
+
+  function tailor() {
+    if (existing) location.hash = `resume?tailor=${existing.id}`
+    else requestTailor({ appId: tracked?.id, job: { title: r.job_title, company: r.company, description: jd } })
   }
 
   return (
@@ -134,6 +162,9 @@ function MatchResults({ result: r, jd }: { result: MatchResult; jd: string }) {
           <div className="flex w-full flex-wrap gap-2 sm:w-auto">
             <Button variant="secondary" icon={savedId ? Check : BookmarkPlus} disabled={!!savedId} onClick={save}>
               {savedId ? 'Saved' : 'Save to top picks'}
+            </Button>
+            <Button variant="secondary" icon={FileUser} onClick={tailor}>
+              {existing ? 'Open tailored resume' : 'Tailor resume for this job'}
             </Button>
             <Button variant="primary" icon={ListPlus} onClick={track}>
               Track application
