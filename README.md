@@ -53,10 +53,14 @@ Jivika (Sanskrit for *livelihood*) searches live job listings, imports job posts
 | Career path | Current role, next target and long-term potential with estimated salary ranges (INR, USD, GBP, EUR), market salary data from live sources, and an interactive learning roadmap with links to [roadmap.sh](https://roadmap.sh); roadmap items and skills to build list checked courses, videos, discussions, articles and docs |
 | Interview prep | **Questions:** tailored questions from a job description, with feedback on your answers. **Coding:** practice problems for the role (algorithms for software roles, SQL and Python data problems for data roles) in a CodeMirror editor. Python, JavaScript and SQL run in your browser against the tests, with hints, a solution, practice links and an AI code review |
 | Cover letter | Tone-aware letters on an A4 preview with Classic, Modern and Compact templates. Edit every field in a side panel, pick the date, add a typed or drawn signature, then download a PDF, copy the text or save a .txt file |
-| Applications | Track applications and their status; feeds the dashboard trends |
+| Profile and resume | Turn your resume into a structured profile (experience, projects, education, skills, languages, certifications, publications, references) with a strength meter, then render a base resume in six themes and download it as an A4 PDF |
+| Tailored resumes | One click from a job match: a resume tailored to the posting that only uses facts from your profile. The server drops any invented company, title, skill or number, and what the posting asks for but your profile lacks is listed as a gap. Refine it in a chat, edit any part, and restore any earlier version |
+| Applications | A drag-and-drop board and a table from Applied to Offer, with a status timeline, notes, the tailored resume and cover letter, and an application email draft (copy it or open it in your mail app) |
 
 Also included:
 
+- **Funnel and saved searches:** a dashboard funnel (Applied, Response, Interview, Offer) for 30 days, 90 days or all time, and saved job searches that mark new postings since your last check.
+- **Export and import** all your data as one JSON file (without your API key), merged or replaced on import.
 - **Light, dark and system themes** for the app and the website, kept in sync across tabs.
 - **Live model lists** in Settings: a searchable list of the provider's current chat models with a recommended pick, context length and prices where the provider reports them, or a custom model id.
 - **Nine providers**, including Qwen (Alibaba Cloud). Qwen models are also available through Groq and OpenRouter.
@@ -314,15 +318,21 @@ Counters use Upstash Redis (`INCR` + `EXPIRE`) when `KV_REST_API_URL`/`KV_REST_A
 | `arbeitnow` | yes | Arbeitnow public job board feed, filtered on the server |
 | `adzuna` | when keys are set | Adzuna search API; needs `JIVIKA_ADZUNA_APP_ID` and `JIVIKA_ADZUNA_APP_KEY` |
 | `ats` | yes | Company career boards on Greenhouse, Lever and Ashby, cached for 30 minutes |
+| `himalayas` | yes | Himalayas public jobs API, with a country filter for India |
+| `jobicy` | yes | Jobicy public remote jobs API |
+| `remoteok` | yes | Remote OK public API; listings link back to Remote OK |
+| `weworkremotely` | yes | We Work Remotely public RSS feed |
+| `hn` | yes | Hacker News "Ask HN: Who is hiring?" threads through the official Algolia API |
+| `yc` | yes | YC startup job listings, read only where robots.txt allows |
 | `linkedin` | no (research) | Public guest job listings, fetched on demand |
-| `naukri` | no (research) | Public search API used by the Naukri web client, fetched on demand |
+| `naukri` | no (research) | Usually blocked by Naukri's bot protection; use Jivika Clipper for Naukri jobs |
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `JIVIKA_JOB_SOURCES` | `remotive,arbeitnow,adzuna,ats` | Sources to use. Research sources must be listed explicitly, for example `remotive,arbeitnow,adzuna,ats,linkedin,naukri` |
 | `JIVIKA_ADZUNA_APP_ID`, `JIVIKA_ADZUNA_APP_KEY` | unset | Free keys from https://developer.adzuna.com |
 | `JIVIKA_ADZUNA_COUNTRY` | `in` | Two-letter Adzuna country code |
-| `JIVIKA_ATS_BOARDS` | built-in list in `jivika/jobs.py` | Comma-separated `greenhouse:<slug>`, `lever:<slug>` or `ashby:<slug>` |
+| `JIVIKA_ATS_BOARDS` | built-in list in `jivika/jobs.py` | Comma-separated `greenhouse:`, `lever:`, `ashby:`, `workable:`, `smartrecruiters:`, `recruitee:` or `freshteam:` boards, for example `smartrecruiters:Freshworks` |
 | `JIVIKA_JOBS_RATE_LIMIT` | `30` | Job searches per client IP per 10 minutes |
 
 Research sources use no login, cookies, proxies or captcha solving. If a source blocks the request, it is reported as unavailable rather than retried. Only fixed URL templates are used, so user input never selects a host.
@@ -430,8 +440,12 @@ docker exec jivika python -c "import sqlite3; c = sqlite3.connect('/data/jivika.
 │   ├── resources.py      Learning resource resolver: keyless sources, allow-lists, link checks, cache
 │   ├── coding.py         Coding problem validation and default languages per role
 │   ├── parsing.py        Resume parsing with pypdf, or Docling (local or docling-serve)
-│   └── models.py         Live model lists and the recommended-model heuristic
+│   ├── models.py         Live model lists and the recommended-model heuristic
+│   ├── llm.py            Model fallback, cooldowns and the Groq demo model pool
+│   └── resume.py         Structured profiles, tailoring checks and application email helpers
 ├── tests/                pytest suite (network blocked; model and fetch calls are faked)
+├── extension/            Jivika Clipper (Manifest V3 extension), bookmarklet, build script and tests
+├── .github/              CI and release workflows, issue templates, Dependabot
 ├── docs/media/           Walkthrough clips (GIF and MP4) used in this README
 ├── frontend/
 │   ├── index.html        Landing page; pricing/, faq/, about/, contact/, privacy/, terms/ alongside
@@ -459,12 +473,21 @@ docker exec jivika python -c "import sqlite3; c = sqlite3.connect('/data/jivika.
 uv run pytest                 # backend tests; no network access
 npm --prefix frontend run lint
 npm run build                 # type-checks and builds the frontend
+node --test extension/test/*.test.mjs   # Clipper extractor and end-to-end tests (needs Chrome)
+npm run build:extension       # builds the Clipper zip and bookmarklet
 ```
+
+CI runs all of these on every push and pull request. Tagging `v*` builds a GitHub Release with the Clipper zip and publishes the Docker image to `ghcr.io/abhimanyus1997/jivika`.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [DEVELOPMENT.md](DEVELOPMENT.md). Report security issues privately as described in [SECURITY.md](SECURITY.md); [PRIVACY.md](PRIVACY.md) lists what goes where.
 
 ## Roadmap
 
 - **Pro hosted plan** with accounts and payments, so no key is needed. Join the waitlist on the pricing page.
-- **Browser extension** to clip jobs from any site into Applications and Job match.
+- **Chrome Web Store listing** for Jivika Clipper, so it installs with one click.
+- **Email and calendar** integration for replies and interview scheduling.
 - **More ATS boards** and job sources.
 
 ## Responsible use
