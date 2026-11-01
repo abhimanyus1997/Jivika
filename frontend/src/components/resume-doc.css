@@ -1,0 +1,314 @@
+/*
+ * A4 resume. Like the cover letter, the paper is white with dark ink in both app themes, so colors are fixed
+ * here. --rs-accent is set inline from the accent picker.
+ */
+.rs {
+  --rs-ink: #1c1b19;
+  --rs-muted: #5c5a54;
+  --rs-rule: #d6d4ce;
+  --rs-accent: #1f7a4d;
+  --rs-pad-y: 16mm;
+  --rs-pad-x: 17mm;
+  --rs-gap: 5mm;
+  --rs-body: 10pt;
+  --rs-leading: 1.45;
+  --rs-head-font: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --rs-body-font: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+
+  box-sizing: border-box;
+  width: 210mm;
+  min-height: 297mm;
+  padding: var(--rs-pad-y) var(--rs-pad-x);
+  background: #fff;
+  color: var(--rs-ink);
+  font-family: var(--rs-body-font);
+  font-size: var(--rs-body);
+  line-height: var(--rs-leading);
+  color-scheme: light;
+  text-align: left;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+.rs * {
+  box-sizing: border-box;
+}
+.rs-head {
+  margin-bottom: var(--rs-gap);
+}
+.rs-name {
+  margin: 0;
+  font-family: var(--rs-head-font);
+  font-size: 22pt;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+.rs-headline {
+  margin-top: 1mm;
+  font-size: 11pt;
+  color: var(--rs-muted);
+}
+.rs-contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 4mm;
+  margin-top: 2mm;
+  font-style: normal;
+  font-size: 9pt;
+  color: var(--rs-muted);
+  overflow-wrap: anywhere;
+}
+.rs-section {
+  margin-top: var(--rs-gap);
+  break-inside: avoid-page;
+}
+.rs-h {
+  margin: 0 0 2mm;
+  padding-bottom: 1mm;
+  border-bottom: 0.6pt solid var(--rs-rule);
+  font-family: var(--rs-head-font);
+  font-size: 9.5pt;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.rs-entry + .rs-entry {
+  margin-top: 3mm;
+}
+.rs-entry {
+  break-inside: avoid;
+}
+.rs-entry-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4mm;
+}
+.rs-entry-title {
+  font-weight: 600;
+}
+.rs-entry-sub {
+  color: var(--rs-muted);
+}
+.rs-entry-sub::before {
+  content: ', ';
+}
+.rs-meta {
+  flex-shrink: 0;
+  font-size: 9pt;
+  color: var(--rs-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.rs-p {
+  margin: 0.5mm 0 0;
+  white-space: pre-line;
+}
+.rs-bullets {
+  margin: 1mm 0 0;
+  padding-left: 4.5mm;
+  list-style: disc;
+}
+.rs-bullets li + li {
+  margin-top: 0.6mm;
+}
+.rs-plain {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rs-plain li + li {
+  margin-top: 1mm;
+}
+.rs-strong {
+  font-weight: 600;
+}
+.rs-muted {
+  color: var(--rs-muted);
+}
+.rs-skills {
+  margin: 0;
+}
+.rs-skills > div {
+  display: flex;
+  gap: 2mm;
+}
+.rs-skills > div + div {
+  margin-top: 0.8mm;
+}
+.rs-skills dt {
+  flex-shrink: 0;
+  font-weight: 600;
+}
+.rs-skills dt::after {
+  content: ':';
+}
+.rs-skills dd {
+  margin: 0;
+}
+
+/* Classic: serif throughout, centred header, thin rules. */
+.rs[data-rtheme='classic'] {
+  --rs-head-font: 'Lora', Georgia, serif;
+  --rs-body-font: 'Lora', Georgia, serif;
+}
+.rs[data-rtheme='classic'] .rs-head {
+  text-align: center;
+}
+.rs[data-rtheme='classic'] .rs-contact {
+  justify-content: center;
+}
+.rs[data-rtheme='classic'] .rs-h {
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  border-bottom-color: var(--rs-ink);
+}
+
+/* Modern: sans, accent name rule and headings. */
+.rs[data-rtheme='modern'] .rs-head {
+  padding-bottom: 3mm;
+  border-bottom: 2.5pt solid var(--rs-accent);
+}
+.rs[data-rtheme='modern'] .rs-headline,
+.rs[data-rtheme='modern'] .rs-h {
+  color: var(--rs-accent);
+}
+.rs[data-rtheme='modern'] .rs-h {
+  border-bottom: 0;
+  padding-bottom: 0;
+  letter-spacing: 0.08em;
+}
+
+/* Compact: smaller type, tighter spacing. */
+.rs[data-rtheme='compact'] {
+  --rs-pad-y: 11mm;
+  --rs-pad-x: 13mm;
+  --rs-gap: 3mm;
+  --rs-body: 9pt;
+  --rs-leading: 1.35;
+}
+.rs[data-rtheme='compact'] .rs-name {
+  font-size: 17pt;
+}
+.rs[data-rtheme='compact'] .rs-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 4mm;
+}
+.rs[data-rtheme='compact'] .rs-contact {
+  flex-basis: 100%;
+  margin-top: 1mm;
+}
+.rs[data-rtheme='compact'] .rs-entry + .rs-entry {
+  margin-top: 2mm;
+}
+
+/* Two-column: tinted sidebar for contact, skills, languages and certifications. */
+.rs[data-rtheme='sidebar'] .rs-cols {
+  display: grid;
+  grid-template-columns: 58mm minmax(0, 1fr);
+  gap: 7mm;
+}
+.rs[data-rtheme='sidebar'] .rs-side {
+  align-self: start;
+  padding: 4mm;
+  border-radius: 2mm;
+  background: color-mix(in srgb, var(--rs-accent) 9%, #fff);
+  font-size: 9pt;
+  overflow-wrap: anywhere;
+}
+.rs[data-rtheme='sidebar'] .rs-side > .rs-section:first-child {
+  margin-top: 0;
+}
+.rs[data-rtheme='sidebar'] .rs-side .rs-contact {
+  flex-direction: column;
+  margin-top: 0;
+}
+.rs[data-rtheme='sidebar'] .rs-side .rs-skills > div {
+  display: block;
+}
+.rs[data-rtheme='sidebar'] .rs-side .rs-skills dt::after {
+  content: '';
+}
+.rs[data-rtheme='sidebar'] .rs-main > .rs-section:first-child {
+  margin-top: 0;
+}
+.rs[data-rtheme='sidebar'] .rs-name {
+  color: var(--rs-accent);
+}
+.rs[data-rtheme='sidebar'] .rs-h {
+  border-bottom-color: color-mix(in srgb, var(--rs-accent) 40%, #fff);
+}
+
+/* Minimal: light weights, no rules, generous space. */
+.rs[data-rtheme='minimal'] {
+  --rs-pad-y: 20mm;
+  --rs-pad-x: 22mm;
+  --rs-gap: 7mm;
+}
+.rs[data-rtheme='minimal'] .rs-name {
+  font-weight: 400;
+  font-size: 24pt;
+}
+.rs[data-rtheme='minimal'] .rs-h {
+  border: 0;
+  padding: 0;
+  font-weight: 500;
+  color: var(--rs-muted);
+  letter-spacing: 0.18em;
+}
+
+/* Executive: spaced capitals for the name, serif body, accent double rule. */
+.rs[data-rtheme='executive'] {
+  --rs-head-font: 'Josefin Sans Variable', 'Century Gothic', sans-serif;
+  --rs-body-font: 'Lora', Georgia, serif;
+}
+.rs[data-rtheme='executive'] .rs-head {
+  padding-bottom: 3mm;
+  border-bottom: 3pt double var(--rs-accent);
+}
+.rs[data-rtheme='executive'] .rs-name {
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.rs[data-rtheme='executive'] .rs-headline {
+  font-family: var(--rs-head-font);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 9.5pt;
+}
+.rs[data-rtheme='executive'] .rs-h {
+  letter-spacing: 0.22em;
+  font-weight: 500;
+  border-bottom: 0;
+  color: var(--rs-accent);
+}
+
+/* Print: only the resume, on A4. The page margins replace the on-screen padding. */
+.resume-print {
+  display: none;
+}
+@page resume {
+  size: A4;
+  margin: 14mm 15mm;
+}
+@media print {
+  body:has(> .resume-print) {
+    background: #fff !important;
+    min-height: 0;
+  }
+  body:has(> .resume-print) > :not(.resume-print) {
+    display: none !important;
+  }
+  .resume-print {
+    display: block;
+    page: resume;
+  }
+  .resume-print .rs {
+    width: auto;
+    min-height: 0;
+    padding: 0;
+  }
+}

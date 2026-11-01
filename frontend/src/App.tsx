@@ -4,6 +4,7 @@ import {
   ChevronRight,
   Contact,
   FileCheck2,
+  FileUser,
   FilePlus2,
   LayoutDashboard,
   Mail,
@@ -39,6 +40,7 @@ import CareerPathPage from './pages/CareerPath'
 import Interview from './pages/Interview'
 import CoverLetter from './pages/CoverLetter'
 import Applications from './pages/Applications'
+import ResumePage from './pages/Resume'
 import Ats from './pages/Ats'
 import JobSearch from './pages/JobSearch'
 import Settings from './pages/Settings'
@@ -49,6 +51,7 @@ const PAGES: Page[] = [
   { id: 'dashboard', title: 'Dashboard', icon: LayoutDashboard, component: Dashboard, group: 'Overview' },
   { id: 'profile', title: 'Profile', icon: UserRound, component: ProfilePage, group: 'Workspace' },
   { id: 'jobs', title: 'Job search', icon: SearchCheck, component: JobSearch, group: 'Workspace' },
+  { id: 'resume', title: 'Resume', icon: FileUser, component: ResumePage, group: 'Workspace' },
   { id: 'applications', title: 'Applications', icon: BriefcaseBusiness, component: Applications, group: 'Workspace' },
   { id: 'match', title: 'Job match', icon: Target, component: JobMatch, group: 'Analyze' },
   { id: 'ats', title: 'ATS checker', icon: ScanText, component: Ats, group: 'Analyze' },
@@ -65,6 +68,8 @@ const COMMANDS: Command[] = [
   ...PAGES.map((p) => ({ id: p.id, label: p.title, group: 'Pages' as const, icon: p.icon, href: `#${p.id}` })),
   { id: 'a-upload', label: 'Upload resume', group: 'Actions', icon: Upload, href: '#profile', keywords: 'cv pdf' },
   { id: 'a-add', label: 'Add application', group: 'Actions', icon: FilePlus2, href: '#applications?new', keywords: 'track job' },
+  { id: 'a-resume', label: 'Download resume PDF', group: 'Actions', icon: FileUser, href: '#resume', keywords: 'cv theme print tailor' },
+  { id: 'a-export', label: 'Export all data', group: 'Actions', icon: SettingsIcon, href: '#settings?focus=data', keywords: 'backup import json' },
   { id: 'a-jobs', label: 'Search jobs', group: 'Actions', icon: SearchCheck, href: '#jobs', keywords: 'find listings openings roles' },
   { id: 'a-match', label: 'Run job match', group: 'Actions', icon: Play, href: '#match', keywords: 'analyze description import link url' },
   { id: 'a-ats', label: 'Check ATS score', group: 'Actions', icon: ScanText, href: '#ats', keywords: 'applicant tracking resume keywords' },
