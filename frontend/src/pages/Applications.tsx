@@ -1,6 +1,8 @@
 import { ExternalLink, KanbanSquare, Pencil, Plus, Search, SearchX, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { ApplicationDetail, formatDate, safeLink } from '../components/ApplicationDetail'
 import {
+  Badge,
   Button,
   Card,
   EmptyState,
@@ -14,26 +16,116 @@ import {
   textareaCls,
   toast,
 } from '../components/ui'
-import { newId, read, STATUSES, today, useApplications, write, type Application, type Status } from '../lib/store'
+import {
+  migrateApplication,
+  newId,
+  read,
+  STATUSES,
+  today,
+  useApplications,
+  useStored,
+  withStatus,
+  write,
+  type Application,
+  type Status,
+} from '../lib/store'
 
 type Filter = 'all' | Status
 
 const blank = (): Application => ({ id: '', company: '', role: '', date: today(), status: 'Applied', link: '', notes: '' })
 
-function formatDate(iso: string) {
-  const [y, m, d] = iso.split('-').map(Number)
-  if (!y) return iso
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+/** Kanban board: one column per status. Cards drag between columns; the status select on each card is the keyboard alternative. */
+function Board({ apps, onStatus, onOpen }: { apps: Application[]; onStatus: (id: string, s: Status) => void; onOpen: (id: string) => void }) {
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [over, setOver] = useState<Status | null>(null)
+  return (
+    <div className="relative grid auto-cols-[minmax(232px,1fr)] grid-flow-col gap-3 overflow-x-auto pb-2" aria-label="Applications board">
+      {STATUSES.map((status) => {
+        const cards = apps.filter((a) => a.status === status)
+        return (
+          <section
+            key={status}
+            aria-label={`${status}, ${cards.length} ${cards.length === 1 ? 'application' : 'applications'}`}
+            onDragOver={(e) => {
+              if (!dragId) return
+              e.preventDefault()
+              e.dataTransfer.dropEffect = 'move'
+              setOver(status)
+            }}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(null)
+            }}
+            onDrop={(e) => {
+              e.preventDefault()
+              const id = dragId ?? e.dataTransfer.getData('text/plain')
+              if (id) onStatus(id, status)
+              setDragId(null)
+              setOver(null)
+            }}
+            className={`flex min-h-48 flex-col rounded-xl border bg-subtle/60 transition-colors duration-150 ${over === status ? 'border-brand-500 bg-brand-50/60' : 'border-line'}`}
+          >
+            <header className="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
+              <StatusBadge status={status} />
+              <span className="t-num text-xs text-faint">{cards.length}</span>
+            </header>
+            <ul className="flex flex-1 flex-col gap-2 px-2 pb-2">
+              {cards.map((a) => (
+                <li
+                  key={a.id}
+                  draggable
+                  onDragStart={(e) => {
+                    setDragId(a.id)
+                    e.dataTransfer.effectAllowed = 'move'
+                    e.dataTransfer.setData('text/plain', a.id)
+                  }}
+                  onDragEnd={() => {
+                    setDragId(null)
+                    setOver(null)
+                  }}
+                  className={`cursor-grab rounded-lg border border-line bg-surface p-3 shadow-card active:cursor-grabbing ${dragId === a.id ? 'opacity-50' : ''}`}
+                >
+                  <button type="button" onClick={() => onOpen(a.id)} className="block w-full min-w-0 text-left">
+                    <span className="block truncate text-[13px] font-semibold text-ink hover:text-brand-700">{a.company || 'Company'}</span>
+                    <span className="block truncate text-[13px] text-muted">{a.role || 'Role'}</span>
+                  </button>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <span className="t-num text-xs text-faint">{formatDate(a.date)}</span>
+                    {typeof a.match === 'number' && (
+                      <Badge tone="brand" mono>
+                        {a.match}%<span className="sr-only"> match</span>
+                      </Badge>
+                    )}
+                  </div>
+                  <label className="mt-2 block">
+                    <span className="sr-only">
+                      Move {a.company} {a.role} to status
+                    </span>
+                    <select className={`${inputCls} h-7 text-xs`} value={a.status} onChange={(e) => onStatus(a.id, e.target.value as Status)}>
+                      {STATUSES.map((s) => (
+                        <option key={s}>{s}</option>
+                      ))}
+                    </select>
+                  </label>
+                </li>
+              ))}
+              {!cards.length && <li className="rounded-lg border border-dashed border-line-strong px-3 py-4 text-center text-xs text-faint">Drop an application here</li>}
+            </ul>
+          </section>
+        )
+      })}
+    </div>
+  )
 }
-
-const safeLink = (url: string) => (/^https?:\/\//i.test(url) ? url : `https://${url}`)
 
 export default function Applications() {
   const [apps, setApps] = useApplications()
   const [draft, setDraft] = useState<Application | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Application | null>(null)
+  const [openId, setOpenId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
+  const [view, setView] = useStored<'board' | 'table'>('applicationsView', 'board')
+  const [announce, setAnnounce] = useState('')
 
   // The command palette links to #applications?new to open the add dialog.
   useEffect(() => {
@@ -53,9 +145,21 @@ export default function Applications() {
   function save() {
     if (!draft) return
     const entry = { ...draft, company: draft.company.trim(), role: draft.role.trim(), link: draft.link.trim() }
-    setApps((list) => (entry.id ? list.map((a) => (a.id === entry.id ? entry : a)) : [{ ...entry, id: newId() }, ...list]))
+    if (entry.id) {
+      // Keep the timeline: a status change in the form is recorded like any other.
+      setApps((list) => list.map((a) => (a.id === entry.id ? withStatus({ ...entry, status: a.status, history: migrateApplication(a).history }, entry.status) : a)))
+    } else {
+      setApps((list) => [migrateApplication({ ...entry, id: newId() }), ...list])
+    }
     toast(entry.id ? 'Application updated' : 'Application added')
     setDraft(null)
+  }
+
+  function setStatus(id: string, status: Status) {
+    const a = apps.find((x) => x.id === id)
+    if (!a || a.status === status) return
+    setApps((list) => list.map((x) => (x.id === id ? withStatus(x, status) : x)))
+    setAnnounce(`${a.company} moved to ${status}.`)
   }
 
   function confirmDelete() {
@@ -69,10 +173,10 @@ export default function Applications() {
   const set = <K extends keyof Application>(k: K, v: Application[K]) => setDraft((d) => (d ? { ...d, [k]: v } : d))
 
   const q = query.trim().toLowerCase()
-  const visible = [...apps]
+  const searched = [...apps]
     .sort((a, b) => b.date.localeCompare(a.date))
-    .filter((a) => filter === 'all' || a.status === filter)
     .filter((a) => !q || `${a.company} ${a.role} ${a.notes}`.toLowerCase().includes(q))
+  const visible = searched.filter((a) => filter === 'all' || a.status === filter)
 
   const filterOptions = [
     { value: 'all' as Filter, label: 'All', count: apps.length },
@@ -94,6 +198,16 @@ export default function Applications() {
       {apps.length ? (
         <div className="space-y-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <Segmented
+              label="View"
+              size="sm"
+              value={view}
+              onChange={setView}
+              options={[
+                { value: 'board', label: 'Board' },
+                { value: 'table', label: 'Table' },
+              ]}
+            />
             <div className="relative lg:w-64">
               <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-faint" strokeWidth={1.75} aria-hidden="true" />
               <input
@@ -105,10 +219,15 @@ export default function Applications() {
                 onChange={(e) => setQuery(e.target.value)}
               />
             </div>
-            <Segmented label="Filter by status" size="sm" options={filterOptions} value={filter} onChange={setFilter} />
+            {view === 'table' && <Segmented label="Filter by status" size="sm" options={filterOptions} value={filter} onChange={setFilter} />}
           </div>
 
-          {visible.length ? (
+          {view === 'board' ? (
+            <>
+              <p className="text-xs text-faint">Drag a card to another column, or change its status with the menu on the card. Select a card to see details.</p>
+              <Board apps={searched} onStatus={setStatus} onOpen={setOpenId} />
+            </>
+          ) : visible.length ? (
             <div className="table-wrap">
               <table className="data-table min-w-[520px] md:min-w-[760px]">
                 <caption className="sr-only">Tracked applications</caption>
@@ -128,7 +247,11 @@ export default function Applications() {
                 <tbody>
                   {visible.map((a) => (
                     <tr key={a.id}>
-                      <td className="font-medium">{a.company}</td>
+                      <td className="font-medium">
+                        <button type="button" className="text-left hover:text-brand-700 hover:underline" onClick={() => setOpenId(a.id)}>
+                          {a.company}
+                        </button>
+                      </td>
                       <td className="text-muted">{a.role}</td>
                       <td className="t-num text-[13px] whitespace-nowrap text-muted">{formatDate(a.date)}</td>
                       <td>
@@ -189,6 +312,9 @@ export default function Applications() {
               />
             </Card>
           )}
+          <span className="sr-only" aria-live="polite">
+            {announce}
+          </span>
         </div>
       ) : (
         <Card>
@@ -205,6 +331,15 @@ export default function Applications() {
         </Card>
       )}
 
+      <ApplicationDetail
+        appId={openId}
+        onClose={() => setOpenId(null)}
+        onEdit={(a) => {
+          setOpenId(null)
+          setDraft(a)
+        }}
+      />
+
       <Modal
         open={!!draft}
         onClose={() => setDraft(null)}
@@ -212,6 +347,19 @@ export default function Applications() {
         description="Saved in this browser only."
         footer={
           <>
+            {draft?.id && (
+              <Button
+                variant="ghost"
+                icon={Trash2}
+                className="mr-auto hover:text-danger"
+                onClick={() => {
+                  setPendingDelete(draft)
+                  setDraft(null)
+                }}
+              >
+                Delete
+              </Button>
+            )}
             <Button variant="secondary" onClick={() => setDraft(null)}>
               Cancel
             </Button>
