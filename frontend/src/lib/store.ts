@@ -12,6 +12,10 @@ import type {
   MatchResult,
   Profile,
   ResumeMeta,
+  EmailDraft,
+  EmailTone,
+  StructuredProfile,
+  TailorResult,
 } from './api'
 
 // All user data lives in the browser. Every key is namespaced so "Clear all" can find it.
@@ -257,6 +261,11 @@ export const STATUSES = [
 
 export type Status = (typeof STATUSES)[number]
 
+export interface StatusChange {
+  status: Status
+  date: string // yyyy-mm-dd
+}
+
 export interface Application {
   id: string
   company: string
@@ -265,9 +274,249 @@ export interface Application {
   status: Status
   link: string
   notes: string
+  /** Status changes, oldest first. Applications saved before the timeline get one from date + status. */
+  history?: StatusChange[]
+  /** Job description, when known (tracked from Job match or pasted in the detail view). */
+  description?: string
+  /** Match score from Job match, when tracked from there. */
+  match?: number
+  /** Last email draft for this application. */
+  email?: EmailDraft & { tone: EmailTone }
 }
 
-export const useApplications = () => useStored<Application[]>('applications', [])
+/** Older applications have no history: start it at the applied date, plus the current status if it moved on. */
+export function migrateApplication(a: Application): Application {
+  if (a.history?.length) return a
+  const history: StatusChange[] = [{ status: 'Applied', date: a.date }]
+  if (a.status !== 'Applied') history.push({ status: a.status, date: a.date })
+  return { ...a, history }
+}
+
+/** Sets the status and records the change in the timeline. */
+export function withStatus(a: Application, status: Status): Application {
+  const m = migrateApplication(a)
+  if (m.status === status) return m
+  return { ...m, status, history: [...(m.history ?? []), { status, date: today() }] }
+}
+
+export function useApplications(): [Application[], Setter<Application[]>] {
+  const [apps, setApps] = useStored<Application[]>('applications', [])
+  return [useMemo(() => apps.map(migrateApplication), [apps]), setApps]
+}
+
+/* ---------- Structured profile and resumes ---------- */
+
+export const SECTION_KEYS = ['experience', 'projects', 'education', 'skills', 'languages', 'certifications', 'publications', 'references'] as const
+export type SectionKey = (typeof SECTION_KEYS)[number]
+
+export const emptyStructured = (): StructuredProfile => ({
+  basics: { name: '', headline: '', email: '', phone: '', location: '', linkedin: '', website: '', summary: '' },
+  experience: [],
+  projects: [],
+  education: [],
+  skills: [],
+  languages: [],
+  certifications: [],
+  publications: [],
+  references: [],
+})
+
+/** Fills missing sections and fields, and gives every list item an id (server output or older saves may lack them). */
+export function normalizeStructured(p: Partial<StructuredProfile> | null | undefined): StructuredProfile {
+  const base = emptyStructured()
+  const out = { ...base, ...p, basics: { ...base.basics, ...p?.basics } } as StructuredProfile
+  const lists = out as unknown as Record<SectionKey, { id?: string }[]>
+  for (const k of SECTION_KEYS) lists[k] = (Array.isArray(lists[k]) ? lists[k] : []).map((item) => ({ ...item, id: item.id || newId() }))
+  out.experience = out.experience.map((i) => ({ ...i, bullets: Array.isArray(i.bullets) ? i.bullets : [] }))
+  out.projects = out.projects.map((i) => ({ ...i, bullets: Array.isArray(i.bullets) ? i.bullets : [] }))
+  out.skills = out.skills.map((g) => ({ ...g, items: Array.isArray(g.items) ? g.items : [] }))
+  return out
+}
+
+export function useStructuredProfile(): [StructuredProfile | null, Setter<StructuredProfile | null>] {
+  const [p, set] = useStored<StructuredProfile | null>('structuredProfile', null)
+  return [useMemo(() => p && normalizeStructured(p), [p]), set]
+}
+
+/** Copies the structured basics into the simple profile that the other tools read. */
+export function syncProfileFromStructured(sp: StructuredProfile) {
+  const prev = read<Profile | null>('profile', null)
+  const b = sp.basics
+  const skills = [...new Set(sp.skills.flatMap((g) => g.items).map((s) => s.trim()).filter(Boolean))]
+  const next: Profile = {
+    name: '',
+    headline: '',
+    current_role: '',
+    experience_years: 0,
+    experience_months: 0,
+    years_experience: 0,
+    location: '',
+    skills: [],
+    summary: '',
+    ...prev,
+  }
+  next.name = b.name || next.name
+  next.headline = b.headline || next.headline
+  next.email = b.email || next.email
+  next.phone = b.phone || next.phone
+  next.location = b.location || next.location
+  next.linkedin = b.linkedin || next.linkedin
+  next.summary = b.summary || next.summary
+  next.current_role = sp.experience[0]?.title || next.current_role
+  if (skills.length) next.skills = skills
+  write('profile', next)
+}
+
+export type ResumeTheme = 'classic' | 'modern' | 'compact' | 'sidebar' | 'minimal' | 'executive'
+
+export interface ResumeSettings {
+  theme: ResumeTheme
+  accent: string
+  /** Sections left out of the rendered resume ('summary' and section keys). */
+  hidden: string[]
+  order: SectionKey[]
+}
+
+export const DEFAULT_RESUME_SETTINGS: ResumeSettings = { theme: 'modern', accent: '#1f7a4d', hidden: [], order: [...SECTION_KEYS] }
+
+export function useResumeSettings(): [ResumeSettings, Setter<ResumeSettings>] {
+  const [s, set] = useStored<ResumeSettings>('resumeSettings', DEFAULT_RESUME_SETTINGS)
+  const value = useMemo(() => {
+    const merged = { ...DEFAULT_RESUME_SETTINGS, ...s }
+    // Keep only known sections, then append any added since the order was saved.
+    const order = merged.order.filter((k) => SECTION_KEYS.includes(k))
+    return { ...merged, order: [...order, ...SECTION_KEYS.filter((k) => !order.includes(k))] }
+  }, [s])
+  return [value, set]
+}
+
+export interface ResumeVersion {
+  resume: StructuredProfile
+  /** What made this version: the tailoring run or a refine instruction. */
+  label: string
+  at: string
+  ai: boolean
+  changes: string[]
+}
+
+export interface TailoredResume {
+  id: string
+  /** Application this resume belongs to (the key is the application id when tailored from one). */
+  appId?: string
+  job: { title: string; company: string; description: string }
+  createdAt: string
+  highlighted_skills: TailorResult['highlighted_skills']
+  gaps: TailorResult['gaps']
+  versions: ResumeVersion[]
+  /** Index of the version shown. */
+  current: number
+}
+
+export const useTailoredResumes = () => useStored<Record<string, TailoredResume>>('tailoredResumes', {})
+
+/** Tailored resume linked to an application, if any. */
+export const tailoredFor = (all: Record<string, TailoredResume>, appId: string) =>
+  all[appId] ?? Object.values(all).find((t) => t.appId === appId)
+
+/* ---------- Saved job searches ---------- */
+
+export interface SavedSearch {
+  id: string
+  q: string
+  location: string
+  remote: 'any' | 'remote' | 'onsite'
+  /** Source ids switched off. */
+  excluded: string[]
+  /** Job ids already shown for this search (capped, most recent last). */
+  seen: string[]
+  /** Unseen jobs found by the last check. */
+  newCount: number
+  checkedAt?: string
+}
+
+export const useSavedSearches = () => useStored<SavedSearch[]>('savedSearches', [])
+
+/* ---------- Export and import ---------- */
+
+export const EXPORT_VERSION = 1
+/** Never exported, imported or replaced: the API key and its verified flag. */
+const SECRET_KEYS = new Set(['apikey', 'keyVerified'])
+/** Stored names an import may contain. Entries ending in '.' are prefixes. */
+const KNOWN_KEYS = [
+  'applications', 'applicationDraft', 'applicationsView', 'atsHistory', 'bannerDismissed', 'careerInput', 'careerPath', 'clip', 'coding',
+  'coding.draft.', 'coverLetter', 'cvReview', 'funnelRange', 'history', 'interview', 'interview.tab', 'jd', 'jobSearch', 'lastMatch',
+  'lastMatchJd', 'linkedinInput', 'linkedinReview', 'matches', 'profile', 'resources.', 'resume', 'resumeSettings', 'roadmapDone',
+  'savedSearches', 'settings', 'sidebarCollapsed', 'signature', 'structuredProfile', 'tailoredResumes', 'tailorRequest',
+]
+export const isKnownKey = (k: string) => !SECRET_KEYS.has(k) && KNOWN_KEYS.some((n) => (n.endsWith('.') ? k.startsWith(n) : k === n))
+
+export interface ExportFile {
+  app: 'jivika'
+  version: number
+  exportedAt: string
+  data: Record<string, unknown>
+}
+
+export function exportData(): ExportFile {
+  const data: Record<string, unknown> = {}
+  for (const full of Object.keys(localStorage)) {
+    if (!full.startsWith(PREFIX)) continue
+    const k = full.slice(PREFIX.length)
+    if (!isKnownKey(k) || /apikey/i.test(k)) continue
+    data[k] = parse(localStorage.getItem(full), null)
+  }
+  return { app: 'jivika', version: EXPORT_VERSION, exportedAt: new Date().toISOString(), data }
+}
+
+/** Checks an uploaded export. Returns the data to import, or an error message. */
+export function validateImport(raw: unknown): { data: Record<string, unknown> } | { error: string } {
+  const f = raw as Partial<ExportFile> | null
+  if (!f || typeof f !== 'object' || Array.isArray(f)) return { error: 'This file is not a Jivika export.' }
+  if (typeof f.version !== 'number') return { error: 'The file has no version field, so it is not a Jivika export.' }
+  if (f.version > EXPORT_VERSION) return { error: `This export is from a newer version (${f.version}). Update Jivika and try again.` }
+  if (!f.data || typeof f.data !== 'object' || Array.isArray(f.data)) return { error: 'The file has no data section.' }
+  const unknown = Object.keys(f.data).filter((k) => !isKnownKey(k))
+  if (unknown.length) return { error: `The file contains entries Jivika does not recognise: ${unknown.slice(0, 5).join(', ')}.` }
+  return { data: f.data as Record<string, unknown> }
+}
+
+const hasIds = (v: unknown): v is { id: string }[] =>
+  Array.isArray(v) && v.every((x) => !!x && typeof x === 'object' && typeof (x as { id?: unknown }).id === 'string')
+const isPlain = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
+
+/** Merge keeps local data and adds what is new: lists with ids are joined (imported wins on the same id), objects are combined, other values stay local. */
+export function mergeValue(local: unknown, incoming: unknown): unknown {
+  if (local == null) return incoming
+  if (hasIds(local) && hasIds(incoming)) {
+    const ids = new Set(incoming.map((x) => x.id))
+    return [...incoming, ...local.filter((x) => !ids.has(x.id))]
+  }
+  if (isPlain(local) && isPlain(incoming)) return { ...local, ...incoming }
+  return local
+}
+
+export function importData(data: Record<string, unknown>, mode: 'merge' | 'replace') {
+  if (mode === 'replace') {
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith(PREFIX) && !SECRET_KEYS.has(k.slice(PREFIX.length)))
+      .forEach((k) => localStorage.removeItem(k))
+  }
+  for (const [k, v] of Object.entries(data)) {
+    if (!isKnownKey(k)) continue
+    const next = mode === 'merge' ? mergeValue(parse(localStorage.getItem(PREFIX + k), null), v) : v
+    if (next == null) localStorage.removeItem(PREFIX + k)
+    else localStorage.setItem(PREFIX + k, JSON.stringify(next))
+  }
+  notify()
+}
+
+/** Moves one item in a list (for reorder buttons and drag and drop). */
+export function moveItem<T>(list: T[], from: number, to: number): T[] {
+  if (from === to || to < 0 || to >= list.length) return list
+  const next = [...list]
+  next.splice(to, 0, ...next.splice(from, 1))
+  return next
+}
 
 export const newId = () => crypto.randomUUID()
 export const today = () => new Date().toLocaleDateString('en-CA') // yyyy-mm-dd in local time

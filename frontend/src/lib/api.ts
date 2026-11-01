@@ -415,6 +415,102 @@ export interface CoverLetterResult {
   letter?: LetterParts
 }
 
+/* ---------- Structured profile and tailored resumes ---------- */
+
+export interface ProfileBasics {
+  name: string
+  headline: string
+  email: string
+  phone: string
+  location: string
+  linkedin: string
+  website: string
+  summary: string
+}
+
+export interface ExperienceItem {
+  id: string
+  company: string
+  title: string
+  location: string
+  start: string
+  end: string
+  current: boolean
+  bullets: string[]
+}
+export interface ProjectItem {
+  id: string
+  name: string
+  role: string
+  link: string
+  description: string
+  bullets: string[]
+}
+export interface EducationItem {
+  id: string
+  institution: string
+  degree: string
+  field: string
+  start: string
+  end: string
+  grade: string
+}
+/** Skills and languages have no server id; the client adds one for stable list keys. */
+export interface SkillGroup {
+  id?: string
+  group: string
+  items: string[]
+}
+export interface LanguageItem {
+  id?: string
+  name: string
+  level: string
+}
+export interface CertificationItem {
+  id: string
+  name: string
+  issuer: string
+  year: string
+}
+export interface PublicationItem {
+  id: string
+  citation: string
+}
+export interface ReferenceItem {
+  id: string
+  name: string
+  relation: string
+  contact: string
+}
+
+export interface StructuredProfile {
+  basics: ProfileBasics
+  experience: ExperienceItem[]
+  projects: ProjectItem[]
+  education: EducationItem[]
+  skills: SkillGroup[]
+  languages: LanguageItem[]
+  certifications: CertificationItem[]
+  publications: PublicationItem[]
+  references: ReferenceItem[]
+}
+
+export interface TailorResult {
+  resume: StructuredProfile
+  highlighted_skills: string[]
+  /** Requirements the profile does not show. Listed for the user, never added to the resume. */
+  gaps: { requirement: string; note: string }[]
+  changes: string[]
+}
+
+export type EmailTone = 'formal' | 'warm' | 'concise'
+
+export interface EmailDraft {
+  to: string
+  subject: string
+  body: string
+}
+
 export const CURRENCIES = ['INR', 'USD', 'GBP', 'EUR'] as const
 export type Currency = (typeof CURRENCIES)[number]
 
@@ -596,6 +692,17 @@ export const api = {
   codingReview: (body: { title: string; statement: string; language: CodingLanguage; code: string; results: CodingResultsSummary }) =>
     request<CodingReview>('/interview/coding/review', { ai: true, body }),
   coverLetter: (body: CoverLetterRequest) => request<CoverLetterResult>('/cover-letter', { ai: true, body }),
+  structureProfile: (resume: string) => request<StructuredProfile>('/profile/structure', { ai: true, body: { resume } }),
+  tailorResume: (body: { profile: StructuredProfile; job_description: string; emphasis?: string }) =>
+    request<TailorResult>('/resume/tailor', { ai: true, body }),
+  refineResume: (body: { resume: StructuredProfile; source_profile: StructuredProfile; instruction: string; section?: string }) =>
+    request<{ resume: StructuredProfile; changes: string[] }>('/resume/refine', { ai: true, body }),
+  applicationEmail: (body: {
+    basics: { name: string; email: string; phone: string; linkedin: string }
+    job: { title: string; company: string; description: string }
+    tone: EmailTone
+    resume_summary?: string
+  }) => request<EmailDraft>('/application/email', { ai: true, body }),
   resolveResources: (items: ({ key: string } & ResourceQuery)[], max_per_item = 3) =>
     request<ResolvedResources>('/resources/resolve', { body: { items, max_per_item } }),
   /** Docling availability. Older servers lack /parser, so that reads as PDF-only. */

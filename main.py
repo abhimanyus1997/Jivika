@@ -9,7 +9,8 @@ job search, model list and salary caches. Providers, schemas and prompts live in
 jivika/schemas.py, job search in jivika/jobs.py, job import from links in
 jivika/importer.py, ATS checks in jivika/ats.py, live model lists in jivika/models.py,
 market salary data in jivika/salary.py, verified learning resources in jivika/resources.py,
-coding practice problems in jivika/coding.py and resume file parsing in jivika/parsing.py.
+coding practice problems in jivika/coding.py, resume file parsing in jivika/parsing.py and structured resumes
+(tailoring checks, application emails) in jivika/resume.py.
 """
 
 import csv
@@ -40,7 +41,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from openai import OpenAI
 from pydantic import AfterValidator, BaseModel, Field, ValidationError
-from jivika import ats, coding, importer, jobs, llm, parsing, resources, salary
+from jivika import ats, coding, importer, jobs, llm, parsing, resources, resume, salary
 from jivika import models as model_lists
 from jivika.ats import STOPWORDS, tokens as _tokens  # noqa: F401  (keyword coverage shares the ATS tokenizer)
 from jivika.schemas import (  # noqa: F401  (re-exported for tests and callers)
@@ -181,7 +182,7 @@ def _is_auth_error(exc: openai.APIError) -> bool:
 
 
 # Output budgets for tasks with long answers; provider defaults (often 8k tokens with reasoning) truncate them.
-TASK_MAX_TOKENS = {"coding_problems": 16_000}
+TASK_MAX_TOKENS = {"coding_problems": 16_000, "resume_structure": 8_000, "resume_tailor": 8_000, "resume_refine": 8_000}
 _JSON_FAILED = re.compile(r"failed to (?:validate|generate) json", re.I)
 MAX_MODEL_ATTEMPTS = 3
 FAILOVER_BUDGET = 150  # seconds; no further model is tried after this, keeping the worst case under Vercel's 300 s
@@ -348,10 +349,10 @@ def answered_headers(response: Response | None, model: str, meta: dict):
 
 
 # Demo calls must fit Groq's free tier (8K tokens per minute per model): shorter inputs and output budgets.
-DEMO_FIELD_CHARS = {"resume": 10_000, "job_description": 6_000}
+DEMO_FIELD_CHARS = {"resume": 10_000, "job_description": 6_000, "profile": 10_000, "source_profile": 8_000}
 DEMO_OTHER_CHARS = 4_000
 DEMO_MAX_TOKENS, DEMO_LONG_MAX_TOKENS = 2_500, 4_000
-DEMO_LONG_TASKS = ("coding_problems", "career_path")
+DEMO_LONG_TASKS = ("coding_problems", "career_path", "resume_structure", "resume_tailor", "resume_refine")
 DEMO_TOKEN_TARGET = 7_500
 
 
@@ -883,6 +884,53 @@ def cover_letter(body: CoverLetterRequest, cfg: BYOK):
     signature = body.sender.name if body.sender and body.sender.name else ""
     text = "\n\n".join([letter.salutation, *letter.paragraphs, "\n".join(filter(None, [letter.sign_off, signature]))])
     return CoverLetter(cover_letter=text, letter=letter)
+
+
+def _profile_json(profile: resume.StructuredProfile) -> str:
+    return profile.model_dump_json(exclude_defaults=True)
+
+
+@app.post("/api/profile/structure", response_model=resume.StructuredProfile)
+def profile_structure(body: resume.StructureRequest, cfg: BYOK):
+    """The resume text as structured sections. Entries, bullets and skills the text does not contain are dropped."""
+    profile = ask(cfg, "resume_structure", resume.StructuredProfile, resume=body.resume)
+    basics = profile.basics
+    basics.email = _from_resume(body.resume, basics.email, ats.EMAIL)
+    basics.phone = _from_resume(body.resume, basics.phone, ats.PHONE)
+    basics.linkedin = _from_resume(body.resume, basics.linkedin, ats.LINKEDIN)
+    basics.name, basics.website = _grounded(basics.name, body.resume), _grounded(basics.website, body.resume)
+    return resume.ground_structure(profile, body.resume)
+
+
+@app.post("/api/resume/tailor", response_model=resume.TailorResult)
+def resume_tailor(body: resume.TailorRequest, cfg: BYOK):
+    """A tailored copy of the profile. Checked against the profile afterwards, so nothing can be invented."""
+    source = resume.fill_ids(body.profile)
+    result = ask(cfg, "resume_tailor", resume.TailorResult, emphasis=body.emphasis.strip(),
+                 job_description=body.job_description, profile=_profile_json(source))
+    return resume.tailor_checked(result, source)
+
+
+@app.post("/api/resume/refine", response_model=resume.RefineResult)
+def resume_refine(body: resume.RefineRequest, cfg: BYOK):
+    source = resume.fill_ids(body.source_profile)
+    result = ask(cfg, "resume_refine", resume.RefineResult, instruction=body.instruction, section=body.section or "",
+                 resume=_profile_json(body.resume), source_profile=_profile_json(source))
+    return resume.refine_checked(result, body.resume, source, body.section)
+
+
+@app.post("/api/application/email", response_model=resume.ApplicationEmail)
+def application_email(body: resume.EmailRequest, cfg: BYOK):
+    job = body.job
+    if not (job.title or job.description.strip()):
+        raise HTTPException(422, "Provide the job title or description.")
+    draft = ask(cfg, "application_email", resume.EmailDraft, tone=body.tone, candidate=body.basics.name,
+                job="
+".join(f"{k}: {v}" for k, v in (("Title", job.title), ("Company", job.company)) if v), job_description=job.description.strip(),
+                resume_summary=body.resume_summary.strip())
+    subject = draft.subject or " - ".join(filter(None, (f"Application for {job.title or 'the role'}", body.basics.name)))
+    return {"to": resume.application_address(job.description), "subject": subject,
+            "body": resume.email_body(draft.body, body.basics, body.tone)}
 
 
 @app.post("/api/interview/coding", response_model=CodingProblems)
