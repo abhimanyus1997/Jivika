@@ -2,6 +2,7 @@
 
 import json
 import math
+import os
 import re
 from typing import Annotated, Any, Literal
 
@@ -92,6 +93,44 @@ PROVIDERS = {
         "extra": {"extra_body": {"enable_thinking": False}},
     },
 }
+
+# Local / self-hosted OpenAI-compatible servers. The base URL comes only from the operator's environment
+# (JIVIKA_<ENV>_URL), never from a request, so callers cannot point the server at an arbitrary host (SSRF).
+# json_mode per docs (2026-11): Ollama and vLLM accept json_object; LM Studio documents only json_schema, and
+# generic servers are unknown, so those rely on the prompt plus validation.
+LOCAL_PROVIDERS = {
+    "ollama": {"env": "OLLAMA", "name": "Ollama", "json_mode": True},
+    "vllm": {"env": "VLLM", "name": "vLLM", "json_mode": True},
+    "lmstudio": {"env": "LMSTUDIO", "name": "LM Studio", "json_mode": False},
+    "openai-compat": {"env": "OPENAI_COMPAT", "name": "OpenAI-compatible server", "json_mode": False},
+}
+LOCAL_KEY_PLACEHOLDER = "local"  # most local servers ignore the key, but the OpenAI client needs one
+
+
+def local_providers() -> dict:
+    """Specs for the local providers whose JIVIKA_<ENV>_URL is set (read on every call, so no restart in tests)."""
+    out = {}
+    for pid, base in LOCAL_PROVIDERS.items():
+        env = base["env"]
+        url = os.getenv(f"JIVIKA_{env}_URL", "").strip().rstrip("/")
+        if not url.startswith(("http://", "https://")):
+            continue
+        name = (os.getenv("JIVIKA_OPENAI_COMPAT_NAME", "").strip()[:60] if pid == "openai-compat" else "") or base["name"]
+        out[pid] = {
+            "name": name,
+            "base_url": url,
+            "default_model": os.getenv(f"JIVIKA_{env}_MODEL", "").strip(),  # blank: the first listed model
+            "key_url": "",
+            "json_mode": base["json_mode"],
+            "temperature": True,
+            "local": True,
+            "key": os.getenv(f"JIVIKA_{env}_KEY", "").strip(),
+        }
+    return out
+
+
+def all_providers() -> dict:
+    return {**PROVIDERS, **local_providers()}
 
 
 # ---------------------------------------------------------------------------

@@ -94,6 +94,9 @@ from jivika.schemas import (  # noqa: F401  (re-exported for tests and callers)
     Text,
     TransitionStep,
     MAX_TEXT_CHARS,
+    LOCAL_KEY_PLACEHOLDER,
+    all_providers,
+    local_providers,
 )
 
 load_dotenv()
@@ -135,25 +138,35 @@ def byok(
     x_llm_key: Annotated[str, Header()] = "",
     x_llm_model: Annotated[str, Header()] = "",
 ) -> LLMConfig:
-    if not x_llm_key.strip():
+    provider = x_llm_provider.strip().lower()
+    local = local_providers().get(provider)
+    if not x_llm_key.strip() and not local:
         if key := demo_key():
             # Demo mode: the owner's Groq key and model, whatever provider or model the client sent.
             return LLMConfig(provider=DEMO_PROVIDER, key=key, model=demo_model(), demo_ip=client_ip(request), response=response)
         raise HTTPException(401, "An API key is required. Add one in Settings.")
-    provider = x_llm_provider.strip().lower()
-    if provider not in PROVIDERS:
+    spec = local or PROVIDERS.get(provider)
+    if spec is None:
         raise HTTPException(400, "Unknown provider.")
-    key = x_llm_key.strip()
+    key = local_key(spec, x_llm_key)
     # Header values are forwarded to the provider and must be printable ASCII.
     if not (key.isascii() and key.isprintable()):
         raise HTTPException(401, "The API key format is invalid.")
     # No model chosen: the model that last answered for this key, else the live list's recommendation if it was
-    # listed recently, else the static default.
+    # listed recently, else the static default (local servers without one: the first model they list).
     model = (x_llm_model.strip() or llm.last_success(provider, key) or model_lists.cached_recommended(provider, key)
-             or PROVIDERS[provider]["default_model"])
+             or spec["default_model"] or (local and model_lists.list_models(provider, key)["recommended"]))
+    if not model:
+        raise HTTPException(503, f"No model is available on {spec['name']}. Ask the server operator to install one.")
     if not (model.isascii() and model.isprintable()):
         raise HTTPException(400, "The model name is invalid.")
     return LLMConfig(provider=provider, key=key, model=model, response=response)
+
+
+def local_key(spec: dict, key: str) -> str:
+    """Hosted providers: the caller's key. Local servers: the operator's JIVIKA_<NAME>_KEY, else the caller's, else a placeholder."""
+    key = key.strip()
+    return (spec["key"] or key or LOCAL_KEY_PLACEHOLDER) if spec.get("local") else key
 
 
 def optional_llm(
@@ -164,7 +177,7 @@ def optional_llm(
     x_llm_model: Annotated[str, Header()] = "",
 ) -> LLMConfig | None:
     """Like byok, but None (instead of 401) when there is neither a user key nor demo mode."""
-    if not x_llm_key.strip() and not demo_key():
+    if not x_llm_key.strip() and not demo_key() and x_llm_provider.strip().lower() not in local_providers():
         return None
     try:
         return byok(request, response, x_llm_provider, x_llm_key, x_llm_model)
@@ -224,7 +237,7 @@ def _create(client, model: str, messages: list[dict], options: dict):
 def _one_model(provider: str, client, model: str, messages: list[dict], options: dict, schema_model):
     """One model: retries once on invalid JSON, once without the output budget if rejected, and once after a
     short wait when overloaded. Raises _Unavailable for errors another model may not have."""
-    name = PROVIDERS[provider]["name"]
+    name = all_providers()[provider]["name"]
     options = dict(options)
     json_tries, overload_retried = 0, False
     while json_tries < 2:
@@ -282,8 +295,10 @@ def complete_json(provider: str, key: str, model: str, system: str, user: str, s
     """A validated schema_model from the provider. Quota, rate-limit, overload and missing-model errors fail over to
     the next candidate (at most MAX_MODEL_ATTEMPTS models): pool order for the demo (by remaining Groq limits),
     else the chosen model then the provider's stable fallbacks. meta receives model, fallback_from, fallback_reason."""
-    spec = PROVIDERS[provider]
-    client = OpenAI(api_key=key, base_url=spec["base_url"], timeout=60, max_retries=0)  # retries are handled here
+    spec = all_providers()[provider]
+    # Local models can take minutes on modest hardware (JIVIKA_LOCAL_TIMEOUT, default 120 s).
+    timeout = (_env_int("JIVIKA_LOCAL_TIMEOUT", 120) or 120) if spec.get("local") else 60
+    client = OpenAI(api_key=key, base_url=spec["base_url"], timeout=timeout, max_retries=0)  # retries are handled here
     options = dict(spec.get("extra", {}))
     if spec["json_mode"]:
         options["response_format"] = {"type": "json_object"}
@@ -293,7 +308,9 @@ def complete_json(provider: str, key: str, model: str, system: str, user: str, s
         options["max_completion_tokens"] = max_tokens
     messages = _messages(system, user, schema_model)
     estimate = _estimate(messages, max_tokens)
-    models = pool or llm.candidates(provider, model, model_lists.cached_ids(provider, key), spec["default_model"], model_lists.stable)
+    # ponytail: local servers try only the chosen model; switching would load another model into memory.
+    models = pool or ([model] if spec.get("local") else
+                      llm.candidates(provider, model, model_lists.cached_ids(provider, key), spec["default_model"], model_lists.stable))
     deadline = time.monotonic() + FAILOVER_BUDGET
     tried: list[tuple[str, str]] = []
     for _ in range(MAX_MODEL_ATTEMPTS):
@@ -691,9 +708,14 @@ def health():
 
 @app.get("/api/providers")
 def providers():
-    return [
+    """Hosted providers, plus local servers the operator configured (local: true, no key needed)."""
+    out = [
         {"id": pid, "name": p["name"], "default_model": p["default_model"], "key_url": p["key_url"], "json_mode": p["json_mode"]}
         for pid, p in PROVIDERS.items()
+    ]
+    return out + [
+        {"id": pid, "name": p["name"], "default_model": p["default_model"], "key_url": "", "json_mode": p["json_mode"], "local": True, "key_required": False}
+        for pid, p in local_providers().items()
     ]
 
 
@@ -723,7 +745,7 @@ def verify(
     x_llm_key: Annotated[str, Header()] = "",
     x_llm_model: Annotated[str, Header()] = "",
 ):
-    if not x_llm_key.strip() and demo_key():
+    if not x_llm_key.strip() and demo_key() and x_llm_provider.strip().lower() not in local_providers():
         # Report demo status instead of calling Groq with the shared key (and spending quota) on every check.
         return {"ok": True, "model": demo_model(), "demo": True, "provider": DEMO_PROVIDER, "remaining_hourly": demo_remaining(client_ip(request))}
     cfg = byok(request, response, x_llm_provider, x_llm_key, x_llm_model)
@@ -1260,13 +1282,16 @@ async def models_rate_limit(request: Request):
 def provider_models(provider_id: str, response: Response, x_llm_key: Annotated[str, Header()] = ""):
     """Live chat models for a provider and key. OpenRouter lists without a key; in demo mode Groq uses the demo key."""
     provider = provider_id.strip().lower()
-    if provider not in PROVIDERS:
+    spec = all_providers().get(provider)
+    if spec is None:
         raise HTTPException(404, "Unknown provider.")
-    key = x_llm_key.strip()
+    key = local_key(spec, x_llm_key)
     if key and not (key.isascii() and key.isprintable()):
         raise HTTPException(401, "The API key format is invalid.")
     demo = False
-    if not key and provider == DEMO_PROVIDER and demo_key():
+    if spec.get("local"):
+        pass  # the operator's server; the key is optional
+    elif not key and provider == DEMO_PROVIDER and demo_key():
         key, demo = demo_key(), True
     elif not key and provider != "openrouter":
         raise HTTPException(401, "Enter an API key to load the model list.")

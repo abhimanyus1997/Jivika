@@ -12,9 +12,10 @@ from collections import OrderedDict
 from datetime import datetime, timezone
 
 from jivika import jobs
-from jivika.schemas import PROVIDERS
+from jivika.schemas import all_providers
 
 TTL, FALLBACK_TTL, MAX_ENTRIES = 3600, 300, 200
+LOCAL_TTL = 60  # local servers gain models with `ollama pull`; relist soon
 MAX_BYTES = 8 * 1024 * 1024  # OpenRouter's public list is about 0.8 MB
 ANTHROPIC_VERSION = "2023-06-01"
 
@@ -109,7 +110,7 @@ def normalize(provider: str, data) -> list[dict]:
 
 def recommend(provider: str, models: list[dict]) -> str:
     ids = [m["id"] for m in models]
-    default = PROVIDERS[provider]["default_model"]
+    default = all_providers()[provider]["default_model"]
     if (default in ids and stable(default)) or not ids:
         return default
     stable_ids = [i for i in ids if stable(i)]
@@ -124,7 +125,7 @@ def stable(model_id: str) -> bool:
 
 
 def _request(provider: str, key: str):
-    base = PROVIDERS[provider]["base_url"].rstrip("/")
+    base = all_providers()[provider]["base_url"].rstrip("/")
     if provider == "anthropic":
         return jobs.fetch_json(
             "https://api.anthropic.com/v1/models?limit=1000",
@@ -157,11 +158,17 @@ def list_models(provider: str, key: str) -> dict:
             raise jobs.SourceError("The provider returned no chat models.")
         result, ttl = {"models": models, "recommended": recommend(provider, models), "source": "live", "fetched_at": fetched_at}, TTL
     except jobs.SourceError as exc:
+        spec = all_providers()[provider]
         message = str(exc)
         if "HTTP 401" in message or "HTTP 403" in message or "HTTP 400" in message or "Blocked" in message:
-            message = f"{PROVIDERS[provider]['name']} did not accept the key for listing models."
-        default = PROVIDERS[provider]["default_model"]
-        result, ttl = {"models": [{"id": default}], "recommended": default, "source": "fallback", "fetched_at": fetched_at, "error": message}, FALLBACK_TTL
+            message = f"{spec['name']} did not accept the key for listing models."
+        elif spec.get("local") and message == "Unavailable right now.":
+            message = f"{spec['name']} is not reachable from the Jivika server."
+        default = spec["default_model"]
+        models = [{"id": default}] if default else []
+        result, ttl = {"models": models, "recommended": default, "source": "fallback", "fetched_at": fetched_at, "error": message}, FALLBACK_TTL
+    if all_providers()[provider].get("local"):
+        ttl = min(ttl, LOCAL_TTL)
     with _lock:
         _cache[ck] = (time.monotonic() + ttl, result)
         while len(_cache) > MAX_ENTRIES:
