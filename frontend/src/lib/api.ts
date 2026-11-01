@@ -625,7 +625,7 @@ export function useAiReady(): boolean {
  * ai: true sends the user's key and needs a key or demo mode; 'optional' sends the key when there is one
  * (the endpoint also works without a model). POST is used whenever there is a body or `ai: true`.
  */
-async function request<T>(
+export async function request<T>(
   path: string,
   init: { body?: unknown; form?: FormData; ai?: boolean | 'optional'; headers?: Record<string, string> } = {},
 ): Promise<T> {
@@ -790,4 +790,22 @@ export function useAction<A extends unknown[], R>(fn: (...args: A) => Promise<R>
     [fn],
   )
   return { run, loading, error, setError }
+}
+
+/* ---------- Application requirements and section regeneration ---------- */
+
+export type { RequirementItem, RequirementResult } from './store'
+
+export type ResumeSection = 'summary' | 'skills' | 'education' | `experience:${string}` | `projects:${string}`
+
+export const applicationApi = {
+  /** Reads a posting's details and checks each requirement against the profile. */
+  requirements: (job_description: string, profile: StructuredProfile) =>
+    request<import('./store').RequirementResult>('/requirements', { ai: true, body: { job_description: job_description.slice(0, 20000), profile } }),
+  /** Rewrites one section or entry of a tailored resume; everything else stays as it was. */
+  regenerateSection: (body: { resume: StructuredProfile; source_profile: StructuredProfile; section: ResumeSection; instruction?: string; job_description?: string }) =>
+    request<{ resume: StructuredProfile; changes: string[] }>('/resume/regenerate-section', {
+      ai: true,
+      body: { ...body, instruction: body.instruction?.slice(0, 500) || undefined, job_description: body.job_description?.slice(0, 6000) || undefined },
+    }),
 }

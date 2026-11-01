@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react'
 import { isDemoLimit, isModelUnavailable, useDemoActive, useLocalProvider, type CareerPath } from '../lib/api'
-import { useApiKey, type Status } from '../lib/store'
+import { statusTone, useApiKey, type Status } from '../lib/store'
 
 /* ---------- Provider marks ---------- */
 
@@ -331,18 +331,9 @@ export function Badge({
   )
 }
 
-const STATUS_TONE: Record<Status, BadgeTone> = {
-  Applied: 'neutral',
-  'Awaiting response': 'warning',
-  'Response received': 'info',
-  Interview: 'accent',
-  Offer: 'brand',
-  Rejected: 'danger',
-}
-
 export function StatusBadge({ status }: { status: Status }) {
   return (
-    <Badge tone={STATUS_TONE[status] ?? 'neutral'} dot>
+    <Badge tone={statusTone(status)} dot>
       {status}
     </Badge>
   )

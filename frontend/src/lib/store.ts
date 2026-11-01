@@ -250,20 +250,82 @@ export const useSignature = () => useStored<string>('signature', '')
 
 /* ---------- Application tracker ---------- */
 
-export const STATUSES = [
-  'Applied',
-  'Awaiting response',
-  'Response received',
-  'Interview',
-  'Offer',
-  'Rejected',
-] as const
+export const STATUSES = ['Draft', 'Applied', 'Screening', 'Interview', 'Offer', 'Accepted', 'Declined', 'Rejected', 'Withdrawn'] as const
 
 export type Status = (typeof STATUSES)[number]
+
+export const TERMINAL: readonly Status[] = ['Accepted', 'Declined', 'Rejected', 'Withdrawn']
+/** Accepted, Declined, Rejected and Withdrawn close an application. */
+export const isTerminal = (s: Status) => TERMINAL.includes(s)
+
+export const STATUS_GROUPS: { id: 'open' | 'closed'; label: string; statuses: Status[] }[] = [
+  { id: 'open', label: 'In progress', statuses: STATUSES.filter((s) => !isTerminal(s)) },
+  { id: 'closed', label: 'Closed', statuses: [...TERMINAL] },
+]
+
+export type StatusTone = 'neutral' | 'brand' | 'accent' | 'warning' | 'danger' | 'info'
+const STATUS_TONES: Record<Status, StatusTone> = {
+  Draft: 'neutral',
+  Applied: 'warning',
+  Screening: 'info',
+  Interview: 'accent',
+  Offer: 'brand',
+  Accepted: 'brand',
+  Declined: 'neutral',
+  Rejected: 'danger',
+  Withdrawn: 'neutral',
+}
+/** Badge tone for a status (matches the ui.tsx Badge tones). */
+export const statusTone = (s: Status): StatusTone => STATUS_TONES[s] ?? 'neutral'
+
+/** Statuses saved before the current set, mapped to their closest current name. */
+const LEGACY_STATUS: Record<string, Status> = { 'Awaiting response': 'Applied', 'Response received': 'Screening' }
+export const normStatus = (s: string): Status => LEGACY_STATUS[s] ?? ((STATUSES as readonly string[]).includes(s) ? (s as Status) : 'Applied')
 
 export interface StatusChange {
   status: Status
   date: string // yyyy-mm-dd
+}
+
+export type WorkMode = 'On-site' | 'Hybrid' | 'Remote' | ''
+
+/** Location and work mode for a meta line, skipping the mode when the location already says it ('Remote, India'). */
+export const placeParts = (location = '', mode = '') => [location, mode && !location.toLowerCase().includes(mode.toLowerCase()) ? mode : ''].filter(Boolean)
+
+export interface RequirementItem {
+  id: string
+  text: string
+  kind: 'required' | 'preferred'
+  status: 'met' | 'partial' | 'missing'
+  evidence: string
+  evidence_refs: string[]
+}
+
+export interface RequirementResult {
+  title: string
+  company: string
+  location: string
+  work_mode: WorkMode
+  salary: string
+  deadline: string
+  requirements: RequirementItem[]
+  summary: { met: number; partial: number; missing: number; total: number }
+}
+
+export interface InterviewEntry {
+  id: string
+  date: string // yyyy-mm-dd
+  time: string // HH:MM
+  duration_min: number
+  title: string
+  notes: string
+}
+
+export interface FollowUp {
+  id: string
+  date: string // yyyy-mm-dd
+  note: string
+  done: boolean
 }
 
 export interface Application {
@@ -282,21 +344,40 @@ export interface Application {
   match?: number
   /** Last email draft for this application. */
   email?: EmailDraft & { tone: EmailTone }
+  /** Apply-by date, yyyy-mm-dd. */
+  deadline?: string
+  location?: string
+  work_mode?: WorkMode
+  salary?: string
+  /** yyyy-mm-dd the application was started. */
+  created?: string
+  /** yyyy-mm-dd it was sent to the employer. */
+  sent?: string
+  requirements?: RequirementResult
+  interviews?: InterviewEntry[]
+  followups?: FollowUp[]
+  /** Cover letter written for this application. */
+  cover_letter?: { text: string; letter?: LetterParts; tone: CoverLetterTone }
 }
 
-/** Older applications have no history: start it at the applied date, plus the current status if it moved on. */
+/** Brings any stored application up to date: current status names and a timeline. Safe to run repeatedly. */
 export function migrateApplication(a: Application): Application {
-  if (a.history?.length) return a
-  const history: StatusChange[] = [{ status: 'Applied', date: a.date }]
-  if (a.status !== 'Applied') history.push({ status: a.status, date: a.date })
-  return { ...a, history }
+  const status = normStatus(a.status)
+  const history = a.history?.length
+    ? a.history.map((h) => ({ ...h, status: normStatus(h.status) }))
+    : status === 'Applied' || status === 'Draft'
+      ? [{ status, date: a.date }]
+      : [{ status: 'Applied' as Status, date: a.date }, { status, date: a.date }]
+  const same = status === a.status && a.history?.length && history.every((h, i) => h.status === a.history![i].status)
+  return same ? a : { ...a, status, history }
 }
 
-/** Sets the status and records the change in the timeline. */
+/** Sets the status and records the change in the timeline. Sending a draft records the sent date. */
 export function withStatus(a: Application, status: Status): Application {
   const m = migrateApplication(a)
   if (m.status === status) return m
-  return { ...m, status, history: [...(m.history ?? []), { status, date: today() }] }
+  const sent = m.status === 'Draft' && status !== 'Draft' && !m.sent ? { sent: today(), date: today(), created: m.created ?? m.date } : {}
+  return { ...m, ...sent, status, history: [...(m.history ?? []), { status, date: today() }] }
 }
 
 export function useApplications(): [Application[], Setter<Application[]>] {
@@ -332,6 +413,9 @@ export function normalizeStructured(p: Partial<StructuredProfile> | null | undef
   out.skills = out.skills.map((g) => ({ ...g, items: Array.isArray(g.items) ? g.items : [] }))
   return out
 }
+
+/** The server schema has no optional personal fields (city, date of birth, show on resume), so carry them over from the source. */
+export const keepBasics = (next: StructuredProfile, from: StructuredProfile) => normalizeStructured({ ...next, basics: { ...from.basics, ...next.basics } })
 
 export function useStructuredProfile(): [StructuredProfile | null, Setter<StructuredProfile | null>] {
   const [p, set] = useStored<StructuredProfile | null>('structuredProfile', null)
@@ -444,9 +528,9 @@ const SECRET_KEYS = new Set(['apikey', 'keyVerified'])
 /** Stored names an import may contain. Entries ending in '.' are prefixes. */
 const KNOWN_KEYS = [
   'applications', 'applicationDraft', 'applicationsView', 'atsHistory', 'bannerDismissed', 'careerInput', 'careerPath', 'clip', 'coding',
-  'coding.draft.', 'coverLetter', 'cvReview', 'funnelRange', 'history', 'interview', 'interview.tab', 'jd', 'jobSearch', 'lastMatch',
-  'lastMatchJd', 'linkedinInput', 'linkedinReview', 'matches', 'profile', 'resources.', 'resume', 'resumeSettings', 'roadmapDone',
-  'savedSearches', 'settings', 'sidebarCollapsed', 'signature', 'structuredProfile', 'tailoredResumes', 'tailorRequest',
+  'coding.draft.', 'coverLetter', 'cvReview', 'dismissedJobs', 'funnelRange', 'history', 'inbox', 'interview', 'interview.tab', 'jd', 'jobSearch', 'lastMatch',
+  'lastMatchJd', 'linkedinInput', 'linkedinReview', 'matches', 'pastSearches', 'profile', 'resources.', 'resume', 'resumeSettings', 'roadmapDone',
+  'savedJobs', 'savedSearches', 'settings', 'sidebarCollapsed', 'signature', 'structuredProfile', 'tailoredResumes', 'tailorRequest',
 ]
 export const isKnownKey = (k: string) => !SECRET_KEYS.has(k) && KNOWN_KEYS.some((n) => (n.endsWith('.') ? k.startsWith(n) : k === n))
 
