@@ -1,5 +1,5 @@
 import { useCallback, useState, useSyncExternalStore } from 'react'
-import { getCredentials, useApiKey } from './store'
+import { getCredentials, useApiKey, useSettings } from './store'
 
 /* ---------- Contract types (mirror the FastAPI schemas) ---------- */
 
@@ -9,6 +9,9 @@ export interface Provider {
   default_model: string
   key_url: string
   json_mode?: boolean
+  /** A local or self-hosted server the operator configured; it needs no key from the browser. */
+  local?: boolean
+  key_required?: boolean
 }
 
 /** Used until /api/providers responds, and if it cannot be reached. */
@@ -580,25 +583,42 @@ const subscribeDemo = (cb: () => void) => {
   }
 }
 
-/** Fetches /api/demo once per page load. */
+/** Ids of the local providers the server offers (from /api/providers); they work without a key. */
+let localIds = new Set<string>()
+function rememberLocal(list: Provider[]) {
+  localIds = new Set(list.filter((p) => p.local).map((p) => p.id))
+  demoSubs.forEach((f) => f())
+  return list
+}
+
+/** Fetches /api/demo and the provider list once per page load. */
 export function loadDemo() {
   request<DemoStatus>('/demo').then(setDemo, () => undefined)
+  api.providers().catch(() => undefined)
 }
 
 export const useDemo = () => useSyncExternalStore(subscribeDemo, () => demo)
 
-/** The demo status when demo mode is in use (enabled and no key of the user's own), else null. */
+/** True when the chosen provider is a local server, which needs no key. */
+export function useLocalProvider(): boolean {
+  const [settings] = useSettings()
+  return useSyncExternalStore(subscribeDemo, () => localIds).has(settings.provider)
+}
+
+/** The demo status when demo mode is in use (enabled, no key of the user's own and no local provider), else null. */
 export function useDemoActive(): DemoStatus | null {
   const key = useApiKey()
   const d = useDemo()
-  return !key && d?.enabled ? d : null
+  const local = useLocalProvider()
+  return !key && !local && d?.enabled ? d : null
 }
 
-/** True when AI actions can run: the user has a key, or the demo model is available. */
+/** True when AI actions can run: the user has a key, a local provider is chosen, or the demo model is available. */
 export function useAiReady(): boolean {
   const key = useApiKey()
   const d = useDemo()
-  return !!key || !!d?.enabled
+  const local = useLocalProvider()
+  return !!key || local || !!d?.enabled
 }
 
 /**
@@ -612,9 +632,9 @@ async function request<T>(
   const headers: Record<string, string> = { ...init.headers }
   if (init.ai) {
     const { provider, model, key } = getCredentials()
-    if (key) {
+    if (key || localIds.has(provider)) {
       headers['X-LLM-Provider'] = provider
-      headers['X-LLM-Key'] = key
+      if (key) headers['X-LLM-Key'] = key
       if (model.trim()) headers['X-LLM-Model'] = model.trim()
     } else if (init.ai === true && !demo?.enabled) {
       throw new ApiError(401, 'Add your API key in Settings to use this tool.')
@@ -653,7 +673,7 @@ async function request<T>(
 }
 
 export const api = {
-  providers: () => request<Provider[]>('/providers'),
+  providers: () => request<Provider[]>('/providers').then(rememberLocal),
   jobSearch: (p: JobSearchParams) => {
     const qs = new URLSearchParams({ q: p.q, remote: p.remote ?? 'any', page: String(p.page ?? 1) })
     if (p.location?.trim()) qs.set('location', p.location.trim())

@@ -22,7 +22,7 @@ import {
   type Point,
   type Status,
 } from '../lib/store'
-import { useDemoActive } from '../lib/api'
+import { useDemoActive, useLocalProvider } from '../lib/api'
 
 function greeting(name?: string) {
   const first = name?.trim().split(/\s+/)[0]
@@ -34,7 +34,8 @@ function greeting(name?: string) {
 const delta = (points: Point[]) => (points.length > 1 ? points[points.length - 1].value - points[points.length - 2].value : null)
 
 function GetStarted() {
-  const key = useApiKey()
+  const local = useLocalProvider()
+  const key = useApiKey() || (local ? 'local' : '')
   const demo = useDemoActive()
   const [resume] = useResume()
   const [matches] = useMatches()

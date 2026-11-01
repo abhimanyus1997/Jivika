@@ -1,4 +1,4 @@
-import { Check, Download, ExternalLink, Eye, EyeOff, Lock, ShieldCheck, Sparkles, Trash2, Upload } from 'lucide-react'
+import { Check, Download, ExternalLink, Eye, EyeOff, Lock, Server, ShieldCheck, Sparkles, Trash2, Upload } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ModelPicker } from '../components/ModelPicker'
 import { ThemeToggle } from '../components/ThemeToggle'
@@ -178,6 +178,8 @@ export default function Settings() {
   const demo = useDemo()
   const verify = useAction(api.verify)
   const provider = providers.find((p) => p.id === settings.provider) ?? providers[0]
+  const local = !!provider.local
+  const usesDemo = !!demo?.enabled && !key.trim() && !local
 
   // #settings?focus=model (from 'Choose another model') focuses the model picker.
   useEffect(() => {
@@ -214,7 +216,7 @@ export default function Settings() {
     setKeyVerified(!!r?.ok)
   }
 
-  const status = !key.trim() ? (
+  const status = !key.trim() && !local ? (
     <Badge dot>No key</Badge>
   ) : keyVerified ? (
     <Badge tone="brand" dot>
@@ -263,8 +265,11 @@ export default function Settings() {
                         />
                         <ProviderIcon id={p.id} className="mt-0.5 size-[18px] text-ink" />
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[13px] font-medium text-ink">{p.name}</span>
-                          <span className="block truncate font-mono text-[11px] text-faint">{p.default_model}</span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="truncate text-[13px] font-medium text-ink">{p.name}</span>
+                            {p.local && <Badge>Local</Badge>}
+                          </span>
+                          <span className="block truncate font-mono text-[11px] text-faint">{p.default_model || 'Server default'}</span>
                         </span>
                         {active && <Check className="size-4 shrink-0 text-brand-600" strokeWidth={2} aria-hidden="true" />}
                       </label>
@@ -272,7 +277,7 @@ export default function Settings() {
                   })}
                 </div>
               </fieldset>
-              {demo?.enabled && !key.trim() ? (
+              {usesDemo ? (
                 // Without a key every request uses the demo model, so a pick here would be ignored.
                 <Field label="Model" hint={`The demo always uses ${demo.model}. Add your own ${provider.name} key to choose a model.`}>
                   <input className={`${inputCls} font-mono`} value={demo.model} readOnly aria-readonly="true" />
@@ -283,7 +288,7 @@ export default function Settings() {
                   provider={provider.id}
                   providerName={provider.name}
                   apiKey={key}
-                  canListWithoutKey={provider.id === 'openrouter'}
+                  canListWithoutKey={provider.id === 'openrouter' || local}
                   fallback={provider.default_model}
                   value={settings.model}
                   onChange={(model) => {
@@ -294,6 +299,12 @@ export default function Settings() {
                 </div>
               )}
               {provider.id === 'qwen' && <Note>Qwen models are also available through Groq and OpenRouter.</Note>}
+              {local && (
+                <Note icon={Server}>
+                  {provider.name} runs on infrastructure the operator of this Jivika server configured. Requests go from the server to that model
+                  server, and no API key is needed here.
+                </Note>
+              )}
             </div>
           </Card>
         </Section>
@@ -303,7 +314,7 @@ export default function Settings() {
           description="Stored only in this browser and sent with each request to your chosen provider. The server never stores or logs it."
         >
           <div className="space-y-4">
-            {demo?.enabled && (
+            {demo?.enabled && !local && (
               <Note icon={Sparkles} tone={key.trim() ? 'neutral' : 'info'}>
                 {key.trim() ? (
                   <>Your own key is in use. Remove it to switch back to the shared demo model.</>
@@ -325,7 +336,7 @@ export default function Settings() {
             )}
             <Card title={`${provider.name} key`} action={status}>
               <div className="space-y-4">
-                <Field label="API key">
+                <Field label={local ? 'API key (optional)' : 'API key'} hint={local ? 'Only if the server expects one and the operator did not set it.' : undefined}>
                   <div className="relative">
                     <input
                       type={show ? 'text' : 'password'}
@@ -337,7 +348,7 @@ export default function Settings() {
                       }}
                       autoComplete="off"
                       spellCheck={false}
-                      placeholder="Paste your API key"
+                      placeholder={local ? 'Not needed for most local servers' : 'Paste your API key'}
                     />
                     <IconButton
                       icon={show ? EyeOff : Eye}
@@ -364,6 +375,9 @@ export default function Settings() {
                 </label>
                 <ErrorMessage message={verify.error} />
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+                  {local ? (
+                    <span className="text-[13px] text-muted">Configured on the server</span>
+                  ) : (
                   <a
                     href={provider.key_url}
                     target="_blank"
@@ -372,6 +386,7 @@ export default function Settings() {
                   >
                     Get a {provider.name} API key <ExternalLink className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
                   </a>
+                  )}
                   <div className="flex items-center gap-3">
                     {verified && (
                       <span role="status" className="text-[13px] text-muted">
@@ -384,8 +399,8 @@ export default function Settings() {
                         )}
                       </span>
                     )}
-                    <Button variant="primary" icon={ShieldCheck} onClick={runVerify} loading={verify.loading} disabled={!key.trim()}>
-                      Verify key
+                    <Button variant="primary" icon={ShieldCheck} onClick={runVerify} loading={verify.loading} disabled={!key.trim() && !local}>
+                      {local ? 'Test connection' : 'Verify key'}
                     </Button>
                   </div>
                 </div>

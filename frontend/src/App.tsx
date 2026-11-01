@@ -25,7 +25,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useCallback, useEffect, useState, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
-import { FALLBACK_PROVIDERS, loadDemo, useAnswered, useDemoActive } from './lib/api'
+import { FALLBACK_PROVIDERS, loadDemo, useAnswered, useDemoActive, useLocalProvider } from './lib/api'
 import { receiveClip } from './lib/clip'
 import { useApiKey, useKeyVerified, useProfile, useSettings, useStored } from './lib/store'
 import { AnsweredBy, Avatar, Badge, Dialog, Logo, ProviderIcon, ShortcutHint, Toaster } from './components/ui'
@@ -103,6 +103,7 @@ const KEY_STATES = {
   unverified: { dot: 'bg-accent-500', label: 'Not verified' },
   demo: { dot: 'bg-info', label: 'Demo' },
   none: { dot: 'bg-faint', label: 'No key' },
+  local: { dot: 'bg-brand-500', label: 'Local' },
 }
 
 function useKeyState() {
@@ -111,6 +112,7 @@ function useKeyState() {
   const demo = useDemoActive()
   const answered = useAnswered()
   const [settings] = useSettings()
+  const local = useLocalProvider()
   if (demo) {
     return {
       ...KEY_STATES.demo,
@@ -121,7 +123,7 @@ function useKeyState() {
     }
   }
   const provider = FALLBACK_PROVIDERS.find((p) => p.id === settings.provider)
-  const state = !key ? 'none' : verified ? 'connected' : 'unverified'
+  const state = local ? 'local' : !key ? 'none' : verified ? 'connected' : 'unverified'
   return {
     ...KEY_STATES[state],
     providerId: settings.provider,

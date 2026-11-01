@@ -9,7 +9,7 @@ import {
   type ButtonHTMLAttributes,
   type ReactNode,
 } from 'react'
-import { isDemoLimit, isModelUnavailable, useDemoActive, type CareerPath } from '../lib/api'
+import { isDemoLimit, isModelUnavailable, useDemoActive, useLocalProvider, type CareerPath } from '../lib/api'
 import { useApiKey, type Status } from '../lib/store'
 
 /* ---------- Provider marks ---------- */
@@ -710,8 +710,9 @@ export function Note({
 /** Inline prompt shown in place of AI actions when no API key is configured; a demo note when the shared model is in use. */
 export function KeyNotice() {
   const key = useApiKey()
+  const local = useLocalProvider()
   const demo = useDemoActive()
-  if (key) return null
+  if (key || local) return null
   if (demo) {
     return (
       <Note icon={Sparkles}>
