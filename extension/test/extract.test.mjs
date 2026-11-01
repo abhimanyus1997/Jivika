@@ -42,6 +42,18 @@ test('naukri job-listings page', async () => {
   assert.doesNotMatch(j.description, /Apply|Recommended jobs|footer|sitemap/i)
 })
 
+test('linkedin 2026 layout with generated class names', async () => {
+  const j = await run(fixtureUrl('www.linkedin.com', 'linkedin-2026', '/jobs/search-results/?currentJobId=5550001111&trackingId=x'))
+  assert.equal(j.source, 'linkedin')
+  assert.equal(j.title, 'Machine Learning Engineer')
+  assert.equal(j.company, 'Example Analytics')
+  assert.match(j.description, /^Role : Machine Learning Engineer/)
+  assert.match(j.description, /- Train and evaluate ranking models\.\n- Ship models to production/)
+  assert.match(j.description, /Location: Pune, hybrid\./)
+  assert.match(j.description, /About the company\nExample Analytics\nSoftware Development \| 201-500 employees\nExample Analytics builds forecasting tools/)
+  assert.doesNotMatch(j.description, /Determine your fit|People you can reach out to|followers|more$/)
+})
+
 test('linkedin jobs/view page', async () => {
   const j = await run(fixtureUrl('www.linkedin.com', 'linkedin-view', '/jobs/view/123?trk=public_jobs&refId=abc'))
   assert.equal(j.source, 'linkedin')

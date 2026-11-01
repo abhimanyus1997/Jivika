@@ -91,6 +91,7 @@ function extract() {
   var site = on('naukri.com') ? 'naukri' : on('linkedin.com') ? 'linkedin' : /(^|\.)indeed\./.test(host) ? 'indeed'
     : on('instahyre.com') ? 'instahyre' : on('wellfound.com') || on('angel.co') ? 'wellfound'
     : on('foundit.in') || on('foundit.com') || on('monsterindia.com') ? 'foundit' : '';
+  var liJobId = ''; // LinkedIn job id read from the page's section ids, for the canonical URL
 
   // (a) schema.org JobPosting JSON-LD
   function fromJsonLd() {
@@ -177,6 +178,36 @@ function extract() {
       };
     }
     if (site === 'linkedin') {
+      // Newer LinkedIn layouts use generated class names, so anchor on the stable section ids
+      // (JobDetails_AboutTheJob_<id>, JobDetails_AboutTheCompany_<id>) and test ids instead.
+      var aboutJob = document.querySelector('[id^="JobDetails_AboutTheJob_"]');
+      var aboutCompany = document.querySelector('[id^="JobDetails_AboutTheCompany_"]');
+      if (aboutJob || aboutCompany) {
+        // The whole section, not just the text box: lists can sit outside the box's paragraph.
+        var jobText = aboutJob ? textOf(aboutJob).replace(/^about the job\s*/i, '') : '';
+        var coName = '', coFacts = [], coAbout = '';
+        if (aboutCompany) {
+          var coLink = aboutCompany.querySelector('a[href*="/company/"]');
+          coName = coLink ? line((coLink.querySelector('p') || coLink).textContent) : '';
+          coAbout = textOf(aboutCompany.querySelector('[data-testid="expandable-text-box"]') || document.createElement('div'));
+          aboutCompany.querySelectorAll('p').forEach(function (p) {
+            if (p.closest('a') || p.querySelector('[data-testid="expandable-text-box"]')) return;
+            var s = line(p.textContent);
+            if (s && s !== '•' && s.length < 80 && s !== coName && !/followers$/i.test(s) && coAbout.indexOf(s) < 0 && coFacts.indexOf(s) < 0) coFacts.push(s);
+          });
+        }
+        var tab = line(document.title).replace(/^\(\d+\)\s*/, '').split(/\s+\|\s+/);
+        var idMatch = (aboutJob || aboutCompany).id.match(/_(\d+)$/);
+        if (idMatch) liJobId = idMatch[1];
+        return {
+          title: first(['.job-details-jobs-unified-top-card__job-title', 'h1']) || (tab.length > 2 ? tab[0] : ''),
+          company: coName || first(['.job-details-jobs-unified-top-card__company-name']) || (tab.length > 2 ? tab[1] : ''),
+          location: first(['.job-details-jobs-unified-top-card__primary-description-container .tvm__text', '.job-details-jobs-unified-top-card__bullet']),
+          employment_type: labelled('Employment type'),
+          experience_required: labelled('Seniority level'),
+          description: tidy([jobText, coName || coAbout ? 'About the company\n' + [coName, coFacts.join(' | '), coAbout].filter(Boolean).join('\n') : ''].filter(Boolean).join('\n\n'))
+        };
+      }
       return {
         title: first(['.job-details-jobs-unified-top-card__job-title', '.jobs-unified-top-card__job-title', '.top-card-layout__title', '.topcard__title', 'h1']),
         company: first(['.job-details-jobs-unified-top-card__company-name', '.jobs-unified-top-card__company-name', '.topcard__org-name-link', '.topcard__flavor']),
@@ -249,7 +280,7 @@ function extract() {
     try {
       var x = new URL(u);
       x.hash = '';
-      var jobId = x.searchParams.get('currentJobId');
+      var jobId = x.searchParams.get('currentJobId') || liJobId;
       if (site === 'linkedin' && jobId && /^\d+$/.test(jobId)) return x.origin + '/jobs/view/' + jobId + '/';
       Array.from(x.searchParams.keys()).forEach(function (k) {
         if (/^(utm_|mc_|pk_)/i.test(k) || /^(src|sid|xp|px|ref|refid|trk|trackingid|tracking_id|gclid|fbclid|msclkid|lipi|origin|from|position|pagenum|ebp|tk|vjk|from_|currentjobid|eboost)$/i.test(k)) x.searchParams.delete(k);
