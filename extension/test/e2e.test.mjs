@@ -64,7 +64,7 @@ test('manifest asks only for activeTab, scripting and storage', () => {
 
 test('Naukri page -> Match in Jivika', async () => {
   const { preview, url } = await clip(fixtureUrl('www.naukri.com', 'naukri', '/job-listings-x-123?src=companyPageJobsDesk&sid=1&xp=1&px=1'), 'match')
-  assert.match(preview, /Senior Platform Engineer\nExample Labs · Bengaluru\nNaukri/)
+  assert.match(preview, /Senior Platform Engineer\nExample Labs · Bengaluru, Pune\nNaukri/)
   assert.ok(url.startsWith(`${APP}#match?clip=z.`), url.slice(0, 80))
   const job = decode(url)
   assert.equal(job.source, 'naukri')

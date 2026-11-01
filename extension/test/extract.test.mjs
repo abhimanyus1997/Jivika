@@ -30,7 +30,7 @@ test('naukri job-listings page', async () => {
   assert.equal(j.company, 'Example Labs')
   assert.equal(j.experience_required, '6 - 9 years')
   assert.equal(j.salary, '18-28 Lacs P.A.')
-  assert.equal(j.location, 'Bengaluru')
+  assert.equal(j.location, 'Bengaluru, Pune')
   assert.equal(j.employment_type, 'Full Time, Permanent')
   assert.equal(j.url, 'https://www.naukri.com/fixture/naukri/job-listings-senior-platform-engineer-example-labs-6-to-9-years-123')
   assert.match(j.description, /^About the role\n\nYou will own the internal platform/)

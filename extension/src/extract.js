@@ -139,24 +139,41 @@ function extract() {
   // (b) site-specific DOM, with class-substring selectors that survive CSS-module hash changes
   function fromSite() {
     if (site === 'naukri') {
-      var labels = ['Role', 'Industry Type', 'Department', 'Employment Type', 'Role Category', 'Education'];
+      // Everything lives in the description section: the posting (dang-inner-html), then
+      // "Role: / Industry Type: / ..." label rows, the Education block and the Key Skills chips.
+      var box = document.querySelector('[class*="job-desc-container"]') || document;
+      var jd = firstBlock(['[class*="dang-inner-html"]', '.jd-desc']) || afterHeading(/^job description$/i);
       var extra = [];
-      labels.forEach(function (l) { var v = labelled(l); if (v) extra.push(l + ': ' + v); });
+      box.querySelectorAll('label').forEach(function (l) {
+        var k = line(l.textContent).replace(/\s*:$/, '');
+        var v = l.nextElementSibling ? line(textOf(l.nextElementSibling)).replace(/\s*,$/, '') : '';
+        if (!k || !v || l.closest('[class*="dang-inner-html"]')) return;
+        var row = (l.closest('[class*="education"]') && !/^education$/i.test(k) ? 'Education (' + k + ')' : k) + ': ' + v;
+        if (extra.indexOf(row) < 0) extra.push(row);
+      });
       var skills = [];
-      document.querySelectorAll('[class*="key-skill"] a, [class*="key-skill"] span, [class*="chip"]').forEach(function (e) {
+      box.querySelectorAll('[class*="key-skill"] [class*="chip"], [class*="key-skill"] a').forEach(function (e) {
         var s = line(e.textContent);
-        if (s && s.length < 60 && !e.querySelector('a, span') && skills.indexOf(s) < 0) skills.push(s);
+        if (s && s.length < 60 && skills.indexOf(s) < 0) skills.push(s);
       });
       if (skills.length) extra.push('Key Skills: ' + skills.join(', '));
-      var jd = firstBlock(['[class*="dang-inner-html"]', '[class*="job-desc"]', '.jd-desc']) || afterHeading(/^job description$/i);
+      var stats = [];
+      document.querySelectorAll('[class*="jhc__stat"]').forEach(function (e) {
+        var s = line(textOf(e));
+        if (s && s.length < 60 && /:/.test(s) && !e.querySelector('[class*="jhc__stat"]') && stats.indexOf(s) < 0) stats.push(s);
+      });
+      if (stats.length) extra.push(stats.join(' | '));
+      var about = firstBlock(['[class*="about-company"]', '[class*="aboutCompany"]']);
+      var employment = '';
+      extra.forEach(function (r) { if (/^Employment Type: /i.test(r)) employment = r.replace(/^Employment Type: /i, ''); });
       return {
         title: first(['[class*="jd-header-title"]', 'h1']),
         company: first(['[class*="jd-header-comp-name"] > a', '[class*="jd-header-comp-name"] a', '[class*="jd-header-comp-name"]']),
-        experience_required: first(['[class*="jhc__exp__"]', '[class*="exp-wrap"]', '.exp']),
-        salary: first(['[class*="jhc__salary__"]', '[class*="salary-wrap"]', '.salary']),
-        location: first(['[class*="jhc__location__"] a', '[class*="jhc__location__"]', '[class*="loc-wrap"]', '.location']),
-        employment_type: labelled('Employment Type'),
-        description: tidy(jd + (extra.length ? '\n\n' + extra.join('\n') : ''))
+        experience_required: first(['[class*="jhc__exp__"]', '[class*="jhc__exp"]', '[class*="exp-wrap"]', '.exp']),
+        salary: first(['[class*="jhc__salary__"]', '[class*="jhc__salary"]', '[class*="salary-wrap"]', '.salary']),
+        location: first(['[class*="jhc__location__"]', '[class*="jhc__location"]', '[class*="loc-wrap"]', '.location']),
+        employment_type: employment || labelled('Employment Type'),
+        description: tidy([jd, extra.join('\n'), about ? 'About the company\n' + about.replace(/^about (the )?company\s*/i, '') : ''].filter(Boolean).join('\n\n'))
       };
     }
     if (site === 'linkedin') {
@@ -254,6 +271,28 @@ function extract() {
     }
     if (k !== 'posted_at') job[k] = '';
   });
+  // "Senior Architect - Airtel" -> "Senior Architect"; "Delhi / NCR, Delhi / NCR, -" -> "Delhi / NCR".
+  if (job.title && job.company) {
+    var tail = job.title.toLowerCase().lastIndexOf(job.company.toLowerCase());
+    if (tail > 0 && tail + job.company.length === job.title.length) job.title = job.title.slice(0, tail).replace(/\s*[-|@–—]\s*$/, '') || job.title;
+  }
+  if (job.location) {
+    var seenGroup = [];
+    job.location = job.location.split(/\s*;\s*/).map(function (g) {
+      var seen = [];
+      return g.split(/\s*,\s*/).filter(function (x) {
+        var k = x.toLowerCase();
+        if (!x || /^[-–—]+$/.test(x) || seen.indexOf(k) >= 0) return false;
+        seen.push(k);
+        return true;
+      }).join(', ');
+    }).filter(function (g) {
+      var k = g.toLowerCase();
+      if (!g || seenGroup.indexOf(k) >= 0) return false;
+      seenGroup.push(k);
+      return true;
+    }).join('; ');
+  }
   job.url = cleanUrl(location.href).slice(0, 2000);
   job.source = site || (ld && (ld.title || ld.description) ? 'jsonld' : 'page');
   return job;
