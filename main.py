@@ -42,7 +42,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from openai import OpenAI
 from pydantic import AfterValidator, BaseModel, Field, ValidationError
-from jivika import applications, ats, coding, importer, jobs, llm, parsing, resources, resume, salary
+from jivika import applications, ats, coding, holidays, importer, jobs, llm, parsing, resources, resume, salary
 from jivika import models as model_lists
 from jivika.ats import STOPWORDS, tokens as _tokens  # noqa: F401  (keyword coverage shares the ATS tokenizer)
 from jivika.schemas import (  # noqa: F401  (re-exported for tests and callers)
@@ -1324,6 +1324,24 @@ def salary_lookup(
     if not title.strip():
         raise HTTPException(422, "Enter a job title.")
     return salary.lookup(title, location, company, currency)
+
+
+_holiday_hits: dict[str, list[float]] = {}
+
+
+async def holidays_rate_limit(request: Request):
+    _limit(_holiday_hits, client_ip(request), 30, "Too many holiday lookups. Please wait a few minutes and try again.")
+
+
+@app.get("/api/holidays", dependencies=[Depends(holidays_rate_limit)])
+def holiday_list(country: Annotated[str, Query(min_length=2, max_length=2)], year: Annotated[int, Query(ge=2000, le=2100)]):
+    """Public holidays for an allow-listed country (Google's public holiday calendars), cached for a day."""
+    try:
+        return holidays.holidays(country.lower(), year)
+    except KeyError:
+        raise HTTPException(422, "Holidays are not available for this country.") from None
+    except jobs.SourceError:
+        raise HTTPException(502, "The holiday calendar is unavailable right now. Please try again later.") from None
 
 
 async def models_rate_limit(request: Request):
