@@ -1,4 +1,4 @@
-import { ArrowRight, BarChart3, Check, Compass, Plus, ShieldCheck, Sparkles, Star } from 'lucide-react'
+import { ArrowRight, BarChart3, Bell, Check, Compass, Funnel, Plus, ShieldCheck, Sparkles, Star } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { ApplicationTrends, MiniBars, weeklyTrends } from '../components/charts'
 import { codingStats, useCoding } from '../components/coding/store'
@@ -15,9 +15,12 @@ import {
   roadmapProgress,
   useResume,
   useRoadmapDone,
+  useSavedSearches,
   useStored,
   write,
+  type Application,
   type Point,
+  type Status,
 } from '../lib/store'
 import { useDemoActive } from '../lib/api'
 
@@ -230,6 +233,112 @@ function TrendsCard() {
   )
 }
 
+type Range = '30' | '90' | 'all'
+
+const STAGES: { label: string; reached: Status[] }[] = [
+  { label: 'Applied', reached: [] },
+  // A rejection is still a reply, so it counts as a response.
+  { label: 'Response', reached: ['Response received', 'Interview', 'Offer', 'Rejected'] },
+  { label: 'Interview', reached: ['Interview', 'Offer'] },
+  { label: 'Offer', reached: ['Offer'] },
+]
+
+/** Applications (applied within the range) that ever reached each stage, from the status timeline. */
+export function funnelCounts(apps: Application[], range: Range, now = new Date()) {
+  const cutoff = range === 'all' ? '' : new Date(now.getTime() - Number(range) * 864e5).toLocaleDateString('en-CA')
+  const inRange = apps.filter((a) => !cutoff || a.date >= cutoff)
+  return STAGES.map((st) => ({
+    label: st.label,
+    count: st.reached.length
+      ? inRange.filter((a) => [a.status, ...(a.history ?? []).map((h) => h.status)].some((s) => st.reached.includes(s))).length
+      : inRange.length,
+  }))
+}
+
+function FunnelCard() {
+  const [applications] = useApplications()
+  const [range, setRange] = useStored<Range>('funnelRange', '90')
+  const rows = useMemo(() => funnelCounts(applications, range), [applications, range])
+  const top = rows[0].count
+  return (
+    <Card
+      title="Application funnel"
+      description="How far your applications get. Responses include rejections."
+      className="h-full lg:col-span-5"
+      action={
+        <Segmented
+          label="Funnel range"
+          size="sm"
+          value={range}
+          onChange={setRange}
+          options={[
+            { value: '30', label: '30 days' },
+            { value: '90', label: '90 days' },
+            { value: 'all', label: 'All time' },
+          ]}
+        />
+      }
+    >
+      {top ? (
+        <table className="w-full text-[13px]">
+          <caption className="sr-only">Applications reaching each stage</caption>
+          <thead className="sr-only">
+            <tr>
+              <th>Stage</th>
+              <th>Applications</th>
+              <th>Conversion from previous stage</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => {
+              const prev = i ? rows[i - 1].count : 0
+              const conv = i && prev ? Math.round((r.count / prev) * 100) : null
+              return (
+                <tr key={r.label} title={`${r.label}: ${r.count}${conv !== null ? `, ${conv}% of ${rows[i - 1].label.toLowerCase()}` : ''}`}>
+                  <th scope="row" className="w-24 py-2 pr-3 text-left font-medium text-ink">
+                    {r.label}
+                  </th>
+                  <td className="py-2">
+                    <div className="flex items-center gap-3">
+                      <div className="h-2.5 flex-1">
+                        {r.count > 0 && (
+                          <div className="h-full rounded-r-[4px]" style={{ width: `${Math.max(2, (r.count / top) * 100)}%`, background: 'var(--color-series-1)' }} />
+                        )}
+                      </div>
+                      <span className="t-num w-8 text-right font-medium text-ink">{r.count}</span>
+                    </div>
+                  </td>
+                  <td className="t-num w-14 py-2 pl-3 text-right text-muted">{i === 0 ? '' : conv === null ? '-' : `${conv}%`}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      ) : (
+        <EmptyState
+          icon={<Funnel />}
+          title={applications.length ? 'No applications in this range' : 'No applications tracked yet'}
+          text="Track applications and update their status to see how many get a response, an interview and an offer."
+        />
+      )}
+    </Card>
+  )
+}
+
+function SavedSearchNote() {
+  const [searches] = useSavedSearches()
+  const total = searches.reduce((s, x) => s + (x.newCount || 0), 0)
+  if (!total) return null
+  return (
+    <Note icon={Bell} tone="info">
+      <span className="t-num font-medium">{total}</span> new {total === 1 ? 'job' : 'jobs'} in saved searches.{' '}
+      <a href="#jobs" className="font-medium underline underline-offset-2">
+        View in Job search
+      </a>
+    </Note>
+  )
+}
+
 function GoalsCard() {
   const [careerPath] = useCareerPath()
   return (
@@ -375,12 +484,18 @@ export default function Dashboard() {
         }
       />
       <GetStarted />
+      <SavedSearchNote />
       <KpiStrip />
       <div className="grid gap-6 lg:grid-cols-12">
         <TrendsCard />
         <GoalsCard />
       </div>
-      <TopPicks />
+      <div className="grid gap-6 lg:grid-cols-12">
+        <FunnelCard />
+        <div className="min-w-0 lg:col-span-7 [&>section]:h-full">
+          <TopPicks />
+        </div>
+      </div>
     </>
   )
 }

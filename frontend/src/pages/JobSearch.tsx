@@ -1,4 +1,4 @@
-import { ExternalLink, FlaskConical, ListPlus, Search, SearchX, SearchCheck, Target } from 'lucide-react'
+import { BellRing, BookmarkPlus, ExternalLink, FlaskConical, ListPlus, Play, Search, SearchX, SearchCheck, Target, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import {
   Badge,
@@ -7,6 +7,7 @@ import {
   EmptyState,
   ErrorMessage,
   Field,
+  IconButton,
   inputCls,
   Note,
   PageHeader,
@@ -16,7 +17,7 @@ import {
   toast,
 } from '../components/ui'
 import { api, ApiError, type Job, type JobSearchResult, type JobSource, type RemoteFilter } from '../lib/api'
-import { useJobDescription, useProfile, useResume, useStored, write } from '../lib/store'
+import { newId, useJobDescription, useProfile, useResume, useSavedSearches, useStored, write, type SavedSearch } from '../lib/store'
 
 interface SearchParams {
   q: string
@@ -72,6 +73,20 @@ function relative(iso?: string): string | null {
 
 const nativeId = (job: Job) => job.id.slice(job.id.indexOf(':') + 1)
 
+/** Names for sources the server may not label (older servers, or before the first response). */
+const SOURCE_NAMES: Record<string, string> = { hn: 'Hacker News (Who is hiring)', yc: 'YC startups' }
+
+/* ---------- Saved searches ---------- */
+
+const MAX_SEEN = 1000
+const norm = (s: string) => s.trim().toLowerCase()
+const sameSearch = (a: Pick<SavedSearch, 'q' | 'location' | 'remote' | 'excluded'>, b: SearchParams) =>
+  norm(a.q) === norm(b.q) && norm(a.location) === norm(b.location) && a.remote === b.remote && [...a.excluded].sort().join() === [...b.excluded].sort().join()
+const describe = (s: SavedSearch) =>
+  [s.location.trim() || 'Any location', s.remote === 'any' ? '' : s.remote === 'remote' ? 'Remote' : 'On-site', s.excluded.length ? `${s.excluded.length} sources off` : '']
+    .filter(Boolean)
+    .join(' · ')
+
 /* ---------- Sources ---------- */
 
 function SourceChip({ source: s, on, onToggle }: { source: JobSource; on: boolean; onToggle: () => void }) {
@@ -92,7 +107,7 @@ function SourceChip({ source: s, on, onToggle }: { source: JobSource; on: boolea
         className={`size-1.5 rounded-full ${!source.enabled || !on ? 'bg-faint' : source.ok ? 'bg-brand-500' : 'bg-danger'}`}
         aria-hidden="true"
       />
-      {source.name}
+      {source.name || SOURCE_NAMES[source.id] || source.id}
       <span className={`text-[11px] ${source.ok && on && source.enabled ? 't-num text-muted' : ''}`}>{status}</span>
       {source.research && (
         <span title={RESEARCH_TIP} className="inline-flex items-center gap-0.5 rounded bg-info-bg px-1 text-[10px] text-info">
@@ -106,7 +121,21 @@ function SourceChip({ source: s, on, onToggle }: { source: JobSource; on: boolea
 
 /* ---------- Result row ---------- */
 
-function JobCard({ job, sourceName, fit, onMatch, matching }: { job: Job; sourceName: string; fit: number | null; onMatch: () => void; matching: boolean }) {
+function JobCard({
+  job,
+  sourceName,
+  fit,
+  onMatch,
+  matching,
+  isNew,
+}: {
+  job: Job
+  sourceName: string
+  fit: number | null
+  onMatch: () => void
+  matching: boolean
+  isNew: boolean
+}) {
   const posted = relative(job.posted_at)
   const band = fit === null ? null : scoreBand(fit)
   return (
@@ -117,6 +146,13 @@ function JobCard({ job, sourceName, fit, onMatch, matching }: { job: Job; source
             {job.title}
           </h3>
           <span className="truncate text-[13px] text-muted">{job.company}</span>
+          {isNew && (
+            <span className="self-center">
+              <Badge tone="accent" dot>
+                New
+              </Badge>
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           {job.location && <Badge>{job.location}</Badge>}
@@ -158,6 +194,7 @@ function JobCard({ job, sourceName, fit, onMatch, matching }: { job: Job; source
                 role: job.title,
                 link: job.url,
                 notes: `Found via ${sourceName} job search.${job.location ? ` ${job.location}.` : ''}`,
+                description: job.description || job.snippet,
               })
               location.hash = 'applications?new'
             }}
@@ -213,6 +250,9 @@ export default function JobSearch() {
   const [error, setError] = useState('')
   const [sort, setSort] = useState<'relevance' | 'newest'>('relevance')
   const [matchingId, setMatchingId] = useState('')
+  const [searches, setSearches] = useSavedSearches()
+  const [newIds, setNewIds] = useState<Set<string>>(() => new Set())
+  const [checking, setChecking] = useState(false)
 
   const resumeWords = useMemo(() => new Set(tokens(`${resume?.text ?? ''} ${(profile?.skills ?? []).join(' ')}`)), [resume, profile])
 
@@ -239,12 +279,77 @@ export default function JobSearch() {
       lastResult = { key, page: page > 1 && jobs.length === prev.length ? MAX_PAGE : page, data: { ...data, jobs } }
       setResult(lastResult)
       setSaved({ ...params, q })
+      markSeen(params, jobs.map((j) => j.id), page > 1)
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Search failed. Try again.')
     } finally {
       setLoading(null)
     }
   }
+
+  /** For a saved search: badge the jobs it has not shown before, then remember them as seen. */
+  function markSeen(params: SearchParams, ids: string[], more: boolean) {
+    const match = searches.find((s) => sameSearch(s, params))
+    if (!match) {
+      if (!more) setNewIds(new Set())
+      return
+    }
+    const seen = new Set(match.seen)
+    const fresh = ids.filter((id) => !seen.has(id))
+    setNewIds((prev) => new Set([...(more ? prev : []), ...fresh]))
+    setSearches((list) =>
+      list.map((s) => (s.id === match.id ? { ...s, seen: [...s.seen, ...fresh].slice(-MAX_SEEN), newCount: 0, checkedAt: new Date().toISOString() } : s)),
+    )
+  }
+
+  function saveSearch() {
+    const q = form.q.trim()
+    if (!q) return
+    const current = result && result.key === JSON.stringify([q, form.location.trim(), form.remote, form.excluded])
+    const shown = current ? result.data.jobs.map((j) => j.id) : []
+    setSearches((list) => [
+      ...list,
+      { id: newId(), q, location: form.location.trim(), remote: form.remote, excluded: form.excluded, seen: shown.slice(-MAX_SEEN), newCount: 0, checkedAt: new Date().toISOString() },
+    ])
+    toast('Search saved. Check it later for new listings.')
+  }
+
+  async function checkSaved() {
+    setChecking(true)
+    const counts = await Promise.all(
+      searches.map(async (s) => {
+        try {
+          const sources = [...knownEnabled].filter((id) => !s.excluded.includes(id))
+          const data = await api.jobSearch({ q: s.q, location: s.location, remote: s.remote, sources: s.excluded.length && sources.length ? sources : undefined })
+          data.sources.forEach((x) => x.enabled && knownEnabled.add(x.id))
+          const seen = new Set(s.seen)
+          return { id: s.id, count: new Set(data.jobs.filter((j) => !s.excluded.includes(j.source) && !seen.has(j.id)).map((j) => j.id)).size }
+        } catch {
+          return null
+        }
+      }),
+    )
+    setChecking(false)
+    const ok = counts.filter((c) => c !== null)
+    const at = new Date().toISOString()
+    setSearches((list) =>
+      list.map((s) => {
+        const c = ok.find((x) => x.id === s.id)
+        return c ? { ...s, newCount: c.count, checkedAt: at } : s
+      }),
+    )
+    const total = ok.reduce((n, c) => n + c.count, 0)
+    const found = `${total} new ${total === 1 ? 'listing' : 'listings'} found`
+    toast(ok.length < counts.length ? `Some searches could not be checked. ${found}.` : found)
+  }
+
+  function runSaved(s: SavedSearch) {
+    const next: SearchParams = { q: s.q, location: s.location, remote: s.remote, excluded: s.excluded }
+    setForm(next)
+    void search(next)
+  }
+
+  const currentSaved = searches.some((s) => sameSearch(s, form))
 
   // A fresh page load re-runs the last search (the server caches it); in-app navigation keeps the results in memory.
   useEffect(() => {
@@ -280,7 +385,7 @@ export default function JobSearch() {
     location.hash = 'match'
   }
 
-  const names = Object.fromEntries((result?.data.sources ?? []).map((s) => [s.id, s.name]))
+  const names: Record<string, string> = Object.fromEntries((result?.data.sources ?? []).map((s) => [s.id, s.name]))
   const jobs = useMemo(() => {
     const list = (result?.data.jobs ?? []).map((job) => ({ job, fit: quickFit(resumeWords, job) }))
     const time = (j: Job) => (j.posted_at ? Date.parse(j.posted_at) || 0 : 0)
@@ -327,9 +432,14 @@ export default function JobSearch() {
               ]}
             />
           </div>
-          <Button type="submit" variant="brand" icon={Search} loading={loading === 'search'} disabled={!form.q.trim()}>
-            Search
-          </Button>
+          <div className="flex gap-2">
+            <Button type="submit" variant="brand" icon={Search} loading={loading === 'search'} disabled={!form.q.trim()}>
+              Search
+            </Button>
+            <Button variant="secondary" icon={BookmarkPlus} onClick={saveSearch} disabled={!form.q.trim() || currentSaved}>
+              {currentSaved ? 'Saved' : 'Save search'}
+            </Button>
+          </div>
         </form>
 
         {result && (
@@ -341,6 +451,48 @@ export default function JobSearch() {
           </div>
         )}
       </Card>
+
+      {searches.length > 0 && (
+        <Card
+          title="Saved searches"
+          description="Check them for listings you have not seen yet."
+          padding={false}
+          divider
+          action={
+            <Button size="sm" variant="secondary" icon={BellRing} loading={checking} onClick={checkSaved}>
+              Check saved searches
+            </Button>
+          }
+        >
+          <ul className="divide-y divide-line">
+            {searches.map((s) => (
+              <li key={s.id} className="flex flex-wrap items-center gap-3 px-5 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <span className="t-title block truncate">{s.q}</span>
+                  <span className="block truncate text-xs text-muted">{describe(s)}</span>
+                </div>
+                {s.newCount > 0 ? (
+                  <Badge tone="accent" mono>
+                    {s.newCount} new
+                  </Badge>
+                ) : (
+                  s.checkedAt && <span className="text-xs text-faint">No new listings</span>
+                )}
+                <Button size="sm" variant="ghost" icon={Play} onClick={() => runSaved(s)} aria-label={`Run saved search ${s.q}`}>
+                  Run
+                </Button>
+                <IconButton
+                  icon={Trash2}
+                  size="sm"
+                  label={`Delete saved search ${s.q}`}
+                  className="hover:bg-danger-bg hover:text-danger"
+                  onClick={() => setSearches((list) => list.filter((x) => x.id !== s.id))}
+                />
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <ErrorMessage message={error} />
 
@@ -415,7 +567,8 @@ export default function JobSearch() {
                 key={job.id}
                 job={job}
                 fit={fit}
-                sourceName={names[job.source] ?? job.source}
+                sourceName={names[job.source] || SOURCE_NAMES[job.source] || job.source}
+                isNew={newIds.has(job.id)}
                 matching={matchingId === job.id}
                 onMatch={() => matchJob(job)}
               />
