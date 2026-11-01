@@ -29,3 +29,7 @@ a { color: var(--brand); }
 label { display: block; font-weight: 500; margin-bottom: 4px; }
 input { box-sizing: border-box; width: 100%; font: inherit; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
 .hint { color: var(--muted); font-size: 12px; margin: 6px 0 10px; }
+[hidden] { display: none !important; }
+.steps { margin: 6px 0 0; padding-left: 18px; }
+.steps li { margin-bottom: 4px; }
+#guide .primary { width: 100%; }

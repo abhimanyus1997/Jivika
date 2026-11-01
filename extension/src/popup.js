@@ -19,6 +19,21 @@ document.getElementById('options').addEventListener('click', function (e) {
   chrome.runtime.openOptionsPage();
 });
 
+document.getElementById('open').addEventListener('click', async function (e) {
+  e.preventDefault();
+  var stored = await chrome.storage.sync.get({ appUrl: CLIP_DEFAULT_APP });
+  await chrome.tabs.create({ url: stored.appUrl });
+  window.close();
+});
+
+// First-run guide: shown until "Got it" is pressed.
+var guide = document.getElementById('guide');
+chrome.storage.local.get({ guideSeen: false }).then(function (s) { guide.hidden = s.guideSeen; });
+document.getElementById('gotit').addEventListener('click', function () {
+  guide.hidden = true;
+  chrome.storage.local.set({ guideSeen: true });
+});
+
 (async function () {
   try {
     var tabs = await chrome.tabs.query({ active: true, currentWindow: true });
