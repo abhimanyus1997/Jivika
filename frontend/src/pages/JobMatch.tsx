@@ -1,4 +1,4 @@
-import { BookmarkPlus, Briefcase, Check, FileUser, ListPlus, MapPin, Target } from 'lucide-react'
+import { BookmarkPlus, Briefcase, Check, FilePlus2, FileUser, ListPlus, MapPin, Target } from 'lucide-react'
 import { useState } from 'react'
 import { JobImport } from '../components/JobImport'
 import { MarketData } from '../components/MarketData'
@@ -37,6 +37,7 @@ import {
   useResume,
   useTailoredResumes,
 } from '../lib/store'
+import { startApplicationFromJob } from './NewApplication'
 import { requestTailor } from './Resume'
 
 type Tab = 'skills' | 'insights' | 'plan'
@@ -166,8 +167,17 @@ function MatchResults({ result: r, jd }: { result: MatchResult; jd: string }) {
             <Button variant="secondary" icon={FileUser} onClick={tailor}>
               {existing ? 'Open tailored resume' : 'Tailor resume for this job'}
             </Button>
-            <Button variant="primary" icon={ListPlus} onClick={track}>
+            <Button variant="secondary" icon={ListPlus} onClick={track}>
               Track application
+            </Button>
+            <Button
+              variant="brand"
+              icon={FilePlus2}
+              onClick={() =>
+                startApplicationFromJob({ title: r.job_title, company: r.company, location: r.location, url: '', description: jd, salary: r.salary_range })
+              }
+            >
+              Start application
             </Button>
           </div>
         </div>
