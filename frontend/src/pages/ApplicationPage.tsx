@@ -22,6 +22,7 @@ import {
   textareaCls,
   toast,
 } from '../components/ui'
+import { calendarYears, nextWorkingDay, offReason, useOffDays } from '../lib/holidays'
 import { api, applicationApi, useAction, useAiReady, type CoverLetterTone, type ResumeSection, type StructuredProfile } from '../lib/api'
 import {
   keepBasics,
@@ -401,6 +402,11 @@ function ScheduleTab({ a, update }: { a: Application; update: (p: Partial<Applic
   const followups = a.followups ?? []
   const setI = (id: string, patch: object) => update({ interviews: interviews.map((x) => (x.id === id ? { ...x, ...patch } : x)) })
   const setF = (id: string, patch: object) => update({ followups: followups.map((x) => (x.id === id ? { ...x, ...patch } : x)) })
+  const { off } = useOffDays(calendarYears(today()))
+  const clash = (date: string) => {
+    const why = date && offReason(date, off)
+    return why ? <Note tone="warning">This date falls on {why}. Check that the employer is working that day.</Note> : null
+  }
   return (
     <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
       <Card
@@ -448,6 +454,7 @@ function ScheduleTab({ a, update }: { a: Application; update: (p: Partial<Applic
                     />
                   </Field>
                 </div>
+                {clash(x.date)}
                 <Field label="Notes">
                   <textarea className={`${textareaCls} field-sizing-content min-h-12`} value={x.notes} onChange={(e) => setI(x.id, { notes: e.target.value })} placeholder="Who you meet, the link, what to prepare." />
                 </Field>
@@ -462,7 +469,7 @@ function ScheduleTab({ a, update }: { a: Application; update: (p: Partial<Applic
         title="Follow-ups"
         description="Reminders to check in."
         action={
-          <Button size="sm" variant="secondary" icon={Plus} onClick={() => update({ followups: [...followups, { id: newId(), date: today(), note: '', done: false }] })}>
+          <Button size="sm" variant="secondary" icon={Plus} onClick={() => update({ followups: [...followups, { id: newId(), date: nextWorkingDay(today(), off), note: '', done: false }] })}>
             Add follow-up
           </Button>
         }
@@ -475,6 +482,7 @@ function ScheduleTab({ a, update }: { a: Application; update: (p: Partial<Applic
                 <input type="date" aria-label="Follow-up date" className={`${inputCls} t-num`} value={x.date} onChange={(e) => setF(x.id, { date: e.target.value })} />
                 <input aria-label="Follow-up note" className={`${inputCls} ${x.done ? 'text-faint line-through' : ''}`} value={x.note} placeholder="Check in with the recruiter" onChange={(e) => setF(x.id, { note: e.target.value })} />
                 <IconButton icon={Trash2} size="sm" label="Remove follow-up" onClick={() => update({ followups: followups.filter((y) => y.id !== x.id) })} />
+                {!x.done && offReason(x.date, off) && <div className="col-span-4">{clash(x.date)}</div>}
               </li>
             ))}
           </ul>
