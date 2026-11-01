@@ -31,17 +31,29 @@
   .btn-sm {
     @apply h-8 px-3 text-[13px];
   }
+  .btn-lg {
+    @apply h-11 px-5 text-[15px];
+  }
+  .btn-primary {
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 1px 2px rgb(28 27 25 / 0.2);
+  }
   .eyebrow {
     @apply text-[12px] leading-4 font-medium tracking-[0.06em] text-brand-600 uppercase;
   }
   .h-display {
-    @apply text-[38px] leading-[1.08] font-semibold tracking-[-0.035em] text-balance text-ink sm:text-[52px];
+    @apply text-[40px] leading-[1.06] font-semibold tracking-[-0.04em] text-balance text-ink sm:text-[56px] lg:text-[64px];
   }
   .h-section {
-    @apply text-[28px] leading-[1.15] font-semibold tracking-[-0.025em] text-balance text-ink sm:text-[36px];
+    @apply text-[28px] leading-[1.15] font-semibold tracking-[-0.025em] text-balance text-ink sm:text-[38px] sm:leading-[1.1];
+  }
+  .h-feature {
+    @apply text-[24px] leading-[1.2] font-semibold tracking-[-0.02em] text-balance text-ink sm:text-[28px];
   }
   .lead {
     @apply text-[17px] leading-7 text-pretty text-muted;
+  }
+  .lead-lg {
+    @apply sm:text-[19px] sm:leading-8;
   }
   .card {
     @apply rounded-xl border border-line bg-surface p-6 shadow-card;
@@ -55,20 +67,117 @@
     stroke-linecap: round;
     stroke-linejoin: round;
   }
+  .site-header {
+    @apply bg-canvas/85 backdrop-blur-md backdrop-saturate-150;
+  }
   .nav-link {
     @apply rounded-lg px-3 py-1.5 text-sm text-muted transition-colors duration-150 hover:bg-subtle hover:text-ink aria-[current=page]:font-medium aria-[current=page]:text-ink;
   }
   .field {
     @apply h-10 w-full min-w-0 rounded-lg border border-line-strong bg-surface px-3 text-sm text-ink placeholder:text-faint focus:border-brand-500 focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-brand-500/30 aria-[invalid=true]:border-danger;
   }
+  .badge-link {
+    @apply text-ink shadow-card transition-colors duration-150 hover:border-line-strong hover:bg-subtle;
+  }
   .browser-frame {
     @apply overflow-hidden rounded-xl border border-line bg-surface shadow-pop;
   }
   .browser-frame > .bar {
-    @apply flex h-9 items-center gap-1.5 border-b border-line bg-subtle px-4;
+    @apply relative flex h-9 items-center gap-1.5 border-b border-line bg-subtle px-4;
   }
   .browser-frame > .bar > span {
     @apply size-2.5 rounded-full bg-line-strong;
+  }
+  /* Decorative address pill in the hero frame. */
+  .browser-frame > .bar > b {
+    @apply absolute left-1/2 hidden h-6 -translate-x-1/2 items-center rounded-md border border-line bg-surface px-10 font-mono text-[11.5px] font-normal text-faint sm:flex;
+  }
+  /* Device bezel: a soft outer rim around a browser frame, so screenshots read as product, not page. */
+  .device {
+    @apply rounded-[18px] border border-line bg-subtle/70 p-1.5 sm:p-2;
+  }
+  .device > .browser-frame {
+    @apply rounded-[12px];
+  }
+
+  /* Landing: trust strip, feature rows, steps, privacy items, callouts */
+  .trust {
+    @apply grid grid-cols-2 gap-x-4 gap-y-6 py-7 lg:grid-cols-4 lg:gap-0 lg:py-8;
+  }
+  .trust > li {
+    @apply flex items-start gap-3 lg:justify-center lg:border-l lg:border-line lg:px-6 lg:first:border-l-0;
+  }
+  .trust > li > .icon {
+    @apply mt-0.5 text-brand-600;
+  }
+  .trust span {
+    @apply flex flex-col text-[13px] leading-5 text-muted;
+  }
+  .trust strong {
+    @apply text-[14px] font-semibold text-ink;
+  }
+  .segmented {
+    @apply inline-flex gap-1 rounded-full border border-line bg-surface p-1 shadow-card;
+  }
+  .segmented a {
+    @apply block rounded-full px-4 py-1.5 text-sm font-medium text-muted transition-colors duration-150 hover:bg-subtle hover:text-ink;
+  }
+  .feature {
+    @apply grid items-center gap-10 lg:grid-cols-[1.3fr_1fr] lg:gap-16;
+  }
+  .feature-flip {
+    @apply lg:grid-cols-[1fr_1.3fr];
+  }
+  .feature-flip > .device {
+    @apply lg:order-last;
+  }
+  .group-label {
+    @apply flex items-center gap-2.5 text-[12px] leading-4 font-medium tracking-[0.06em] text-brand-600 uppercase;
+  }
+  .group-label > span {
+    @apply rounded-md font-mono tabular-nums bg-brand-50 px-1.5 py-0.5 text-[11px] tracking-normal text-brand-700;
+  }
+  .icon-tile {
+    @apply flex size-9 shrink-0 items-center justify-center rounded-lg border border-brand-100 bg-brand-50 text-brand-600;
+  }
+  .tool-list {
+    @apply mt-7 space-y-5;
+  }
+  .tool-list > li {
+    @apply flex gap-4;
+  }
+  .tool-list h4 {
+    @apply text-[15px] leading-6 font-semibold text-ink;
+  }
+  .tool-list p {
+    @apply mt-0.5 text-sm leading-6 text-muted;
+  }
+  .steps {
+    @apply relative grid gap-5 md:grid-cols-3 md:gap-8;
+  }
+  .steps > li {
+    @apply relative rounded-xl border border-line bg-canvas p-6;
+  }
+  .step-num {
+    @apply flex size-9 items-center justify-center rounded-full border border-line-strong bg-surface text-[14px] font-semibold text-ink shadow-card;
+  }
+  .privacy-item {
+    @apply flex h-full gap-4 rounded-xl border border-white/10 bg-white/[0.04] p-5;
+  }
+  .privacy-item > .icon {
+    @apply mt-0.5 text-brand-200;
+  }
+  .privacy-item p {
+    @apply text-sm leading-6 text-white/75;
+  }
+  .privacy-item strong {
+    @apply block font-medium text-white;
+  }
+  .callout {
+    @apply flex flex-col items-start gap-6 rounded-2xl border border-line bg-surface p-7 shadow-card sm:p-9 lg:flex-row lg:items-center lg:gap-8;
+  }
+  .cta {
+    @apply relative flex flex-col items-start gap-10 overflow-hidden rounded-2xl border border-line bg-surface p-8 shadow-card sm:p-12 lg:flex-row lg:items-center lg:justify-between;
   }
   .browser-frame img {
     @apply block h-auto w-full bg-subtle;
@@ -124,6 +233,41 @@ html[data-theme='dark'] .btn-primary {
 html[data-theme='dark'] .bg-brand-900 {
   background-color: #0f2a1d;
   --color-brand-200: #aed6be;
+}
+
+/* Hero backdrop: a faint dot grid that fades out towards the edges, plus a soft brand wash behind the product frame. */
+.hero-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(var(--color-line-strong) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 55% at 50% 20%, #000 20%, transparent 75%);
+  mask-image: radial-gradient(ellipse 70% 55% at 50% 20%, #000 20%, transparent 75%);
+  opacity: 0.7;
+}
+.hero-bg::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 4%;
+  width: min(1100px, 92%);
+  height: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, var(--color-brand-100), transparent 70%);
+  opacity: 0.55;
+  filter: blur(40px);
+}
+.hero-bg > .wrap {
+  z-index: 1;
+}
+html[data-theme='dark'] .hero-bg::before {
+  opacity: 0.5;
+}
+html[data-theme='dark'] .device {
+  background-color: rgb(255 255 255 / 0.03);
 }
 
 /* Provider marks are black monochrome SVGs used as <img>; flip them on dark surfaces. */
@@ -182,12 +326,6 @@ html[data-theme='dark'] img[src*='/providers/'] {
     transform: translateY(-2px);
     border-color: var(--color-line-strong);
     box-shadow: var(--shadow-pop);
-  }
-  .browser-frame {
-    transition: transform 300ms ease-out;
-  }
-  .browser-frame:hover {
-    transform: scale(1.01);
   }
 }
 
