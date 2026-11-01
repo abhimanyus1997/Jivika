@@ -2,16 +2,13 @@ import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis
 import type { Application, Point } from '../lib/store'
 
 /*
- * Chart palette, validated for CVD separation in this stacking order
- * (evergreen | marigold | rose). Marigold is below 3:1 on white, so the
- * trends chart always ships a legend and a table view.
- * Colors are CSS variables: index.css swaps in dark steps (#3FA672 | #C4821C | #D9586F),
- * validated separately against the dark surface #1A1A18 (all checks pass, worst CVD dE 8.2).
+ * Chart palette, validated for CVD separation in this order (evergreen | marigold).
+ * Marigold is below 3:1 on white, so the weekly chart always ships a legend and a table view.
+ * Colors are CSS variables: index.css swaps in dark steps, validated against the dark surface.
  */
 export const SERIES = [
-  { key: 'awaiting', label: 'Awaiting response', color: 'var(--color-series-1)' },
-  { key: 'received', label: 'Response received', color: 'var(--color-series-2)' },
-  { key: 'rejected', label: 'Rejected', color: 'var(--color-series-3)' },
+  { key: 'started', label: 'Started', color: 'var(--color-series-1)' },
+  { key: 'sent', label: 'Sent', color: 'var(--color-series-2)' },
 ] as const
 
 type SeriesKey = (typeof SERIES)[number]['key']
@@ -76,64 +73,54 @@ export function MiniBars({ points, label }: { points: Point[]; label: string }) 
   )
 }
 
-const WEEKS = 8
-
 function weekStart(d: Date) {
   const s = new Date(d.getFullYear(), d.getMonth(), d.getDate())
   s.setDate(s.getDate() - ((s.getDay() + 6) % 7)) // Monday
   return s
 }
 
-function bucket(status: Application['status']): SeriesKey {
-  if (status === 'Rejected') return 'rejected'
-  if (status === 'Applied' || status === 'Awaiting response') return 'awaiting'
-  return 'received'
+const parseDay = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number)
+  return y ? new Date(y, m - 1, d) : null
 }
 
-type WeekRow = { week: string } & Record<SeriesKey, number> & { total: number }
+type App = Application & { created?: string; sent?: string }
 
-export function weeklyTrends(apps: Application[]): WeekRow[] {
+/** When the application was started: the created date, or the tracked date for older entries. */
+export const startedOn = (a: Application) => (a as App).created || a.date
+/** When it was sent: the sent date, the first non-draft status change, or the tracked date. Empty for drafts. */
+export function sentOn(a: Application): string {
+  const x = a as App
+  if (String(a.status) === 'Draft') return ''
+  return x.sent || (a.history ?? []).find((h) => String(h.status) !== 'Draft')?.date || a.date
+}
+
+type WeekRow = { week: string } & Record<SeriesKey, number>
+
+/** Started vs sent per week, oldest first, covering `weeks` weeks up to this one. */
+export function weeklyTrends(apps: Application[], weeks = 8): WeekRow[] {
   const current = weekStart(new Date())
   const rows: WeekRow[] = []
-  for (let i = WEEKS - 1; i >= 0; i--) {
+  for (let i = weeks - 1; i >= 0; i--) {
     const start = new Date(current)
     start.setDate(start.getDate() - i * 7)
-    rows.push({ week: shortDate(start.toISOString()), awaiting: 0, received: 0, rejected: 0, total: 0 })
+    rows.push({ week: shortDate(start.toISOString()), started: 0, sent: 0 })
   }
-  for (const app of apps) {
-    const [y, m, d] = app.date.split('-').map(Number)
-    if (!y) continue
-    const diff = Math.round((current.getTime() - weekStart(new Date(y, m - 1, d)).getTime()) / (7 * 864e5))
-    if (diff < 0 || diff >= WEEKS) continue
-    const row = rows[WEEKS - 1 - diff]
-    row[bucket(app.status)]++
-    row.total++
+  const add = (iso: string, key: SeriesKey) => {
+    const day = parseDay(iso)
+    if (!day) return
+    const diff = Math.round((current.getTime() - weekStart(day).getTime()) / (7 * 864e5))
+    if (diff >= 0 && diff < weeks) rows[weeks - 1 - diff][key]++
+  }
+  for (const a of apps) {
+    add(startedOn(a), 'started')
+    const s = sentOn(a)
+    if (s) add(s, 'sent')
   }
   return rows
 }
 
-/** Stacked segment with a 2px surface gap below it and a rounded end only on the top segment. */
-function segmentShape(index: number) {
-  return function Segment(props: unknown) {
-    const { x, y, width, height, payload } = props as { x: number; y: number; width: number; height: number; payload: WeekRow }
-    const keys = SERIES.map((s) => s.key)
-    const below = keys.slice(0, index).some((k) => payload[k] > 0)
-    const above = keys.slice(index + 1).some((k) => payload[k] > 0)
-    const h = height - (below ? 2 : 0)
-    if (!(h > 0) || !(width > 0)) return <g />
-    const fill = SERIES[index].color
-    if (above) return <rect x={x} y={y} width={width} height={h} fill={fill} />
-    const r = Math.min(4, h, width / 2)
-    return (
-      <path
-        fill={fill}
-        d={`M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + width - r}Q${x + width},${y} ${x + width},${y + r}V${y + h}Z`}
-      />
-    )
-  }
-}
-
-/** Legend chips for the application status series. */
+/** Legend chips for the weekly series. */
 function TrendsLegend() {
   return (
     <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted" aria-label="Legend">
@@ -147,7 +134,7 @@ function TrendsLegend() {
   )
 }
 
-/** Weekly stacked bars by status, from weeklyTrends(). `view` is controlled by the caller. */
+/** Weekly grouped bars, started vs sent, from weeklyTrends(). `view` is controlled by the caller. */
 export function ApplicationTrends({ rows, view }: { rows: WeekRow[]; view: 'chart' | 'table' }) {
   return (
     <div className="space-y-4">
@@ -155,7 +142,7 @@ export function ApplicationTrends({ rows, view }: { rows: WeekRow[]; view: 'char
       {view === 'table' ? (
         <div className="table-wrap">
           <table className="data-table">
-            <caption className="sr-only">Applications by week</caption>
+            <caption className="sr-only">Applications started and sent by week</caption>
             <thead>
               <tr>
                 <th>Week of</th>
@@ -164,7 +151,6 @@ export function ApplicationTrends({ rows, view }: { rows: WeekRow[]; view: 'char
                     {s.label}
                   </th>
                 ))}
-                <th className="text-right">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -176,18 +162,17 @@ export function ApplicationTrends({ rows, view }: { rows: WeekRow[]; view: 'char
                       {r[s.key]}
                     </td>
                   ))}
-                  <td className="num font-medium">{r.total}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       ) : (
-        <div className="h-56" role="img" aria-label="Stacked bar chart of applications per week by status. Switch to the table view for values.">
+        <div className="h-56" role="img" aria-label="Bar chart of applications started and sent per week. Switch to the table view for values.">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={rows} margin={{ top: 8, right: 4, bottom: 0, left: -20 }}>
+            <BarChart data={rows} margin={{ top: 8, right: 4, bottom: 0, left: -20 }} barGap={2}>
               <CartesianGrid vertical={false} stroke={INK.grid} />
-              <XAxis dataKey="week" tickLine={false} axisLine={{ stroke: INK.grid }} tick={{ fill: INK.muted, fontSize: 11 }} />
+              <XAxis dataKey="week" tickLine={false} axisLine={{ stroke: INK.grid }} tick={{ fill: INK.muted, fontSize: 11 }} minTickGap={8} />
               <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fill: INK.muted, fontSize: 11 }} />
               <Tooltip
                 cursor={{ fill: INK.hover }}
@@ -195,24 +180,13 @@ export function ApplicationTrends({ rows, view }: { rows: WeekRow[]; view: 'char
                   active && payload?.length ? (
                     <TipBox
                       title={`Week of ${label}`}
-                      rows={[...SERIES]
-                        .reverse()
-                        .map((s) => ({ label: s.label, value: (payload[0].payload as WeekRow)[s.key], color: s.color }))}
+                      rows={SERIES.map((s) => ({ label: s.label, value: (payload[0].payload as WeekRow)[s.key], color: s.color }))}
                     />
                   ) : null
                 }
               />
-              {SERIES.map((s, i) => (
-                <Bar
-                  key={s.key}
-                  dataKey={s.key}
-                  name={s.label}
-                  stackId="status"
-                  fill={s.color}
-                  maxBarSize={24}
-                  shape={segmentShape(i)}
-                  isAnimationActive={false}
-                />
+              {SERIES.map((s) => (
+                <Bar key={s.key} dataKey={s.key} name={s.label} fill={s.color} maxBarSize={14} radius={[3, 3, 0, 0]} isAnimationActive={false} />
               ))}
             </BarChart>
           </ResponsiveContainer>
