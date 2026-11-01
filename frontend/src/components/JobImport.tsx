@@ -2,6 +2,7 @@ import { Link2 } from 'lucide-react'
 import { useId, useState } from 'react'
 import { api, ApiError, importedJobText, SOURCE_LABEL, useAction, type ImportedJob } from '../lib/api'
 import { useStored } from '../lib/store'
+import { CLIPPER_URL } from './ClipperPromo'
 import { Badge, Button, ErrorMessage, inputCls } from './ui'
 
 const BLOCKING_HOSTS = /(^|\.)(naukri|linkedin)\.com$/i
@@ -90,7 +91,7 @@ export function JobImport({ onImport }: { onImport: (text: string, job: Imported
       {blocked && (
         <p className="text-xs leading-4 text-muted">
           This site blocks server imports.{' '}
-          <a href={`${import.meta.env.BASE_URL}clipper/`} className="font-medium text-brand-600 hover:underline">
+          <a href={CLIPPER_URL} className="font-medium text-brand-600 hover:underline">
             Use Jivika Clipper
           </a>{' '}
           to send this job from your browser.

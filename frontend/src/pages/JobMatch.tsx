@@ -1,5 +1,6 @@
 import { BookmarkPlus, Briefcase, Check, FilePlus2, FileUser, ListPlus, MapPin, Target } from 'lucide-react'
 import { useState } from 'react'
+import { ClipperPromo } from '../components/ClipperPromo'
 import { JobImport } from '../components/JobImport'
 import { MarketData } from '../components/MarketData'
 import { ResourceFooter, ResourceList, useResources } from '../components/ResourceList'
@@ -324,6 +325,7 @@ export default function JobMatch() {
                   placeholder="Paste the full job description here."
                 />
               </Field>
+              <ClipperPromo />
               <KeyNotice />
               <ErrorMessage message={match.error} />
               <Button variant="brand" icon={Target} className="w-full" onClick={analyze} loading={match.loading} disabled={!key || !resume?.text || jdShort}>

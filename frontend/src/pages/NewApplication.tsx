@@ -1,5 +1,6 @@
 import { ArrowLeft, ArrowRight, Check, ListChecks, Sparkles } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { ClipperPromo } from '../components/ClipperPromo'
 import { JobImport } from '../components/JobImport'
 import { RequirementMatch } from '../components/RequirementMatch'
 import { Button, Card, ErrorMessage, Field, inputCls, KeyNotice, Note, PageHeader, Segmented, SkeletonCard, textareaCls, toast } from '../components/ui'
@@ -353,6 +354,7 @@ export default function NewApplication() {
                   placeholder="Paste the full job posting here."
                 />
               </Field>
+              <ClipperPromo />
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Company">
                   <input className={inputCls} value={d.company} onChange={(e) => set('company', e.target.value)} />
