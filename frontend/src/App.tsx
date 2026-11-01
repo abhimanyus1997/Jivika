@@ -1,17 +1,20 @@
 import {
   ArrowLeft,
   BriefcaseBusiness,
+  CalendarDays,
   ChevronRight,
   Contact,
   FileCheck2,
   FileUser,
   FilePlus2,
+  Inbox as InboxIcon,
   LayoutDashboard,
   Mail,
   Menu,
   MessagesSquare,
   PanelLeftClose,
   PanelLeftOpen,
+  Plus,
   Play,
   Route,
   ScanText,
@@ -25,6 +28,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useCallback, useEffect, useState, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
+import { needsAnswerCount, useInbox } from './lib/inbox'
 import { FALLBACK_PROVIDERS, loadDemo, useAnswered, useDemoActive, useLocalProvider } from './lib/api'
 import { receiveClip } from './lib/clip'
 import { useApiKey, useKeyVerified, useProfile, useSettings, useStored } from './lib/store'
@@ -44,8 +48,13 @@ import ResumePage from './pages/Resume'
 import Ats from './pages/Ats'
 import JobSearch from './pages/JobSearch'
 import Settings from './pages/Settings'
+import NewApplication from './pages/NewApplication'
+import ApplicationPage from './pages/ApplicationPage'
+import InboxPage from './pages/Inbox'
+import CalendarPage from './pages/Calendar'
 
-type Page = { id: string; title: string; icon: LucideIcon; component: ComponentType; group: string }
+/** hidden pages are reachable by hash but not listed in the sidebar or the command palette. */
+type Page = { id: string; title: string; icon: LucideIcon; component: ComponentType; group: string; hidden?: boolean }
 
 const PAGES: Page[] = [
   { id: 'dashboard', title: 'Dashboard', icon: LayoutDashboard, component: Dashboard, group: 'Overview' },
@@ -53,6 +62,8 @@ const PAGES: Page[] = [
   { id: 'jobs', title: 'Job search', icon: SearchCheck, component: JobSearch, group: 'Workspace' },
   { id: 'resume', title: 'Resume', icon: FileUser, component: ResumePage, group: 'Workspace' },
   { id: 'applications', title: 'Applications', icon: BriefcaseBusiness, component: Applications, group: 'Workspace' },
+  { id: 'inbox', title: 'Inbox', icon: InboxIcon, component: InboxPage, group: 'Workspace' },
+  { id: 'calendar', title: 'Calendar', icon: CalendarDays, component: CalendarPage, group: 'Workspace' },
   { id: 'match', title: 'Job match', icon: Target, component: JobMatch, group: 'Analyze' },
   { id: 'ats', title: 'ATS checker', icon: ScanText, component: Ats, group: 'Analyze' },
   { id: 'cv', title: 'CV review', icon: FileCheck2, component: CvReview, group: 'Analyze' },
@@ -61,11 +72,16 @@ const PAGES: Page[] = [
   { id: 'interview', title: 'Interview prep', icon: MessagesSquare, component: Interview, group: 'Plan' },
   { id: 'cover-letter', title: 'Cover letter', icon: Mail, component: CoverLetter, group: 'Plan' },
   { id: 'settings', title: 'Settings', icon: SettingsIcon, component: Settings, group: 'System' },
+  { id: 'new-application', title: 'New application', icon: Plus, component: NewApplication, group: 'Workspace', hidden: true },
+  { id: 'application', title: 'Application', icon: BriefcaseBusiness, component: ApplicationPage, group: 'Workspace', hidden: true },
 ]
 const GROUPS = ['Overview', 'Workspace', 'Analyze', 'Plan']
 
 const COMMANDS: Command[] = [
-  ...PAGES.map((p) => ({ id: p.id, label: p.title, group: 'Pages' as const, icon: p.icon, href: `#${p.id}` })),
+  ...PAGES.filter((p) => !p.hidden).map((p) => ({ id: p.id, label: p.title, group: 'Pages' as const, icon: p.icon, href: `#${p.id}` })),
+  { id: 'a-new', label: 'New application', group: 'Actions', icon: Plus, href: '#new-application', keywords: 'apply start job posting tailor' },
+  { id: 'a-inbox', label: 'Open inbox', group: 'Actions', icon: InboxIcon, href: '#inbox', keywords: 'email recruiter reply message' },
+  { id: 'a-calendar', label: 'Open calendar', group: 'Actions', icon: CalendarDays, href: '#calendar', keywords: 'interview follow up deadline ics schedule' },
   { id: 'a-upload', label: 'Upload resume', group: 'Actions', icon: Upload, href: '#profile', keywords: 'cv pdf' },
   { id: 'a-add', label: 'Add application', group: 'Actions', icon: FilePlus2, href: '#applications?new', keywords: 'track job' },
   { id: 'a-resume', label: 'Download resume PDF', group: 'Actions', icon: FileUser, href: '#resume', keywords: 'cv theme print tailor' },
@@ -202,22 +218,31 @@ function ModelCard({ compact }: { compact: boolean }) {
 
 /* ---------- Sidebar ---------- */
 
-function NavItem({ page, active, compact, onNavigate }: { page: Page; active: boolean; compact: boolean; onNavigate?: () => void }) {
+function NavItem({ page, active, compact, onNavigate, badge = 0 }: { page: Page; active: boolean; compact: boolean; onNavigate?: () => void; badge?: number }) {
   const Icon = page.icon
+  const badgeLabel = badge ? `${page.title}, ${badge} ${badge === 1 ? 'email needs' : 'emails need'} an answer` : undefined
   return (
     <a
       href={`#${page.id}`}
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
-      aria-label={compact ? page.title : undefined}
-      title={compact ? page.title : undefined}
+      aria-label={badgeLabel ?? (compact ? page.title : undefined)}
+      title={compact ? (badgeLabel ?? page.title) : undefined}
       className={`relative flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-sm transition-colors duration-150 ${
         compact ? 'justify-center' : ''
       } ${active ? 'bg-subtle font-medium text-ink' : 'text-muted hover:bg-subtle hover:text-ink'}`}
     >
       {active && <span className="absolute top-1.5 bottom-1.5 -left-3 w-0.5 rounded-r bg-brand-500" aria-hidden="true" />}
       <Icon className="size-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-      {!compact && <span className="truncate">{page.title}</span>}
+      {!compact && <span className="flex-1 truncate">{page.title}</span>}
+      {badge > 0 &&
+        (compact ? (
+          <span className="absolute top-1 right-1 size-2 rounded-full bg-accent-500 ring-2 ring-surface" aria-hidden="true" />
+        ) : (
+          <span className="t-num rounded-full bg-accent-50 px-1.5 text-[11px] leading-[18px] font-medium text-accent-700" aria-hidden="true">
+            {badge}
+          </span>
+        ))}
     </a>
   )
 }
@@ -236,6 +261,8 @@ function Sidebar({
   footer?: ReactNode
 }) {
   const settings = PAGES.find((p) => p.id === 'settings')!
+  const [inbox] = useInbox()
+  const unanswered = needsAnswerCount(inbox)
   return (
     <div className="flex h-full flex-col">
       <a href="#dashboard" onClick={onNavigate} className={`flex h-[52px] shrink-0 items-center gap-2.5 px-4 ${compact ? 'justify-center px-0' : ''}`}>
@@ -248,7 +275,20 @@ function Sidebar({
         )}
       </a>
 
-      <div className="px-3 pb-2">
+      <div className="space-y-2 px-3 pb-2">
+        <a
+          href="#new-application"
+          onClick={onNavigate}
+          aria-current={current === 'new-application' ? 'page' : undefined}
+          aria-label={compact ? 'New application' : undefined}
+          title={compact ? 'New application' : undefined}
+          className={`flex h-8 w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-2.5 text-[13px] font-medium text-white transition-colors duration-150 hover:bg-brand-700 ${
+            compact ? 'px-0' : ''
+          }`}
+        >
+          <Plus className="size-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+          {!compact && <span>New application</span>}
+        </a>
         <button
           type="button"
           onClick={onSearch}
@@ -279,8 +319,15 @@ function Sidebar({
               <div className="t-overline px-2.5 pb-1">{g}</div>
             )}
             <div className="space-y-0.5">
-              {PAGES.filter((p) => p.group === g).map((p) => (
-                <NavItem key={p.id} page={p} active={p.id === current} compact={compact} onNavigate={onNavigate} />
+              {PAGES.filter((p) => p.group === g && !p.hidden).map((p) => (
+                <NavItem
+                  key={p.id}
+                  page={p}
+                  active={p.id === current || (p.id === 'applications' && current === 'application')}
+                  compact={compact}
+                  onNavigate={onNavigate}
+                  badge={p.id === 'inbox' ? unanswered : 0}
+                />
               ))}
             </div>
           </div>
@@ -413,6 +460,14 @@ export default function App() {
               Jivika
             </a>
             <ChevronRight className="size-3.5 shrink-0 text-faint" aria-hidden="true" />
+            {page.id === 'application' && (
+              <>
+                <a href="#applications" className="text-muted hover:text-ink">
+                  Applications
+                </a>
+                <ChevronRight className="size-3.5 shrink-0 text-faint" aria-hidden="true" />
+              </>
+            )}
             <span aria-current="page" className="truncate font-medium text-ink">
               {page.title}
             </span>
