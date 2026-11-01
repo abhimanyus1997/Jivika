@@ -147,143 +147,212 @@
   margin: 0;
 }
 
-/* Classic: serif throughout, centred header, thin rules. */
-.rs[data-rtheme='classic'] {
-  --rs-head-font: 'Lora', Georgia, serif;
-  --rs-body-font: 'Lora', Georgia, serif;
+/*
+ * Designs come from lib/resume-themes as data attributes (header, heading, name, layout, dates) plus the CSS
+ * variables above. The base rules are the 'left' header, 'rule' headings and a 'bold' name.
+ */
+.rs-name {
+  font-size: calc(var(--rs-body) * 2.2);
 }
-.rs[data-rtheme='classic'] .rs-head {
-  text-align: center;
-}
-.rs[data-rtheme='classic'] .rs-contact {
-  justify-content: center;
-}
-.rs[data-rtheme='classic'] .rs-h {
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  border-bottom-color: var(--rs-ink);
+.rs-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-right: 1mm;
+  vertical-align: -0.14em;
+  color: var(--rs-accent);
 }
 
-/* Modern: sans, accent name rule and headings. */
-.rs[data-rtheme='modern'] .rs-head {
+/* Header */
+.rs[data-header='center'] .rs-head {
+  text-align: center;
+}
+.rs[data-header='center'] .rs-contact {
+  justify-content: center;
+}
+.rs[data-header='rule'] .rs-head {
   padding-bottom: 3mm;
   border-bottom: 2.5pt solid var(--rs-accent);
 }
-.rs[data-rtheme='modern'] .rs-headline,
-.rs[data-rtheme='modern'] .rs-h {
+.rs[data-header='rule'] .rs-headline {
   color: var(--rs-accent);
 }
-.rs[data-rtheme='modern'] .rs-h {
-  border-bottom: 0;
-  padding-bottom: 0;
-  letter-spacing: 0.08em;
+.rs[data-header='double'] .rs-head {
+  padding-bottom: 3mm;
+  border-bottom: 3pt double var(--rs-accent);
 }
-
-/* Compact: smaller type, tighter spacing. */
-.rs[data-rtheme='compact'] {
-  --rs-pad-y: 11mm;
-  --rs-pad-x: 13mm;
-  --rs-gap: 3mm;
-  --rs-body: 9pt;
-  --rs-leading: 1.35;
-}
-.rs[data-rtheme='compact'] .rs-name {
-  font-size: 17pt;
-}
-.rs[data-rtheme='compact'] .rs-head {
+.rs[data-header='inline'] .rs-title {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   column-gap: 4mm;
 }
-.rs[data-rtheme='compact'] .rs-contact {
-  flex-basis: 100%;
+.rs[data-header='inline'] .rs-name {
+  font-size: calc(var(--rs-body) * 1.9);
+}
+.rs[data-header='inline'] .rs-contact {
   margin-top: 1mm;
 }
-.rs[data-rtheme='compact'] .rs-entry + .rs-entry {
-  margin-top: 2mm;
+.rs[data-header='banner'] .rs-head {
+  margin: calc(-1 * var(--rs-pad-y)) calc(-1 * var(--rs-pad-x)) var(--rs-gap);
+  padding: 9mm max(var(--rs-pad-x), 8mm) 7mm;
+  background: #1f2328;
+  color: #fff;
+}
+.rs[data-header='banner'] .rs-headline,
+.rs[data-header='banner'] .rs-head .rs-contact {
+  color: rgba(255, 255, 255, 0.78);
+}
+.rs[data-header='banner'] .rs-head .rs-icon {
+  color: color-mix(in srgb, var(--rs-accent) 45%, #fff);
 }
 
-/* Two-column: tinted sidebar for contact, skills, languages and certifications. */
-.rs[data-rtheme='sidebar'] .rs-cols {
-  display: grid;
-  grid-template-columns: 58mm minmax(0, 1fr);
-  gap: 7mm;
+/* Name */
+.rs[data-name='light'] .rs-name {
+  font-weight: 300;
+  font-size: calc(var(--rs-body) * 2.4);
 }
-.rs[data-rtheme='sidebar'] .rs-side {
-  align-self: start;
-  padding: 4mm;
-  border-radius: 2mm;
-  background: color-mix(in srgb, var(--rs-accent) 9%, #fff);
-  font-size: 9pt;
-  overflow-wrap: anywhere;
-}
-.rs[data-rtheme='sidebar'] .rs-side > .rs-section:first-child {
-  margin-top: 0;
-}
-.rs[data-rtheme='sidebar'] .rs-side .rs-contact {
-  flex-direction: column;
-  margin-top: 0;
-}
-.rs[data-rtheme='sidebar'] .rs-side .rs-skills > div {
-  display: block;
-}
-.rs[data-rtheme='sidebar'] .rs-side .rs-skills dt::after {
-  content: '';
-}
-.rs[data-rtheme='sidebar'] .rs-main > .rs-section:first-child {
-  margin-top: 0;
-}
-.rs[data-rtheme='sidebar'] .rs-name {
-  color: var(--rs-accent);
-}
-.rs[data-rtheme='sidebar'] .rs-h {
-  border-bottom-color: color-mix(in srgb, var(--rs-accent) 40%, #fff);
-}
-
-/* Minimal: light weights, no rules, generous space. */
-.rs[data-rtheme='minimal'] {
-  --rs-pad-y: 20mm;
-  --rs-pad-x: 22mm;
-  --rs-gap: 7mm;
-}
-.rs[data-rtheme='minimal'] .rs-name {
-  font-weight: 400;
-  font-size: 24pt;
-}
-.rs[data-rtheme='minimal'] .rs-h {
-  border: 0;
-  padding: 0;
-  font-weight: 500;
-  color: var(--rs-muted);
-  letter-spacing: 0.18em;
-}
-
-/* Executive: spaced capitals for the name, serif body, accent double rule. */
-.rs[data-rtheme='executive'] {
-  --rs-head-font: 'Josefin Sans Variable', 'Century Gothic', sans-serif;
-  --rs-body-font: 'Lora', Georgia, serif;
-}
-.rs[data-rtheme='executive'] .rs-head {
-  padding-bottom: 3mm;
-  border-bottom: 3pt double var(--rs-accent);
-}
-.rs[data-rtheme='executive'] .rs-name {
+.rs[data-name='caps'] .rs-name {
   font-weight: 400;
   letter-spacing: 0.2em;
   text-transform: uppercase;
 }
-.rs[data-rtheme='executive'] .rs-headline {
+.rs[data-name='caps'] .rs-headline {
   font-family: var(--rs-head-font);
+  font-size: 9.5pt;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  font-size: 9.5pt;
 }
-.rs[data-rtheme='executive'] .rs-h {
-  letter-spacing: 0.22em;
-  font-weight: 500;
+.rs[data-name='accent'] .rs-name {
+  color: var(--rs-accent);
+}
+.rs[data-header='banner'][data-name='accent'] .rs-name {
+  color: color-mix(in srgb, var(--rs-accent) 35%, #fff);
+}
+
+/* Section headings */
+.rs[data-heading='underline'] .rs-h {
+  border-bottom: 0.9pt solid var(--rs-ink);
+  letter-spacing: 0.16em;
+}
+.rs[data-heading='accent'] .rs-h {
+  padding-bottom: 0;
   border-bottom: 0;
   color: var(--rs-accent);
+  letter-spacing: 0.1em;
+}
+.rs[data-heading='quiet'] .rs-h {
+  padding: 0;
+  border: 0;
+  font-weight: 500;
+  color: var(--rs-muted);
+  letter-spacing: 0.18em;
+}
+.rs[data-heading='bar'] .rs-h {
+  padding: 0 0 0 2mm;
+  border-bottom: 0;
+  border-left: 3pt solid var(--rs-accent);
+  font-size: 10pt;
+  letter-spacing: 0.03em;
+  text-transform: none;
+}
+.rs[data-heading='lines'] .rs-h {
+  padding: 0.8mm 0;
+  border-top: 0.6pt solid var(--rs-ink);
+  border-bottom: 0.6pt solid var(--rs-ink);
+  letter-spacing: 0.2em;
+}
+.rs[data-heading='band'] .rs-h {
+  padding: 0.8mm 2mm;
+  border-bottom: 0;
+  border-radius: 1mm;
+  background: color-mix(in srgb, var(--rs-accent) 12%, #fff);
+  letter-spacing: 0.1em;
+}
+.rs[data-heading='centered'] .rs-h {
+  padding-bottom: 1.5mm;
+  border-bottom: 0;
+  text-align: center;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+}
+.rs[data-heading='centered'] .rs-h::after {
+  content: '';
+  display: block;
+  width: 10mm;
+  margin: 1.2mm auto 0;
+  border-bottom: 0.8pt solid var(--rs-accent);
+}
+
+/* Dates under the title instead of on the right */
+.rs[data-dates='below'] .rs-entry-head {
+  display: block;
+}
+.rs[data-dates='below'] .rs-meta {
+  display: block;
+  font-size: 8.5pt;
+}
+
+/* Two columns: 'sidebar' puts contact and skills in a tinted column on the left, 'columns' puts details on the right. */
+.rs-cols {
+  display: grid;
+  gap: 7mm;
+}
+.rs[data-layout='sidebar'] .rs-cols {
+  grid-template-columns: 58mm minmax(0, 1fr);
+}
+.rs[data-layout='columns'] .rs-cols {
+  grid-template-columns: minmax(0, 1fr) 56mm;
+  gap: 6mm;
+}
+.rs[data-layout='columns'] .rs-side {
+  grid-column: 2;
+  grid-row: 1;
+  padding-left: 5mm;
+  border-left: 0.6pt solid var(--rs-rule);
+}
+.rs[data-layout='columns'] .rs-main {
+  grid-column: 1;
+  grid-row: 1;
+}
+.rs-side {
+  align-self: start;
+  font-size: 9pt;
+  overflow-wrap: anywhere;
+}
+.rs[data-layout='sidebar'] .rs-side {
+  padding: 4mm;
+  border-radius: 2mm;
+  background: color-mix(in srgb, var(--rs-accent) 9%, #fff);
+}
+.rs-side > .rs-section:first-child,
+.rs-main > .rs-section:first-child {
+  margin-top: 0;
+}
+.rs-side .rs-contact {
+  flex-direction: column;
+  margin-top: 0;
+}
+.rs-side .rs-skills > div {
+  display: block;
+}
+.rs-side .rs-skills dt::after {
+  content: '';
+}
+.rs-side .rs-entry-head {
+  display: block;
+}
+.rs-side .rs-meta {
+  display: block;
+}
+.rs-side .rs-entry-sub {
+  display: block;
+}
+.rs-side .rs-entry-sub::before {
+  content: '';
+}
+.rs[data-layout='sidebar'][data-heading='rule'] .rs-h {
+  border-bottom-color: color-mix(in srgb, var(--rs-accent) 40%, #fff);
 }
 
 /* Print: only the resume, on A4. The page margins replace the on-screen padding. */
@@ -310,5 +379,8 @@
     width: auto;
     min-height: 0;
     padding: 0;
+    /* The page margins come from @page (set inline by ResumePrint). */
+    --rs-pad-y: 0mm !important;
+    --rs-pad-x: 0mm !important;
   }
 }

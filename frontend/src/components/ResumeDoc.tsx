@@ -3,19 +3,52 @@ import '@fontsource/lora/400-italic.css'
 import '@fontsource/lora/600.css'
 import '@fontsource-variable/josefin-sans'
 import './resume-doc.css'
+import { CalendarDays, Globe, House, Link2, Mail, MapPin, Phone, type LucideIcon } from 'lucide-react'
 import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import type { StructuredProfile } from '../lib/api'
-import type { ResumeSettings, ResumeTheme, SectionKey } from '../lib/store'
+import type { ProfileBasics, StructuredProfile } from '../lib/api'
+import { BUILT_IN, FONTS, resolveTheme, type DesignSettings, type ResumeDesign } from '../lib/resume-themes'
+import type { ResumeTheme, SectionKey } from '../lib/store'
 
-export const THEMES: { value: ResumeTheme; label: string; hint: string }[] = [
-  { value: 'classic', label: 'Classic', hint: 'Serif, centred header' },
-  { value: 'modern', label: 'Modern', hint: 'Sans with accent headings' },
-  { value: 'compact', label: 'Compact', hint: 'Dense, fits more on a page' },
-  { value: 'sidebar', label: 'Two-column', hint: 'Sidebar for skills and contact' },
-  { value: 'minimal', label: 'Minimal', hint: 'Quiet, generous spacing' },
-  { value: 'executive', label: 'Executive', hint: 'Spaced capitals, serif body' },
-]
+/** Built-in themes as picker options. The full definitions live in lib/resume-themes. */
+export const THEMES: { value: ResumeTheme; label: string; hint: string }[] = BUILT_IN.map((t) => ({ value: t.id as ResumeTheme, label: t.name, hint: t.hint }))
+
+/** Optional personal fields, kept in basics. Older profiles and the server schema do not have them. */
+export interface PersonalFields {
+  city?: string
+  country?: string
+  address?: string
+  /** yyyy-mm-dd */
+  birth_date?: string
+  /** Per-field 'Show on resume' choice; missing means the default below. */
+  show?: Partial<Record<ContactKey, boolean>>
+}
+export type Basics = ProfileBasics & PersonalFields
+
+export const CONTACT_FIELDS = [
+  { key: 'email', label: 'Email', icon: Mail },
+  { key: 'phone', label: 'Phone', icon: Phone },
+  { key: 'location', label: 'Location', icon: MapPin },
+  { key: 'linkedin', label: 'LinkedIn', icon: Link2 },
+  { key: 'website', label: 'Website', icon: Globe },
+  { key: 'address', label: 'Street address', icon: House },
+  { key: 'birth_date', label: 'Date of birth', icon: CalendarDays },
+] as const satisfies readonly { key: string; label: string; icon: LucideIcon }[]
+export type ContactKey = (typeof CONTACT_FIELDS)[number]['key']
+
+/** Street address and date of birth stay off the resume unless switched on. */
+export const shownOnResume = (b: Basics, key: ContactKey) => b.show?.[key] ?? !(key === 'address' || key === 'birth_date')
+
+const birthDate = (iso: string) => {
+  const d = new Date(`${iso}T00:00:00`)
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+function contactValue(b: Basics, key: ContactKey): string {
+  if (key === 'location') return b.location?.trim() || [b.city, b.country].map((x) => x?.trim()).filter(Boolean).join(', ')
+  if (key === 'birth_date') return b.birth_date?.trim() ? birthDate(b.birth_date.trim()) : ''
+  return (b[key] ?? '').trim()
+}
 
 export const SECTION_TITLES: Record<SectionKey | 'summary', string> = {
   summary: 'Summary',
@@ -30,6 +63,8 @@ export const SECTION_TITLES: Record<SectionKey | 'summary', string> = {
 }
 
 const SIDE: SectionKey[] = ['skills', 'languages', 'certifications']
+/** The narrow right-hand column of the 'columns' layout. */
+const RIGHT: SectionKey[] = ['skills', 'education', 'languages', 'certifications']
 const clean = (list: string[]) => list.map((s) => s.trim()).filter(Boolean)
 const range = (start: string, end: string, current?: boolean) => [start, current ? 'Present' : end].map((s) => s?.trim()).filter(Boolean).join(' – ')
 
@@ -169,15 +204,39 @@ function renderSection(key: SectionKey, p: StructuredProfile): ReactNode {
 
 export interface ResumeDocProps {
   profile: StructuredProfile
-  settings: ResumeSettings
+  settings: DesignSettings
+  /** Renders this design instead of the one in settings (theme thumbnails). */
+  design?: ResumeDesign
+}
+
+const MM = 96 / 25.4
+/** Top and bottom margins are a little tighter than the sides. */
+const marginsMm = (d: ResumeDesign) => ({ y: Math.round(d.margin * 0.9 * 10) / 10, x: d.margin })
+
+function docStyle(d: ResumeDesign, accent: string) {
+  const m = marginsMm(d)
+  return {
+    '--rs-accent': accent,
+    '--rs-head-font': FONTS[d.font].head,
+    '--rs-body-font': FONTS[d.font].body,
+    '--rs-body': `${d.size}pt`,
+    '--rs-leading': d.leading,
+    '--rs-pad-y': `${m.y}mm`,
+    '--rs-pad-x': `${m.x}mm`,
+    '--rs-gap': `${d.gap}mm`,
+  } as CSSProperties
 }
 
 /** The resume itself, the same on screen and in print. Paper is white with dark ink in both app themes. */
-export function ResumeDoc({ profile: p, settings }: ResumeDocProps) {
-  const b = p.basics
-  const contact = [b.email, b.phone, b.location, b.linkedin, b.website].filter((x) => x?.trim())
+export function ResumeDoc({ profile: p, settings, design }: ResumeDocProps) {
+  const resolved = resolveTheme(settings)
+  const d = design ?? resolved.design
+  const b = p.basics as Basics
+  const contact = CONTACT_FIELDS.filter((f) => shownOnResume(b, f.key))
+    .map((f) => ({ ...f, value: contactValue(b, f.key) }))
+    .filter((f) => f.value)
   const visible = settings.order.filter((k) => !settings.hidden.includes(k))
-  const sidebar = settings.theme === 'sidebar'
+  const side = d.layout === 'sidebar' ? SIDE : d.layout === 'columns' ? RIGHT : []
   const summary = !settings.hidden.includes('summary') && b.summary?.trim() && (
     <Section id="summary">
       <p className="rs-p">{b.summary}</p>
@@ -185,52 +244,70 @@ export function ResumeDoc({ profile: p, settings }: ResumeDocProps) {
   )
   const contactBlock = contact.length > 0 && (
     <address className="rs-contact">
-      {contact.map((c, i) => (
-        <span key={i}>{c}</span>
+      {contact.map(({ key, label, value, icon: Icon }) => (
+        <span key={key}>
+          {d.icons && <Icon className="rs-icon" strokeWidth={2} aria-hidden="true" />}
+          {d.icons && <span className="sr-only">{label}: </span>}
+          {value}
+        </span>
       ))}
     </address>
   )
+  const sections = (keys: SectionKey[]) => keys.map((k) => <Fragment key={k}>{renderSection(k, p)}</Fragment>)
   return (
-    <article className="rs" data-rtheme={settings.theme} style={{ '--rs-accent': settings.accent } as CSSProperties}>
+    <article
+      className="rs"
+      data-rtheme={resolved.theme.id}
+      data-layout={d.layout}
+      data-header={d.header}
+      data-heading={d.heading}
+      data-name={d.name}
+      data-dates={d.dates}
+      style={docStyle(d, settings.accent)}
+    >
       <header className="rs-head">
-        <h2 className="rs-name">{b.name || 'Your name'}</h2>
-        {b.headline && <p className="rs-headline">{b.headline}</p>}
-        {!sidebar && contactBlock}
+        <div className="rs-title">
+          <h2 className="rs-name">{b.name || 'Your name'}</h2>
+          {b.headline && <p className="rs-headline">{b.headline}</p>}
+        </div>
+        {d.layout !== 'sidebar' && contactBlock}
       </header>
-      {sidebar ? (
+      {side.length ? (
         <div className="rs-cols">
           <aside className="rs-side">
-            {contactBlock && (
+            {d.layout === 'sidebar' && contactBlock && (
               <section className="rs-section">
                 <h3 className="rs-h">Contact</h3>
                 {contactBlock}
               </section>
             )}
-            {visible.filter((k) => SIDE.includes(k)).map((k) => (
-              <Fragment key={k}>{renderSection(k, p)}</Fragment>
-            ))}
+            {sections(visible.filter((k) => side.includes(k)))}
           </aside>
           <div className="rs-main">
             {summary}
-            {visible.filter((k) => !SIDE.includes(k)).map((k) => (
-              <Fragment key={k}>{renderSection(k, p)}</Fragment>
-            ))}
+            {sections(visible.filter((k) => !side.includes(k)))}
           </div>
         </div>
       ) : (
         <>
           {summary}
-          {visible.map((k) => (
-            <Fragment key={k}>{renderSection(k, p)}</Fragment>
-          ))}
+          {sections(visible)}
         </>
       )}
     </article>
   )
 }
 
+/** Pages the resume fills on A4, from its rendered height. */
+export function pageCount(el: HTMLElement) {
+  const pad = parseFloat(getComputedStyle(el).paddingTop) || 0
+  const page = 297 * MM - 2 * pad
+  const content = el.scrollHeight - 2 * pad
+  return Math.max(1, Math.ceil((content - 1) / page))
+}
+
 /** A4 preview, scaled down to fit narrow columns (print is unaffected). */
-export function ResumePaper(props: ResumeDocProps) {
+export function ResumePaper({ onPages, ...props }: ResumeDocProps & { onPages?: (pages: number) => void }) {
   const wrap = useRef<HTMLDivElement>(null)
   const [zoom, setZoom] = useState(1)
   useEffect(() => {
@@ -240,6 +317,13 @@ export function ResumePaper(props: ResumeDocProps) {
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
+  useEffect(() => {
+    const doc = wrap.current?.querySelector<HTMLElement>('.rs')
+    if (!doc || !onPages) return
+    const ro = new ResizeObserver(() => onPages(pageCount(doc)))
+    ro.observe(doc)
+    return () => ro.disconnect()
+  }, [onPages])
   return (
     <div ref={wrap} className="w-full">
       <div className="mx-auto w-fit rounded-sm shadow-[0_1px_3px_rgba(0,0,0,0.12),0_8px_24px_-6px_rgba(0,0,0,0.18)]" style={{ zoom }}>
@@ -249,10 +333,24 @@ export function ResumePaper(props: ResumeDocProps) {
   )
 }
 
+/** First page of the resume at thumbnail size, for the theme gallery. Not interactive and hidden from assistive tech. */
+export function ResumeThumb({ width = 150, ...props }: ResumeDocProps & { width?: number }) {
+  const zoom = width / 794
+  return (
+    <div aria-hidden="true" inert className="overflow-hidden rounded-sm bg-white ring-1 ring-line" style={{ width, height: Math.round(width * 1.414) }}>
+      <div style={{ zoom }}>
+        <ResumeDoc {...props} />
+      </div>
+    </div>
+  )
+}
+
 /** Print-only copy, portalled to body so only the resume prints. Mount it whenever Download PDF is available. */
 export function ResumePrint(props: ResumeDocProps) {
+  const m = marginsMm(props.design ?? resolveTheme(props.settings).design)
   return createPortal(
     <div className="resume-print" aria-hidden="true">
+      <style>{`@page resume { size: A4; margin: ${m.y}mm ${m.x}mm; }`}</style>
       <ResumeDoc {...props} />
     </div>,
     document.body,
