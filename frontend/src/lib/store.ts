@@ -522,77 +522,16 @@ export const useSavedSearches = () => useStored<SavedSearch[]>('savedSearches', 
 
 /* ---------- Export and import ---------- */
 
-export const EXPORT_VERSION = 1
 /** Never exported, imported or replaced: the API key and its verified flag. */
 const SECRET_KEYS = new Set(['apikey', 'keyVerified'])
 /** Stored names an import may contain. Entries ending in '.' are prefixes. */
 const KNOWN_KEYS = [
-  'applications', 'applicationDraft', 'applicationsView', 'atsHistory', 'bannerDismissed', 'careerInput', 'careerPath', 'clip', 'coding',
-  'coding.draft.', 'coverLetter', 'cvReview', 'dismissedJobs', 'funnelRange', 'history', 'inbox', 'interview', 'interview.tab', 'jd', 'jobSearch', 'lastMatch',
+  'applications', 'applicationDraft', 'applicationsView', 'atsHistory', 'bannerDismissed', 'careerInput', 'careerPath', 'clip', 'clipperPromoDismissed', 'clipReceived', 'coding',
+  'coding.draft.', 'coverLetter', 'cvReview', 'daysOff', 'dismissedJobs', 'funnelRange', 'history', 'holidayImports', 'holidaySettings', 'inbox', 'interview', 'interview.tab', 'jd', 'jobSearch', 'lastMatch',
   'lastMatchJd', 'linkedinInput', 'linkedinReview', 'matches', 'pastSearches', 'profile', 'resources.', 'resume', 'resumeSettings', 'roadmapDone',
   'savedJobs', 'savedSearches', 'settings', 'sidebarCollapsed', 'signature', 'structuredProfile', 'tailoredResumes', 'tailorRequest',
 ]
 export const isKnownKey = (k: string) => !SECRET_KEYS.has(k) && KNOWN_KEYS.some((n) => (n.endsWith('.') ? k.startsWith(n) : k === n))
-
-export interface ExportFile {
-  app: 'jivika'
-  version: number
-  exportedAt: string
-  data: Record<string, unknown>
-}
-
-export function exportData(): ExportFile {
-  const data: Record<string, unknown> = {}
-  for (const full of Object.keys(localStorage)) {
-    if (!full.startsWith(PREFIX)) continue
-    const k = full.slice(PREFIX.length)
-    if (!isKnownKey(k) || /apikey/i.test(k)) continue
-    data[k] = parse(localStorage.getItem(full), null)
-  }
-  return { app: 'jivika', version: EXPORT_VERSION, exportedAt: new Date().toISOString(), data }
-}
-
-/** Checks an uploaded export. Returns the data to import, or an error message. */
-export function validateImport(raw: unknown): { data: Record<string, unknown> } | { error: string } {
-  const f = raw as Partial<ExportFile> | null
-  if (!f || typeof f !== 'object' || Array.isArray(f)) return { error: 'This file is not a Jivika export.' }
-  if (typeof f.version !== 'number') return { error: 'The file has no version field, so it is not a Jivika export.' }
-  if (f.version > EXPORT_VERSION) return { error: `This export is from a newer version (${f.version}). Update Jivika and try again.` }
-  if (!f.data || typeof f.data !== 'object' || Array.isArray(f.data)) return { error: 'The file has no data section.' }
-  const unknown = Object.keys(f.data).filter((k) => !isKnownKey(k))
-  if (unknown.length) return { error: `The file contains entries Jivika does not recognise: ${unknown.slice(0, 5).join(', ')}.` }
-  return { data: f.data as Record<string, unknown> }
-}
-
-const hasIds = (v: unknown): v is { id: string }[] =>
-  Array.isArray(v) && v.every((x) => !!x && typeof x === 'object' && typeof (x as { id?: unknown }).id === 'string')
-const isPlain = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
-
-/** Merge keeps local data and adds what is new: lists with ids are joined (imported wins on the same id), objects are combined, other values stay local. */
-export function mergeValue(local: unknown, incoming: unknown): unknown {
-  if (local == null) return incoming
-  if (hasIds(local) && hasIds(incoming)) {
-    const ids = new Set(incoming.map((x) => x.id))
-    return [...incoming, ...local.filter((x) => !ids.has(x.id))]
-  }
-  if (isPlain(local) && isPlain(incoming)) return { ...local, ...incoming }
-  return local
-}
-
-export function importData(data: Record<string, unknown>, mode: 'merge' | 'replace') {
-  if (mode === 'replace') {
-    Object.keys(localStorage)
-      .filter((k) => k.startsWith(PREFIX) && !SECRET_KEYS.has(k.slice(PREFIX.length)))
-      .forEach((k) => localStorage.removeItem(k))
-  }
-  for (const [k, v] of Object.entries(data)) {
-    if (!isKnownKey(k)) continue
-    const next = mode === 'merge' ? mergeValue(parse(localStorage.getItem(PREFIX + k), null), v) : v
-    if (next == null) localStorage.removeItem(PREFIX + k)
-    else localStorage.setItem(PREFIX + k, JSON.stringify(next))
-  }
-  notify()
-}
 
 /** Moves one item in a list (for reorder buttons and drag and drop). */
 export function moveItem<T>(list: T[], from: number, to: number): T[] {
