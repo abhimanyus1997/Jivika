@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Frequently asked questions
+    url: https://jivika.abhimanyu.fyi/faq/
+    about: Answers about keys, the demo model, privacy and supported providers.
+  - name: Report a security vulnerability
+    url: https://github.com/abhimanyus1997/Jivika/security/policy
+    about: Please report vulnerabilities privately, not as a public issue.

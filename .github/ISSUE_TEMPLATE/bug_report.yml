@@ -1,0 +1,61 @@
+name: Bug report
+description: Something in Jivika does not work as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Please do not paste API keys, resume content or other personal data.
+        Report security issues privately as described in the security policy, not here.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Web app (/app/)
+        - Website pages
+        - API / backend
+        - Jivika Clipper (extension or bookmarklet)
+        - Docker / self-hosting
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. See ...
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: Model provider and model
+      description: For AI features, for example "Gemini, gemini-2.5-flash" or "demo model". Never include the key.
+  - type: input
+    id: environment
+    attributes:
+      label: Browser and OS
+      placeholder: Chrome 142 on Windows 11
+  - type: input
+    id: deployment
+    attributes:
+      label: Deployment
+      description: The hosted site, a local checkout (commit), or the Docker image (tag).
+      placeholder: https://jivika.abhimanyu.fyi
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error messages or logs
+      description: Browser console or server output, with any secrets removed.
+      render: text
