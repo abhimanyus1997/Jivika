@@ -1,10 +1,21 @@
-import { Check, ExternalLink, Eye, EyeOff, Lock, ShieldCheck, Sparkles, Trash2 } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { Check, Download, ExternalLink, Eye, EyeOff, Lock, ShieldCheck, Sparkles, Trash2, Upload } from 'lucide-react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ModelPicker } from '../components/ModelPicker'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { Badge, Button, Card, ErrorMessage, Field, IconButton, inputCls, Modal, Note, PageHeader, ProviderIcon, toast } from '../components/ui'
 import { api, FALLBACK_PROVIDERS, useAction, useDemo, type Provider } from '../lib/api'
-import { clearAll, getKey, saveKey, setKeyVerified, useKeyVerified, useSettings } from '../lib/store'
+import {
+  clearAll,
+  exportData,
+  getKey,
+  importData,
+  saveKey,
+  setKeyVerified,
+  today,
+  useKeyVerified,
+  useSettings,
+  validateImport,
+} from '../lib/store'
 
 /** Settings row: title and description on the left, controls on the right. */
 function Section({ title, description, children }: { title: string; description: ReactNode; children: ReactNode }) {
@@ -15,6 +26,143 @@ function Section({ title, description, children }: { title: string; description:
         <p className="mt-1 text-[13px] leading-5 text-muted">{description}</p>
       </div>
       <div className="min-w-0">{children}</div>
+    </section>
+  )
+}
+
+const COUNTED: { key: string; label: string }[] = [
+  { key: 'applications', label: 'Applications' },
+  { key: 'tailoredResumes', label: 'Tailored resumes' },
+  { key: 'matches', label: 'Saved matches' },
+  { key: 'savedSearches', label: 'Saved searches' },
+  { key: 'atsHistory', label: 'ATS checks' },
+]
+
+/** Item count for a stored value: list length, object size, or 1. */
+const countOf = (v: unknown) => (Array.isArray(v) ? v.length : v && typeof v === 'object' ? Object.keys(v).length : v == null ? 0 : 1)
+
+/** Export everything except the API key to a JSON file, and import such a file back (merge or replace). */
+function DataTransfer() {
+  const file = useRef<HTMLInputElement>(null)
+  const [pending, setPending] = useState<{ name: string; data: Record<string, unknown> } | null>(null)
+  const [error, setError] = useState('')
+
+  function exportAll() {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(exportData(), null, 2)], { type: 'application/json' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `jivika-export-${today()}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast(`Downloaded ${a.download}`)
+  }
+
+  async function pick(f: File | undefined) {
+    setError('')
+    if (!f) return
+    if (f.size > 20 * 1024 * 1024) return setError('The file is larger than 20 MB, so it is not a Jivika export.')
+    let raw: unknown
+    try {
+      raw = JSON.parse(await f.text())
+    } catch {
+      return setError('The file is not valid JSON.')
+    }
+    const r = validateImport(raw)
+    if ('error' in r) return setError(r.error)
+    setPending({ name: f.name, data: r.data })
+  }
+
+  function apply(mode: 'merge' | 'replace') {
+    if (!pending) return
+    importData(pending.data, mode)
+    setPending(null)
+    toast(mode === 'merge' ? 'Data merged' : 'Data replaced')
+  }
+
+  const keys = pending ? Object.keys(pending.data) : []
+  return (
+    <section id="data-transfer" className="rounded-xl border border-line bg-surface p-5 shadow-card">
+      <h3 className="t-title">Export and import</h3>
+      <p className="mt-0.5 max-w-xl text-[13px] leading-5 text-muted">
+        Download everything stored here as a JSON file, or bring it into another browser. Your API key is never included.
+      </p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button variant="secondary" icon={Download} onClick={exportAll}>
+          Export all data
+        </Button>
+        <Button variant="secondary" icon={Upload} onClick={() => file.current?.click()}>
+          Import
+        </Button>
+        <input
+          ref={file}
+          type="file"
+          accept="application/json,.json"
+          className="sr-only"
+          tabIndex={-1}
+          aria-hidden="true"
+          onChange={(e) => {
+            void pick(e.target.files?.[0])
+            e.target.value = ''
+          }}
+        />
+      </div>
+      {error && (
+        <div className="mt-3">
+          <ErrorMessage message={error} />
+        </div>
+      )}
+      <Modal
+        open={!!pending}
+        onClose={() => setPending(null)}
+        title="Import data"
+        description={pending?.name}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setPending(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={() => apply('replace')}>
+              Replace
+            </Button>
+            <Button data-autofocus onClick={() => apply('merge')}>
+              Merge
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3 text-sm">
+          <p className="text-ink">
+            The file has <span className="t-num">{keys.length}</span> stored {keys.length === 1 ? 'item' : 'items'}.
+          </p>
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-[13px]">
+            {COUNTED.filter((c) => keys.includes(c.key)).map((c) => (
+              <div key={c.key} className="flex justify-between gap-3">
+                <dt className="text-muted">{c.label}</dt>
+                <dd className="t-num text-ink">{countOf(pending?.data[c.key])}</dd>
+              </div>
+            ))}
+            {['resume', 'profile', 'structuredProfile', 'coverLetter'].filter((k) => keys.includes(k)).length > 0 && (
+              <div className="col-span-2 text-muted">
+                Includes{' '}
+                {[
+                  ['resume', 'resume'],
+                  ['profile', 'profile'],
+                  ['structuredProfile', 'structured profile'],
+                  ['coverLetter', 'cover letter'],
+                ]
+                  .filter(([k]) => keys.includes(k))
+                  .map(([, l]) => l)
+                  .join(', ')}
+                .
+              </div>
+            )}
+          </dl>
+          <p className="text-[13px] leading-5 text-muted">
+            <span className="font-medium text-ink">Merge</span> keeps what is here and adds the file's entries; items with the same id are taken from the
+            file. <span className="font-medium text-ink">Replace</span> deletes local data first (your API key stays).
+          </p>
+        </div>
+      </Modal>
     </section>
   )
 }
@@ -34,7 +182,12 @@ export default function Settings() {
   // #settings?focus=model (from 'Choose another model') focuses the model picker.
   useEffect(() => {
     const focus = () => {
-      if (/[?&]focus=model/.test(location.hash)) document.querySelector<HTMLInputElement>('#model-field input')?.focus()
+      if (/[?&]focus=model\b/.test(location.hash)) document.querySelector<HTMLInputElement>('#model-field input')?.focus()
+      if (/[?&]focus=data/.test(location.hash)) {
+        const el = document.getElementById('data-transfer')
+        el?.scrollIntoView({ block: 'center' })
+        el?.querySelector<HTMLButtonElement>('button')?.focus()
+      }
     }
     focus()
     window.addEventListener('hashchange', focus)
@@ -256,6 +409,7 @@ export default function Settings() {
               Your key and data stay in this browser. They are sent along only when you run a tool, and no account is
               required.
             </Note>
+            <DataTransfer />
             <section className="rounded-xl border border-danger-line bg-surface">
               <div className="flex flex-wrap items-center justify-between gap-4 p-5">
                 <div className="min-w-0">
