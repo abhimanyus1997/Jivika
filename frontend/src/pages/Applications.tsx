@@ -1,6 +1,8 @@
-import { ExternalLink, KanbanSquare, Pencil, Plus, Search, SearchX, Trash2 } from 'lucide-react'
+import { ExternalLink, KanbanSquare, Pencil, Plus, Search, SearchX, Trash2, Upload } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { formatDate, safeLink } from '../components/ApplicationDetail'
+import { ExportMenu } from '../components/ExportMenu'
+import { ImportDialog } from '../components/ImportDialog'
 import { matchLabel } from '../components/RequirementMatch'
 import {
   Badge,
@@ -205,6 +207,7 @@ function Board({ apps, columns, onStatus }: { apps: Application[]; columns: Colu
 export default function Applications() {
   const [apps, setApps] = useApplications()
   const [draft, setDraft] = useState<Application | null>(null)
+  const [importing, setImporting] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<Application | null>(null)
   const [closing, setClosing] = useState<Application | null>(null)
   const [query, setQuery] = useState('')
@@ -283,6 +286,10 @@ export default function Applications() {
         description={apps.length ? applicationsSummary(apps) : 'Track where you have applied. Status updates feed the trends on your dashboard.'}
         actions={
           <>
+            <Button variant="secondary" icon={Upload} onClick={() => setImporting(true)}>
+              Import
+            </Button>
+            <ExportMenu formats={['applications-csv', 'applications-json', 'calendar-ics']} />
             <Button variant="secondary" icon={Plus} onClick={() => setDraft(blank())}>
               Log an application
             </Button>
@@ -293,6 +300,7 @@ export default function Applications() {
         }
       />
 
+      <ImportDialog open={importing} onClose={() => setImporting(false)} />
       {apps.length ? (
         <div className="space-y-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">

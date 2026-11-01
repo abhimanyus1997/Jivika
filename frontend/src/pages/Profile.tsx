@@ -1,5 +1,7 @@
-import { Check, FileText, FileUp, LayoutList, MapPin, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { Check, FileText, FileUp, LayoutList, MapPin, Plus, Sparkles, Trash2, Upload } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { ExportMenu } from '../components/ExportMenu'
+import { ImportDialog } from '../components/ImportDialog'
 import { prefilledItem, ProfileEditor, sectionCount, SectionOrder, StrengthMeter } from '../components/ProfileEditor'
 import { SECTION_TITLES } from '../components/ResumeDoc'
 import { ResumeDropzone, ResumeFileRow } from '../components/Resume'
@@ -339,6 +341,7 @@ export default function ProfilePage() {
   const [exp, setExp] = useState(() => experienceText(profile))
   const [skillInput, setSkillInput] = useState('')
   const extract = useAction(api.profile)
+  const [importing, setImporting] = useState(false)
 
   useEffect(() => {
     setDraft(profile ?? EMPTY)
@@ -406,6 +409,10 @@ export default function ProfilePage() {
             >
               Import from a resume
             </Button>
+            <Button variant="secondary" icon={Upload} onClick={() => setImporting(true)}>
+              Import
+            </Button>
+            <ExportMenu formats={['profile-jsonresume', 'profile-europass', 'profile-jivika', 'profile-md', 'profile-txt']} />
             <ButtonLink href="#resume" icon={FileText}>
               See base resume
             </ButtonLink>
@@ -416,6 +423,7 @@ export default function ProfilePage() {
         }
       />
 
+      <ImportDialog open={importing} onClose={() => setImporting(false)} />
       <ProfileSummary profile={profile} />
       <KeyNotice />
       <ErrorMessage message={extract.error} />

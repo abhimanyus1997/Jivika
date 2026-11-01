@@ -1,5 +1,6 @@
 import { CopyPlus, FileDown, FileText, History, MessageSquareText, RotateCcw, Sparkles, Trash2, Undo2, Upload, UserRoundPen } from 'lucide-react'
 import { memo, useEffect, useRef, useState, useSyncExternalStore, type ComponentProps } from 'react'
+import { ExportMenu } from '../components/ExportMenu'
 import { ProfileEditor } from '../components/ProfileEditor'
 import { printResume, ResumePaper, ResumePrint, ResumeThumb, SECTION_TITLES } from '../components/ResumeDoc'
 import {
@@ -659,6 +660,7 @@ export default function ResumePage() {
             <ButtonLink href="#profile" size="sm" icon={UserRoundPen}>
               Edit profile
             </ButtonLink>
+            <ExportMenu size="sm" formats={['profile-jsonresume', 'profile-md', 'profile-txt']} profile={shown ?? undefined} />
             <Button
               size="sm"
               variant="brand"
