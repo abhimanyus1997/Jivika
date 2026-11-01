@@ -73,6 +73,37 @@ export function fold(line: string): string {
   return parts.join('\r\n ')
 }
 
+/** Reverses escapeText. */
+export const unescapeText = (s: string) => s.replace(/\\([\\;,nN])/g, (_, c: string) => (c === 'n' || c === 'N' ? '\n' : c))
+
+export interface IcsEvent {
+  date: string // yyyy-mm-dd
+  end: string // exclusive yyyy-mm-dd for all-day events, '' when absent
+  summary: string
+  description: string
+}
+
+/** VEVENTs of an .ics file as plain text (never interpreted). Dates come from the first 8 digits of DTSTART/DTEND. */
+export function parseIcs(text: string, max = 2000): IcsEvent[] {
+  const out: IcsEvent[] = []
+  let ev: Record<string, string> | null = null
+  const day = (v = '') => (/^\d{8}/.test(v) ? `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6, 8)}` : '')
+  for (const line of text.replace(/\r?\n[ \t]/g, '').split(/\r?\n/)) {
+    if (line === 'BEGIN:VEVENT') ev = {}
+    else if (line === 'END:VEVENT' && ev) {
+      const date = day(ev.DTSTART)
+      if (date) out.push({ date, end: day(ev.DTEND), summary: unescapeText(ev.SUMMARY ?? '').trim(), description: unescapeText(ev.DESCRIPTION ?? '') })
+      ev = null
+      if (out.length >= max) break
+    } else if (ev) {
+      const i = line.indexOf(':')
+      const name = line.slice(0, i).split(';')[0].toUpperCase()
+      if (i > 0 && ['DTSTART', 'DTEND', 'SUMMARY', 'DESCRIPTION'].includes(name) && !(name in ev)) ev[name] = line.slice(i + 1)
+    }
+  }
+  return out
+}
+
 /* ---------- Dates and entry edits ---------- */
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -138,14 +169,37 @@ function eventLines(e: CalEntry, stamp: string): string[] {
   ]
 }
 
-export function buildIcs(entries: CalEntry[], now = new Date()): string {
+/** An all-day event that is not tied to an application, such as a holiday or a personal day off. */
+export interface AllDayEvent {
+  date: string
+  title: string
+  notes?: string
+}
+
+function allDayLines(e: AllDayEvent, stamp: string): string[] {
+  const uid = `${compact(e.date)}-${e.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)}`
+  return [
+    'BEGIN:VEVENT',
+    `UID:holiday-${uid}@jivika`,
+    `DTSTAMP:${stamp}`,
+    `DTSTART;VALUE=DATE:${compact(e.date)}`,
+    `DTEND;VALUE=DATE:${nextDay(e.date)}`,
+    `SUMMARY:${escapeText(e.title)}`,
+    ...(e.notes ? [`DESCRIPTION:${escapeText(e.notes)}`] : []),
+    'TRANSP:TRANSPARENT',
+    'END:VEVENT',
+  ]
+}
+
+export function buildIcs(entries: CalEntry[], now = new Date(), extra: AllDayEvent[] = []): string {
   const stamp = now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
-  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Jivika//Job search calendar//EN', 'CALSCALE:GREGORIAN', ...entries.flatMap((e) => eventLines(e, stamp)), 'END:VCALENDAR']
+  const events = [...entries.flatMap((e) => eventLines(e, stamp)), ...extra.flatMap((e) => allDayLines(e, stamp))]
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Jivika//Job search calendar//EN', 'CALSCALE:GREGORIAN', ...events, 'END:VCALENDAR']
   return lines.map(fold).join('\r\n') + '\r\n'
 }
 
-export function downloadIcs(entries: CalEntry[], fileName: string) {
-  const url = URL.createObjectURL(new Blob([buildIcs(entries)], { type: 'text/calendar;charset=utf-8' }))
+export function downloadIcs(entries: CalEntry[], fileName: string, extra: AllDayEvent[] = []) {
+  const url = URL.createObjectURL(new Blob([buildIcs(entries, new Date(), extra)], { type: 'text/calendar;charset=utf-8' }))
   const a = document.createElement('a')
   a.href = url
   a.download = fileName

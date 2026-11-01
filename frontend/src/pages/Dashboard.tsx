@@ -1,9 +1,11 @@
 import { ArrowRight, BarChart3, Bell, Check, Compass, Funnel, Plus, ShieldCheck, Sparkles, Star } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { ApplicationTrends, MiniBars, startedOn, weeklyTrends } from '../components/charts'
+import { CLIPPER_URL, useClipReceived } from '../components/ClipperPromo'
 import { codingStats, useCoding } from '../components/coding/store'
 import { FunnelFlow, FunnelTable, funnelData } from '../components/FunnelFlow'
 import { Badge, ButtonLink, Card, CareerTimeline, EmptyState, Note, PageHeader, Segmented, StatCell, scoreBand } from '../components/ui'
+import { calendarYears, useOffDays } from '../lib/holidays'
 import { addDays, calendarEntries, dayLabel } from '../lib/ics'
 import { needsAnswer, useInbox } from '../lib/inbox'
 import {
@@ -48,6 +50,7 @@ function GetStarted() {
   const [lastMatch] = useLastMatch()
   const [applications] = useApplications()
   const [noteDismissed, setNoteDismissed] = useStored('bannerDismissed', false)
+  const clipReceived = useClipReceived()
 
   const steps = [
     demo
@@ -56,6 +59,7 @@ function GetStarted() {
     { title: 'Upload your resume', text: 'Jivika extracts your profile and skills.', done: !!resume, href: '#profile', cta: 'Upload resume' },
     { title: 'Run your first job match', text: 'Compare your resume with a job description.', done: matches.length > 0 || !!lastMatch, href: '#match', cta: 'Run job match' },
     { title: 'Start an application', text: 'Add a job you want and follow it from draft to offer.', done: applications.length > 0, href: '#new-application', cta: 'New application' },
+    { title: 'Install Jivika Clipper', text: 'Send jobs from LinkedIn, Naukri and other sites in one click.', done: clipReceived, href: CLIPPER_URL, cta: 'Get the Clipper' },
   ]
   const done = steps.filter((s) => s.done).length
   if (done === steps.length) return null
@@ -64,7 +68,7 @@ function GetStarted() {
   return (
     <Card
       title="Get started"
-      description="Four steps to a complete picture of your job search."
+      description="Five steps to a complete picture of your job search."
       action={
         <span className="t-num text-[13px] text-muted">
           {done}/{steps.length} done
@@ -85,7 +89,7 @@ function GetStarted() {
           <div className="h-full rounded-full bg-brand-500 transition-[width] duration-150" style={{ width: `${(done / steps.length) * 100}%` }} />
         </div>
       </div>
-      <ol className="grid gap-px p-2 sm:grid-cols-2 lg:grid-cols-4">
+      <ol className="grid gap-px p-2 sm:grid-cols-2 lg:grid-cols-5">
         {steps.map((s, i) => (
           <li key={s.title} className="flex flex-col gap-2 rounded-lg p-3">
             <div className="flex items-center gap-2">
@@ -437,6 +441,8 @@ function CalendarCard() {
   const now = today()
   const [month, setMonth] = useState(now.slice(0, 8) + '01')
   const week = entries.filter((e) => e.date >= now && e.date <= addDays(now, 7) && !e.done)
+  const { off } = useOffDays(calendarYears(month))
+  const offWeek = [...off.entries()].filter(([d, list]) => d >= now && d <= addDays(now, 7) && list.some((h) => h.off)).map(([d]) => d)
   return (
     <Card
       title="Calendar"
@@ -448,10 +454,10 @@ function CalendarCard() {
       }
     >
       <div className="space-y-4">
-        <MonthGrid entries={entries} month={month} onMonth={setMonth} compact />
+        <MonthGrid entries={entries} month={month} onMonth={setMonth} compact off={off} />
         <div>
           <h3 className="mb-2 text-[13px] font-medium text-ink">Next 7 days</h3>
-          <Agenda entries={week} empty="Nothing scheduled this week." />
+          <Agenda entries={week} empty="Nothing scheduled this week." off={off} extraDays={offWeek} />
         </div>
       </div>
     </Card>
