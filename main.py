@@ -10,7 +10,8 @@ jivika/schemas.py, job search in jivika/jobs.py, job import from links in
 jivika/importer.py, ATS checks in jivika/ats.py, live model lists in jivika/models.py,
 market salary data in jivika/salary.py, verified learning resources in jivika/resources.py,
 coding practice problems in jivika/coding.py, resume file parsing in jivika/parsing.py and structured resumes
-(tailoring checks, application emails) in jivika/resume.py.
+(tailoring checks, application emails) in jivika/resume.py. Requirement matching and the inbox (employer email
+triage and replies) live in jivika/applications.py.
 """
 
 import csv
@@ -29,7 +30,7 @@ import http.client
 import urllib.request
 from contextlib import closing
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -41,7 +42,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from openai import OpenAI
 from pydantic import AfterValidator, BaseModel, Field, ValidationError
-from jivika import ats, coding, importer, jobs, llm, parsing, resources, resume, salary
+from jivika import applications, ats, coding, importer, jobs, llm, parsing, resources, resume, salary
 from jivika import models as model_lists
 from jivika.ats import STOPWORDS, tokens as _tokens  # noqa: F401  (keyword coverage shares the ATS tokenizer)
 from jivika.schemas import (  # noqa: F401  (re-exported for tests and callers)
@@ -952,6 +953,57 @@ def application_email(body: resume.EmailRequest, cfg: BYOK):
     subject = draft.subject or " - ".join(filter(None, (f"Application for {job.title or 'the role'}", body.basics.name)))
     return {"to": resume.application_address(job.description), "subject": subject,
             "body": resume.email_body(draft.body, body.basics, body.tone)}
+
+
+def _today() -> str:
+    today = date.today()
+    return f"{today.isoformat()} ({today:%A})"
+
+
+@app.post("/api/requirements", response_model=applications.RequirementResult)
+def requirements(body: applications.RequirementsRequest, cfg: BYOK):
+    """The job's requirements checked against the profile. Evidence may only cite real profile entries and names."""
+    profile, jd = resume.fill_ids(body.profile), body.job_description
+    draft = ask(cfg, "requirements", applications.RequirementsDraft, today=_today(), job_description=jd, profile=_profile_json(profile))
+    found = applications.ground_requirements(draft, profile, jd)
+    return applications.RequirementResult(
+        title=_grounded(draft.title, jd), company=_grounded(draft.company, jd), location=_grounded(draft.location, jd),
+        work_mode=applications.work_mode(draft.work_mode, jd), salary=_grounded(draft.salary, jd),
+        deadline=applications.deadline(draft.deadline, jd), requirements=found, summary=applications.requirement_summary(found))
+
+
+@app.post("/api/resume/regenerate-section", response_model=resume.RefineResult)
+def resume_regenerate_section(body: resume.RegenerateRequest, cfg: BYOK):
+    """One section or entry rewritten and checked against the source profile; everything else is returned unchanged."""
+    source = resume.fill_ids(body.source_profile)
+    try:
+        kind, _, current = resume.regenerate_target(body.resume, body.section)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
+    draft = ask(cfg, "resume_regenerate", resume.RegenerateDraft, section=kind,
+                instruction=body.instruction or "Make it clearer and more specific.", job_description=body.job_description,
+                current=json.dumps(current, ensure_ascii=False), source_profile=_profile_json(source))
+    return resume.regenerate_checked(draft, body.resume, source, body.section)
+
+
+@app.post("/api/inbox/classify", response_model=applications.Classification)
+def inbox_classify(body: applications.ClassifyRequest, cfg: BYOK):
+    """What a pasted employer email is about, linked to one of the given applications only when it names it."""
+    listed = "\n".join(f"{a.id}: {a.role} at {a.company} ({a.status})" for a in body.applications)
+    draft = ask(cfg, "inbox_classify", applications.ClassifyDraft, today=_today(), applications=listed, email=body.email_text)
+    return applications.check_classification(draft, body, _grounded)
+
+
+@app.post("/api/inbox/reply", response_model=applications.Reply)
+def inbox_reply(body: applications.ReplyRequest, cfg: BYOK):
+    """A reply to an employer email from the given facts; sentences with numbers the facts lack are dropped."""
+    role = " at ".join(filter(None, (body.application.role, body.application.company)))
+    draft = ask(cfg, "inbox_reply", resume.EmailDraft, tone=body.tone, email_kind=body.kind, candidate=body.basics.name,
+                application=role, availability=body.availability, profile_summary=body.profile_summary, email=body.email_text)
+    facts = "\n".join([body.email_text, body.availability, body.profile_summary, role, body.basics.name])
+    text = applications.facts_only(draft.body, facts) or "Thank you for your email."
+    return {"subject": applications.reply_subject(draft.subject, body.email_text, body.application),
+            "body": resume.email_body(text, body.basics, body.tone, attach=False)}
 
 
 @app.post("/api/interview/coding", response_model=CodingProblems)

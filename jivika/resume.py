@@ -390,6 +390,79 @@ def refine_checked(result: RefineResult, current: StructuredProfile, source: Str
 
 
 # ---------------------------------------------------------------------------
+# Regenerating one section or entry
+# ---------------------------------------------------------------------------
+
+_TARGET = re.compile(r"^(?:summary|skills|education|(?:experience|projects):[\w.-]{1,200})$")
+
+
+class RegenerateRequest(BaseModel):
+    resume: StructuredProfile
+    source_profile: StructuredProfile
+    section: Annotated[str, Field(max_length=220), AfterValidator(str.strip), Field(pattern=_TARGET.pattern)]
+    instruction: Annotated[str, Field(max_length=500), AfterValidator(str.strip)] = ""
+    job_description: Annotated[str, Field(max_length=6000), AfterValidator(str.strip)] = ""
+
+
+class RegenerateDraft(BaseModel):
+    """What the model returns for one part: only the field matching the section is read."""
+    headline: Short = ""
+    summary: Long = ""
+    experience: Experience | None = None
+    project: Project | None = None
+    skills: Annotated[list[SkillGroup], _capped(20)] = []
+    education: Annotated[list[Education], _capped(15)] = []
+    changes: Notes = []
+
+
+def regenerate_target(current: StructuredProfile, section: str):
+    """(kind, entry id, the current part as a dict) or ValueError when the entry is not in the resume."""
+    kind, _, entry_id = section.partition(":")
+    if kind in ("experience", "projects"):
+        entry = next((e for e in getattr(current, kind) if e.id == entry_id), None)
+        if entry is None:
+            raise ValueError(f"No {kind} entry with id '{entry_id}' in the resume.")
+        return kind, entry_id, entry.model_dump()
+    if kind == "summary":
+        return kind, "", {"headline": current.basics.headline, "summary": current.basics.summary}
+    return kind, "", [e.model_dump() for e in getattr(current, kind)]
+
+
+def regenerate_checked(draft: RegenerateDraft, current: StructuredProfile, source: StructuredProfile, section: str) -> RefineResult:
+    """current with only the targeted part replaced by the checked rewrite; every other field stays exactly as it was."""
+    kind, entry_id, _ = regenerate_target(current, section)
+    out = current.model_copy(deep=True)
+    candidate = StructuredProfile(basics=current.basics.model_copy())
+    if kind == "summary":
+        candidate.basics.headline, candidate.basics.summary = draft.headline, draft.summary
+    elif kind == "experience" and draft.experience:
+        candidate.experience = [draft.experience.model_copy(update={"id": entry_id})]
+    elif kind == "projects" and draft.project:
+        candidate.projects = [draft.project.model_copy(update={"id": entry_id})]
+    elif kind in ("skills", "education"):
+        setattr(candidate, kind, getattr(draft, kind))
+    checked, notes = enforce(candidate, source)
+    if kind == "summary":
+        for field in ("headline", "summary"):
+            new = getattr(draft, field)
+            if new and getattr(checked.basics, field) == new:
+                setattr(out.basics, field, new)
+    elif kind in ("experience", "projects"):
+        entries = getattr(checked, kind)
+        if entries and entries[0].id == entry_id:
+            setattr(out, kind, [entries[0] if e.id == entry_id else e for e in getattr(out, kind)])
+        else:
+            notes.append("Kept this entry as it was: the rewrite could not be matched to your profile.")
+    elif kind == "skills":
+        drafted = {_norm(i) for g in draft.skills for i in g.items}
+        if any(_norm(i) in drafted for g in checked.skills for i in g.items):  # else enforce fell back to the source
+            out.skills = checked.skills
+    elif checked.education:
+        out.education = checked.education
+    return RefineResult(resume=out, changes=list(dict.fromkeys([*draft.changes, *notes])))
+
+
+# ---------------------------------------------------------------------------
 # Application email
 # ---------------------------------------------------------------------------
 
@@ -417,12 +490,12 @@ _SIGNED = re.compile(r"\n[ \t]*(?:(?:best|kind|warm|warmest)\s+regards|regards|(
 _ATTACHED = "I have attached my resume and cover letter for your review."
 
 
-def email_body(draft_body: str, basics: EmailBasics, tone: str) -> str:
-    """Plain text: markdown removed, the attachments mentioned, then a sign-off and the sender's own details."""
+def email_body(draft_body: str, basics: EmailBasics, tone: str, attach: bool = True) -> str:
+    """Plain text: markdown removed, the attachments mentioned (when attach), then a sign-off and the sender's own details."""
     body = re.sub(r"\*\*|__|^#+\s*", "", draft_body, flags=re.M).strip()
     body = _SIGNED.sub("", body).strip()  # the signature is added below, from the sender's own details
     lower = body.lower()
-    if not (re.search(r"\b(?:resume|résumé|cv)\b", lower) and "cover letter" in lower):
+    if attach and not (re.search(r"\b(?:resume|résumé|cv)\b", lower) and "cover letter" in lower):
         body = f"{body}\n\n{_ATTACHED}" if body else _ATTACHED
     contact = " | ".join(filter(None, (basics.email, basics.phone, basics.linkedin)))
     signature = "\n".join(filter(None, (f"{SIGN_OFFS[tone]},", basics.name, contact)))
