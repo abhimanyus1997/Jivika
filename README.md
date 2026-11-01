@@ -356,6 +356,22 @@ Search pages rate limit by IP (DuckDuckGo answers only a few queries a minute), 
 
 Docling is an optional extra because it is large (it installs PyTorch). Install it with `uv sync --extra docling` locally, or with `docker build --build-arg WITH_DOCLING=1 .`. With Docling, uploads also accept DOCX, PNG and JPG (OCR), and the layout it reports (tables, pictures, columns, headers and footers, section headings) feeds the ATS checker. Without it, those file types return 415 with "This file type needs the Docling parser. Upload a PDF instead."
 
+### Local models (Ollama, vLLM, LM Studio)
+
+A self-hosted Jivika can use models running on your own hardware through any OpenAI-compatible server. Local providers are configured by the server operator only: the base URL always comes from these environment variables and never from a request, so visitors cannot make the server call other addresses. A provider appears in `GET /api/providers` (with `local: true` and `key_required: false`) only when its URL is set, so a deployment without them shows nothing new.
+
+| Variable | Example | Purpose |
+| --- | --- | --- |
+| `JIVIKA_OLLAMA_URL` | `http://127.0.0.1:11434/v1` | [Ollama](https://ollama.com)'s OpenAI-compatible endpoint (`http://ollama:11434/v1` in Docker Compose) |
+| `JIVIKA_VLLM_URL` | `http://127.0.0.1:8000/v1` | A [vLLM](https://docs.vllm.ai) OpenAI-compatible server |
+| `JIVIKA_LMSTUDIO_URL` | `http://127.0.0.1:1234/v1` | The [LM Studio](https://lmstudio.ai) local server |
+| `JIVIKA_OPENAI_COMPAT_URL`, `JIVIKA_OPENAI_COMPAT_NAME` | `http://llm.internal:9000/v1`, `Team LLM` | Any other OpenAI-compatible server, shown under the given name |
+| `JIVIKA_<NAME>_KEY` | unset | Key for servers that require one (vLLM `--api-key`), where `<NAME>` is `OLLAMA`, `VLLM`, `LMSTUDIO` or `OPENAI_COMPAT`. Without it a placeholder (or a key the user enters) is sent |
+| `JIVIKA_<NAME>_MODEL` | unset | Default model; otherwise the newest model the server lists |
+| `JIVIKA_LOCAL_TIMEOUT` | `120` | Seconds to wait for a local model's answer |
+
+Model lists come from the server's `/models` endpoint (embedding models are hidden). Ollama and vLLM get JSON mode (`response_format: json_object`); LM Studio and generic servers rely on the prompt plus schema validation. Demo limits never apply to local providers, and a failed model is not swapped for another one, since that would load a second model into memory. Small models (under about 7B parameters) often return incomplete JSON for the longer tools; 8B or larger instruction-tuned models work best.
+
 ## Deployment
 
 ### Vercel
@@ -412,6 +428,54 @@ docker run -d --name jivika -p 8000:8000 \
 ```
 
 Add `-e JIVIKA_DEMO_GROQ_KEY` (with the variable exported in your shell) to enable demo mode. The image works on Render, Railway, Fly.io or any VPS behind a TLS-terminating proxy. It listens on `$PORT` when the platform sets it and on 8000 otherwise, and has a health check on `/api/health`. Rate limits are kept in memory, so run a single worker per instance.
+
+#### Docker Compose with local models
+
+Jivika with [Ollama](https://hub.docker.com/r/ollama/ollama) on the same Compose network (`docker-compose.yml`):
+
+```yaml
+services:
+  jivika:
+    build: .
+    ports: ["8000:8000"]
+    volumes: ["jivika-data:/data"]
+    environment:
+      JIVIKA_OLLAMA_URL: http://ollama:11434/v1
+      JIVIKA_OLLAMA_MODEL: qwen3:8b   # optional
+      JIVIKA_LOCAL_TIMEOUT: "180"     # optional, for CPU-only hosts
+    depends_on: [ollama]
+  ollama:
+    image: ollama/ollama
+    volumes: ["ollama:/root/.ollama"]
+    # GPU: add `gpus: all` (Compose 2.30+) with the NVIDIA Container Toolkit installed
+volumes:
+  jivika-data:
+  ollama:
+```
+
+Start it and pull a model: `docker compose up -d && docker compose exec ollama ollama pull qwen3:8b`. Ollama is not published on a host port, so only Jivika can reach it.
+
+A vLLM server instead (NVIDIA GPU required):
+
+```yaml
+services:
+  jivika:
+    build: .
+    ports: ["8000:8000"]
+    environment:
+      JIVIKA_VLLM_URL: http://vllm:8000/v1
+      JIVIKA_VLLM_KEY: ${VLLM_API_KEY}
+  vllm:
+    image: vllm/vllm-openai
+    command: ["--model", "Qwen/Qwen3-8B", "--api-key", "${VLLM_API_KEY}"]
+    gpus: all
+    ipc: host
+    volumes: ["hf-cache:/root/.cache/huggingface"]
+volumes:
+  hf-cache:
+```
+
+For Ollama or LM Studio running on the Docker host itself, use `http://host.docker.internal:11434/v1` (or `:1234/v1`), adding `extra_hosts: ["host.docker.internal:host-gateway"]` on Linux. Local providers are meant for self-hosted deployments; Vercel functions cannot reach a server on your machine.
 
 ### Exporting the waitlist
 
