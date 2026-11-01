@@ -323,9 +323,9 @@ def test_default_sources_and_gating(net):
     result = jobs.search("data analyst", "India")
     sources = by_source(result)
     assert [s["id"] for s in result["sources"]] == ["remotive", "arbeitnow", "adzuna", "ats", "himalayas", "jobicy", "remoteok",
-                                                   "weworkremotely", "linkedin", "naukri"]
+                                                   "weworkremotely", "hn", "yc", "linkedin", "naukri"]
     assert {k for k, s in sources.items() if s["enabled"]} == {"remotive", "arbeitnow", "ats", "himalayas", "jobicy", "remoteok",
-                                                              "weworkremotely"}  # adzuna needs keys
+                                                              "weworkremotely", "hn", "yc"}  # adzuna needs keys
     assert all(sources[k]["ok"] and sources[k]["count"] for k in ("himalayas", "jobicy", "remoteok", "weworkremotely"))
     assert sources["linkedin"]["research"] and sources["naukri"]["research"] and not sources["ats"]["research"]
     assert not any("linkedin" in u or "naukri" in u or "adzuna" in u for u, _ in net[0])

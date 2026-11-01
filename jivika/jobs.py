@@ -6,6 +6,7 @@ elsewhere. All network access goes through fetch(), which the tests replace.
 """
 
 import email.utils
+import html
 import http.client
 import json
 import logging
@@ -16,6 +17,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import urllib.robotparser
 import xml.etree.ElementTree as ET
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
@@ -31,9 +33,11 @@ FEED_MAX_BYTES = 4 * 1024 * 1024  # the Arbeitnow feed alone is about 3 MB
 PER_PAGE = 20  # page size for sources whose whole feed is filtered here
 SEARCH_TTL, SEARCH_MAX = 600, 50  # an entry can hold ~1 MB of descriptions
 BOARD_TTL, FEED_TTL = 1800, 900
+STARTUP_TTL, ROBOTS_TTL = 6 * 3600, 24 * 3600
+ROBOTS_AGENT = "Jivika"  # the product token in USER_AGENT, matched against robots.txt groups
 USER_AGENT = "Mozilla/5.0 (compatible; Jivika/1.0; +https://abhimanyu.fyi/jivika)"
 
-DEFAULT_SOURCES = "remotive,arbeitnow,adzuna,ats,himalayas,jobicy,remoteok,weworkremotely"
+DEFAULT_SOURCES = "remotive,arbeitnow,adzuna,ats,himalayas,jobicy,remoteok,weworkremotely,hn,yc"
 # Verified live (HTTP 200, India roles, response under the size cap) on 2026-10-31.
 DEFAULT_ATS_BOARDS = (
     "greenhouse:groww,greenhouse:inmobi,greenhouse:hackerrank,greenhouse:druva,greenhouse:observeai,"
@@ -52,6 +56,8 @@ ANYWHERE = ("worldwide", "anywhere", "global")
 
 class SourceError(Exception):
     """A source could not be used; the message is shown to users, so it never contains URLs or keys."""
+
+    status: int | None = None  # the HTTP status, when the source answered with an error
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +92,9 @@ def fetch(url: str, headers: dict | None = None, cap: int = MAX_BYTES, data: byt
         body = b"".join(chunks)
     except urllib.error.HTTPError as exc:
         blocked = exc.code in (403, 406, 429, 999)
-        raise SourceError("Blocked or rate limited by the source." if blocked else f"The source returned HTTP {exc.code}.") from None
+        error = SourceError("Blocked or rate limited by the source." if blocked else f"The source returned HTTP {exc.code}.")
+        error.status = exc.code
+        raise error from None
     except (OSError, http.client.HTTPException, ValueError):
         raise SourceError("Unavailable right now.") from None
     if size > cap:
@@ -689,6 +697,214 @@ def naukri(q, location, remote, page):
     return out
 
 
+# ---------------------------------------------------------------------------
+# Startup sources: Hacker News "Who is hiring?" and YC's job listings, read only where robots.txt allows
+# ---------------------------------------------------------------------------
+
+
+def robots_allowed(url: str) -> bool:
+    """Whether the site's robots.txt lets ROBOTS_AGENT fetch url (cached per host for a day). A missing robots.txt
+    (4xx) allows everything; an unreadable one (5xx, network error, redirect) raises SourceError, as RFC 9309 asks."""
+    parts = urllib.parse.urlsplit(url)
+
+    def load():
+        rules = urllib.robotparser.RobotFileParser()
+        try:
+            body = fetch(f"{parts.scheme}://{parts.netloc}/robots.txt", {"Accept": "text/plain"}, cap=512 * 1024)
+            rules.parse(body.decode("utf-8", "replace").splitlines())
+        except SourceError as exc:
+            if not (exc.status and 400 <= exc.status < 500 and exc.status != 429):
+                raise SourceError("The site's robots.txt could not be read.") from None
+            rules.parse([])
+        return rules
+
+    rules = cached(f"robots:{parts.netloc}", ROBOTS_TTL, load)
+    # urllib.robotparser parses the groups but matches paths by plain prefix; RFC 9309 adds '*' and '$' wildcards
+    # and the longest match wins (Allow on a tie). robotparser stores paths percent-quoted, so '*' is %2A, '$' %24.
+    entry = next((e for e in rules.entries if e.applies_to(ROBOTS_AGENT)), rules.default_entry)
+    target = urllib.parse.quote((parts.path or "/") + (f"?{parts.query}" if parts.query else ""))
+    best = None
+    for line in entry.rulelines if entry else []:
+        pattern = re.escape(line.path).replace("%2A", ".*")
+        pattern = pattern[:-3] + "$" if pattern.endswith("%24") else pattern
+        if re.match(pattern, target) and (best is None or len(line.path) > best[0] or (len(line.path) == best[0] and line.allowance)):
+            best = (len(line.path), line.allowance)
+    return best is None or best[1]
+
+
+def polite_fetch(url: str, cap: int = FEED_MAX_BYTES) -> bytes:
+    if not robots_allowed(url):
+        raise SourceError("The site's robots.txt does not allow this.")
+    return fetch(url, cap=cap)
+
+
+def _json(body: bytes):
+    try:
+        return json.loads(body)
+    except ValueError:
+        raise SourceError("The source returned an invalid response.") from None
+
+
+HN_API = "https://hn.algolia.com/api/v1"
+_HN_TITLE = re.compile(r"^ask hn: who is hiring\?", re.I)
+_HN_SPLIT = re.compile(r"\s*\|\s*|\s+[–—]\s+")
+_HN_WORK = re.compile(r"\b(?:remote|onsite|on-site|on site|hybrid|in[- ]office|in[- ]person)\b", re.I)
+_HN_ONSITE = re.compile(r"\b(?:onsite|on-site|on site|hybrid|in[- ]office|in[- ]person)\b", re.I)
+_HN_BARE_REMOTE = re.compile(r"\(?\s*(?:fully\s+|100%\s+)?remote(?:\s+(?:ok|friendly|first|only))?\s*\)?", re.I)
+_HN_ROLE = re.compile(
+    r"\b(?:engineers?|engineering|developers?|designers?|scientists?|managers?|leads?|architects?|analysts?|directors?|"
+    r"head of|founding|sre|devops|interns?|internships?|researchers?|recruiters?|marketing|sales|account executives?|"
+    r"product|cto|vp|consultants?|specialists?|administrators?|technicians?|writers?|full[- ]?stack|back[- ]?end|"
+    r"front[- ]?end|ml|ai|data|software|programmers?|operations|support|swes?|devs?)\b", re.I)
+_HN_NOISE = re.compile(
+    r"https?://|www\.|[$€£₹]|\b\d+\s*k\b|\b(?:full[- ]?time|part[- ]?time|contract(?:or)?|visa|equity|salary|"
+    r"series [a-z]|yc [swf]\d+|seed|funded|\d{4})\b", re.I)
+
+
+def parse_hn_header(line: str) -> dict | None:
+    """'Acme (YC W21) | Senior Engineer | Berlin | REMOTE | $150k' -> company, title, location, remote.
+    None when the line does not follow the pipe convention. A bare REMOTE counts as worldwide, as the
+    thread's own rules ask posters to write REMOTE (US) or similar when remote work is restricted."""
+    parts = [p.strip() for p in _HN_SPLIT.split(line.strip()) if p.strip()]
+    if len(parts) < 2:
+        return None
+    company = re.sub(r"\s*\([^)]*\)\s*$", "", parts[0]).strip() or parts[0]
+    title, places, remote, onsite = "", [], False, False
+    for part in parts[1:]:
+        if _HN_WORK.search(part):
+            remote = remote or (bool(re.search(r"\bremote\b", part, re.I)) and not re.search(r"\bno remote\b", part, re.I))
+            onsite = onsite or bool(_HN_ONSITE.search(part))
+            if _HN_BARE_REMOTE.fullmatch(part):
+                places.append("Remote (Worldwide)")
+            elif not _HN_WORK.fullmatch(part):  # 'Remote (US)', 'Hybrid, Berlin'; a bare ONSITE adds no place
+                places.append(part)
+        elif _HN_NOISE.search(part):
+            continue
+        elif not title and _HN_ROLE.search(part):
+            title = part
+        elif len(places) < 2 and len(part) <= 80:
+            places.append(part)
+    return {
+        "company": company,
+        "title": title,
+        "location": " / ".join(places),
+        "remote": True if remote else (False if onsite else None),
+    }
+
+
+def hn_jobs(thread: dict) -> list[dict]:
+    """Jobs from a 'Who is hiring?' thread as returned by the Algolia items endpoint (top-level comments only)."""
+    out = []
+    for comment in thread.get("children") or [] if isinstance(thread, dict) else []:
+        if not isinstance(comment, dict) or not comment.get("text") or not str(comment.get("id") or "").isdigit():
+            continue
+        text = html_text(comment["text"])
+        first_line = text.split("\n", 1)[0][:300]
+        header = parse_hn_header(first_line)
+        if not header:
+            continue
+        # Without a role in the first line, the post itself is searched for the query.
+        item = job("hn", comment["id"], header["title"] or "Open roles (see post)", header["company"],
+                   f"https://news.ycombinator.com/item?id={comment['id']}", location=header["location"],
+                   remote=header["remote"], text=text, posted_at=comment.get("created_at_i") or comment.get("created_at"),
+                   tags=first_line if header["title"] else text[:2000])
+        if item:
+            out.append(item)
+    return out
+
+
+def hn_thread() -> list[dict]:
+    """The latest 'Ask HN: Who is hiring?' story by whoishiring, parsed (cached for 6 hours)."""
+
+    def load():
+        found = _json(polite_fetch(f"{HN_API}/search_by_date?" + urllib.parse.urlencode(
+            {"tags": "story,author_whoishiring", "hitsPerPage": 10, "attributesToRetrieve": "title,objectID"})))
+        hits = (found.get("hits") or []) if isinstance(found, dict) else []
+        story = next((h for h in hits if isinstance(h, dict) and _HN_TITLE.match(str(h.get("title") or ""))), None)
+        if not story or not str(story.get("objectID") or "").isdigit():
+            raise SourceError("The current hiring thread could not be found.")
+        return hn_jobs(_json(polite_fetch(f"{HN_API}/items/{story['objectID']}")))
+
+    return cached("hn", STARTUP_TTL, load)
+
+
+def hn(q, location, remote, page):
+    return [i for i in hn_thread() if matches(i, q, location)]
+
+
+YC_JOBS = "https://www.ycombinator.com/jobs"
+# YC's role pages (www.ycombinator.com/jobs/role/<slug>), picked by words in the query.
+YC_ROLES = {
+    "software-engineer": ("engineer", "developer", "software", "backend", "frontend", "full stack", "fullstack", "devops",
+                          "sre", "programmer", "data", "ml", "machine learning"),
+    "designer": ("design", "ux", "ui"),
+    "product-manager": ("product",),
+    "recruiting-hr": ("recruit", "hr", "talent", "people"),
+    "sales-manager": ("sales", "account executive", "business development"),
+    "marketing": ("marketing", "growth", "content"),
+    "support": ("support", "success"),
+    "operations": ("operations", "ops", "finance"),
+    "science": ("science", "scientist", "research"),
+}
+_YC_PAGE = re.compile(r'data-page="([^"]*)"')
+_YC_PATH = re.compile(r"/companies/[\w.-]+/jobs/[\w.-]+")
+
+
+def parse_yc(markup: str) -> list[dict]:
+    """Postings from the JSON props a YC jobs page embeds in its data-page attribute."""
+    found = _YC_PAGE.search(markup)
+    try:
+        props = json.loads(html.unescape(found.group(1))).get("props") if found else None
+    except (ValueError, AttributeError):
+        props = None
+    if not isinstance(props, dict):
+        raise SourceError("The source returned an unexpected response.")
+    out = []
+    for j in props.get("jobPostings") or []:
+        if not isinstance(j, dict) or not _YC_PATH.fullmatch(str(j.get("url") or "")):
+            continue
+        # Country codes as YC writes them ('US / IN / SG / Remote'); IN is spelled out for the India filter.
+        place = re.sub(r"(?<![A-Za-z])IN(?![A-Za-z])", "India", str(j.get("location") or ""))
+        skills = [str(s.get("name") if isinstance(s, dict) else s) for s in j.get("skills") or []]
+        details = [j.get("companyOneLiner"), j.get("companyBatchName") and f"YC batch: {j['companyBatchName']}",
+                   j.get("roleSpecificType") and f"Role: {j['roleSpecificType']}",
+                   j.get("minExperience") and f"Experience: {j['minExperience']}", j.get("visa") and f"Visa: {j['visa']}",
+                   skills and f"Skills: {', '.join(skills)}"]
+        item = job("yc", j.get("id"), j.get("title"), j.get("companyName"), "https://www.ycombinator.com" + j["url"],
+                   location=place, remote=True if re.search(r"\bremote\b", place, re.I) else None,
+                   text="\n".join(str(d) for d in details if d), employment_type=j.get("type"), salary=j.get("salaryRange"),
+                   tags=" ".join(map(str, (j.get("prettyRole") or "", j.get("roleSpecificType") or "", *skills))))
+        if item:
+            out.append(item)
+    return out
+
+
+def yc(q, location, remote, page):
+    """YC startup jobs from the public listing pages (robots.txt allows /jobs): the role page for the query, plus
+    the India and remote pages when wanted. Each page is cached for 6 hours."""
+    lowered = q.lower()
+    role = next((slug for slug, words in YC_ROLES.items() if any(re.search(rf"\b{re.escape(w)}", lowered) for w in words)), None)
+    urls = [f"{YC_JOBS}/role/{role}" if role else YC_JOBS]
+    if _wants_india(location):
+        urls.append(f"{YC_JOBS}/location/india")
+    if remote == "remote":
+        urls.append(f"{YC_JOBS}/location/remote")
+
+    def page_jobs(url):
+        return cached(url, STARTUP_TTL, lambda: parse_yc(polite_fetch(url).decode("utf-8", "replace")))
+
+    with ThreadPoolExecutor(max_workers=len(urls)) as pool:
+        pages = list(pool.map(lambda url: _try(page_jobs, url), urls))
+    if all(p is None for p in pages):
+        raise SourceError("YC job listings are unavailable right now.")
+    seen, out = set(), []
+    for item in (i for p in pages if p for i in p):
+        if item["id"] not in seen and matches(item, q, location):
+            seen.add(item["id"])
+            out.append(item)
+    return out
+
+
 # id -> (name, function, research, paged by the source itself)
 SOURCES = {
     "remotive": ("Remotive", remotive, False, False),
@@ -699,6 +915,8 @@ SOURCES = {
     "jobicy": ("Jobicy", jobicy, False, False),
     "remoteok": ("Remote OK", remoteok, False, False),
     "weworkremotely": ("We Work Remotely", weworkremotely, False, False),
+    "hn": ("Hacker News: Who is hiring?", hn, False, False),
+    "yc": ("Y Combinator startups", yc, False, False),
     "linkedin": ("LinkedIn", linkedin, True, True),
     "naukri": ("Naukri", naukri, True, True),
 }
