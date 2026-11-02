@@ -1,29 +1,45 @@
 <!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><title>Jivika Clipper</title><link rel="stylesheet" href="style.css"></head>
-<body style="width: 300px">
+<body style="width: 320px">
 <main class="wrap">
   <div class="head"><img src="icons/icon-32.png" alt="">Jivika Clipper</div>
   <section id="guide" class="card" hidden aria-labelledby="guide-title">
     <div id="guide-title" class="title">How to use Jivika Clipper</div>
     <ol class="steps">
-      <li>Open a job page on LinkedIn, Naukri or any careers site.</li>
+      <li>Open a job page on LinkedIn, Naukri or any careers site, or your LinkedIn profile.</li>
       <li>Click Jivika Clipper in the toolbar.</li>
-      <li>Pick Match, ATS check, Cover letter or Interview prep.</li>
+      <li>Pick Match, ATS check, Cover letter or Interview prep. On a profile, pick Import.</li>
     </ol>
     <p class="hint">Tip: pin Jivika Clipper from the puzzle-piece menu so it is always one click away.</p>
     <button type="button" id="gotit" class="primary">Got it</button>
   </section>
   <div id="preview" class="card" aria-live="polite"><div class="meta">Reading this page...</div></div>
-  <div class="grid">
+  <ul id="checklist" class="checklist" hidden aria-label="What was captured"></ul>
+  <p id="warning" class="warn" role="status" hidden></p>
+  <div id="job-actions" class="grid">
     <button class="primary" data-page="match" disabled>Match in Jivika</button>
     <button data-page="ats" disabled>ATS check</button>
     <button data-page="cover" disabled>Cover letter</button>
     <button data-page="interview" disabled>Interview prep</button>
+    <button data-page="track" class="wide" disabled>Track this application</button>
   </div>
+  <div id="profile-actions" class="grid" hidden>
+    <button class="primary" data-page="profile" disabled>Import to my profile</button>
+    <button data-page="linkedin" class="wide" disabled>Review my LinkedIn</button>
+  </div>
+  <section id="fill" class="card fill" aria-labelledby="fill-title" hidden>
+    <div id="fill-title" class="title">Application form</div>
+    <button type="button" id="fill-run" class="primary">Fill this application</button>
+    <div id="fill-status" class="meta" role="status"></div>
+    <button type="button" id="fill-site" class="link">Show a Fill with Jivika button on this site</button>
+  </section>
   <div class="foot"><span>Nothing is sent to our servers.</span><span><a href="#" id="open">Open Jivika</a> &middot; <a href="#" id="options">Options</a></span></div>
+  <div class="foot version">Version <span id="version"></span></div>
 </main>
 <script src="extract.js"></script>
+<script src="profile.js"></script>
+<script src="fill.js"></script>
 <script src="clip.js"></script>
 <script src="popup.js"></script>
 </body>

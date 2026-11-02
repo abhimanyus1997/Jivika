@@ -1,12 +1,12 @@
 /* Jivika design tokens (frontend/src/index.css): warm neutrals, evergreen brand. */
 :root {
   --canvas: #f7f7f5; --surface: #fff; --line: #e6e5e1; --ink: #1c1b19; --muted: #6b6963;
-  --brand: #1f7a4d; --brand-600: #17633e; --brand-50: #eef6f1; --danger: #b42318; --danger-bg: #fef3f2;
+  --brand: #1f7a4d; --brand-600: #17633e; --brand-50: #eef6f1; --danger: #b42318; --danger-bg: #fef3f2; --warn: #b54708; --warn-bg: #fffaeb;
   color-scheme: light dark;
   font: 13px/1.45 'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 @media (prefers-color-scheme: dark) {
-  :root { --canvas: #121211; --surface: #1a1a18; --line: #2e2d2a; --ink: #ecebe7; --muted: #a3a19a; --brand-50: #13261c; --danger: #f97066; --danger-bg: #2a1513; }
+  :root { --canvas: #121211; --surface: #1a1a18; --line: #2e2d2a; --ink: #ecebe7; --muted: #a3a19a; --brand-50: #13261c; --danger: #f97066; --danger-bg: #2a1513; --warn: #fdb022; --warn-bg: #2b1d07; }
 }
 body { margin: 0; background: var(--canvas); color: var(--ink); }
 .wrap { padding: 14px; }
@@ -33,3 +33,19 @@ input { box-sizing: border-box; width: 100%; font: inherit; padding: 7px 9px; bo
 .steps { margin: 6px 0 0; padding-left: 18px; }
 .steps li { margin-bottom: 4px; }
 #guide .primary { width: 100%; }
+.checklist { list-style: none; margin: -4px 0 12px; padding: 0 2px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; font-size: 12px; }
+.checklist li { color: var(--ink); overflow-wrap: anywhere; }
+.checklist li.missing { color: var(--muted); }
+.checklist .mark { display: inline-block; width: 14px; font-weight: 700; }
+.checklist .ok .mark { color: var(--brand); }
+.warn { margin: -4px 0 12px; padding: 8px 10px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); font-size: 12px; }
+button.wide { grid-column: 1 / -1; }
+.fill { margin-top: 12px; margin-bottom: 0; }
+.fill .primary { width: 100%; margin-top: 8px; }
+.fill .meta:empty { display: none; }
+.fill .meta { margin-top: 8px; }
+button.link { border: 0; padding: 0; margin-top: 8px; background: none; color: var(--brand); text-decoration: underline; font-size: 12px; text-align: left; }
+.version { margin-top: 4px; }
+.sites { list-style: none; padding: 0; margin: 6px 0 10px; }
+.sites li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 0; }
+.wrap h2 { font-size: 13px; margin: 18px 0 4px; }

@@ -12,6 +12,11 @@ const dist = join(here, 'dist')
 const unpacked = join(dist, 'jivika-clipper')
 const downloads = join(here, '..', 'frontend', 'public', 'downloads')
 
+// One version everywhere: the manifest, and CLIPPER_VERSION in clip.js (popup footer, bookmarklet and clip payloads).
+const manifestVersion = JSON.parse(readFileSync(join(src, 'manifest.json'), 'utf8')).version
+const clipVersion = readFileSync(join(src, 'clip.js'), 'utf8').match(/CLIPPER_VERSION = '([^']+)'/)[1]
+if (manifestVersion !== clipVersion) throw new Error(`manifest.json version ${manifestVersion} differs from CLIPPER_VERSION ${clipVersion} in clip.js`)
+
 rmSync(dist, { recursive: true, force: true })
 cpSync(src, unpacked, { recursive: true, filter: (p) => !p.endsWith('bookmarklet.js') })
 
@@ -54,7 +59,7 @@ writeFileSync(join(dist, 'jivika-clipper.zip'), zipped)
 
 // Bookmarklet: the same extractor and hand-off code, minified into one javascript: URL.
 const strip = (f) => readFileSync(join(src, f), 'utf8').replace(/^if \(typeof module !== 'undefined'\).*$/m, '')
-const code = `(function(){${strip('extract.js')}\n${strip('clip.js')}\n${strip('bookmarklet.js')}})()`
+const code = `(function(){${['extract.js', 'profile.js', 'clip.js', 'bookmarklet.js'].map(strip).join('\n')}})()`
 const { minifySync } = createRequire(join(here, '..', 'frontend', 'package.json'))('rolldown/utils')
 const min = minifySync('bookmarklet.js', code, { compress: true, mangle: true }).code.trim()
 const bookmarklet = 'javascript:' + encodeURIComponent(min)
