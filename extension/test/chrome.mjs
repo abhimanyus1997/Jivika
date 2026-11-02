@@ -19,7 +19,8 @@ function testCert() {
   rmSync(dir, { recursive: true, force: true })
   return tls
 }
-const HOSTS = ['www.naukri.com', 'www.linkedin.com', 'in.indeed.com', 'careers.northwind.test', 'jobs.contoso.test', 'jivika.abhimanyu.fyi']
+const HOSTS = ['www.naukri.com', 'www.linkedin.com', 'in.indeed.com', 'careers.northwind.test', 'jobs.contoso.test', 'jivika.abhimanyu.fyi',
+  'job-boards.greenhouse.io', 'jobs.lever.co', 'jobs.ashbyhq.com', 'example.wd5.myworkdayjobs.com', 'jobs.smartrecruiters.com', 'apply.workable.com']
 
 export function findChrome() {
   const c = [
@@ -35,13 +36,15 @@ export function findChrome() {
   return c
 }
 
-// Serves (over https) fixtures/<name>.html for /fixture/<name>/... on any host, and a stub Jivika app at /app/.
+// Serves (over https) fixtures/<name>.html for /fixture/<name>/... on any host, LinkedIn-style profile paths
+// (/in/<slug>/ -> profile-<slug>.html, /in/<slug>/details/<section>/ -> profile-<slug>-<section>.html) and a stub Jivika app at /app/.
 export function startServer(port) {
   // Self-signed, test-only certificate: naukri.com and linkedin.com are HSTS-preloaded, so the fixtures must be served over https.
   const tls = testCert()
   const server = createServer(tls, (req, res) => {
     const m = req.url.match(/^\/fixture\/([\w-]+)/)
-    const file = m ? join(FIXTURES, `${m[1]}.html`) : req.url.startsWith('/app/') ? null : ''
+    const p = req.url.match(/^\/in\/([\w-]+)\/(?:details\/([\w-]+)\/)?/)
+    const file = m ? join(FIXTURES, `${m[1]}.html`) : p ? join(FIXTURES, `profile-${p[1]}${p[2] ? `-${p[2]}` : ''}.html`) : req.url.startsWith('/app/') ? null : ''
     if (file === null) return res.end('<!doctype html><title>Jivika app stub</title><p>app</p>')
     if (!file || !existsSync(file)) { res.statusCode = 404; return res.end('not found') }
     res.setHeader('content-type', 'text/html; charset=utf-8')
@@ -55,7 +58,9 @@ export async function launch(port) {
   const proc = spawn(findChrome(), [
     '--headless=new', `--user-data-dir=${profile}`, '--remote-debugging-pipe', '--enable-unsafe-extension-debugging',
     '--no-first-run', '--no-default-browser-check', '--disable-gpu', '--disable-sync', '--disable-component-update',
-    '--ignore-certificate-errors',
+    '--ignore-certificate-errors', '--window-size=1280,800',
+    // Background tabs keep rendering and running timers, so lazy sections and scroll listeners behave as in a focused tab.
+    '--disable-renderer-backgrounding', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows',
     `--host-resolver-rules=${HOSTS.map((h) => `MAP ${h} 127.0.0.1:${port}`).join(', ')}`,
     'about:blank',
   ], { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] })
