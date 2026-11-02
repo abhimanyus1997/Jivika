@@ -1,0 +1,22 @@
+<!doctype html>
+<!-- Synthetic profile with very long, generated, incompressible descriptions, to exercise the size limits of clip hand-offs. -->
+<html><head><meta charset="utf-8"><title>Large Example | LinkedIn</title></head><body>
+<main id="main">
+  <section componentkey="refTopcard"><h1>Large Example</h1><p>Principal Engineer</p><p>Pune, Maharashtra, India</p></section>
+  <section><h2>About</h2><p>Generated profile for size tests.</p></section>
+  <section><h2>Experience</h2><ul id="list"></ul></section>
+</main>
+<script>
+  // Seeded generator so every run builds the same page.
+  var seed = 7;
+  function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+  function word() { var w = ''; for (var i = 0, n = 3 + Math.floor(rnd() * 7); i < n; i++) w += String.fromCharCode(97 + Math.floor(rnd() * 26)); return w; }
+  var html = '';
+  for (var i = 0; i < 70; i++) {
+    var text = [];
+    for (var j = 0; j < 220; j++) text.push(word());
+    html += '<li><p>Engineer ' + i + '</p><p>Company ' + i + ' · Full-time</p><p>Jan 20' + (10 + (i % 15)) + ' - Dec 20' + (10 + (i % 15)) + '</p><p>' + text.join(' ') + '.</p></li>';
+  }
+  document.getElementById('list').innerHTML = html;
+</script>
+</body></html>

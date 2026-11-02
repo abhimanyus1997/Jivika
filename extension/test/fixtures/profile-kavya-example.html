@@ -1,0 +1,97 @@
+<!doctype html>
+<!-- Synthetic LinkedIn-style profile (2026 layout): generated class names, sections identified only by their h2 heading,
+     sections below the fold that render only once scrolled into view, and a truncated About with a "see more" button.
+     The person, companies and schools are invented. -->
+<html><head><meta charset="utf-8"><title>Kavya Example | LinkedIn</title>
+<style>
+  body { margin: 0; font: 14px sans-serif; }
+  .k3x9 { max-width: 760px; margin: 0 auto; }
+  section { border: 1px solid #ddd; margin: 8px 0; padding: 12px; }
+  .lz1 { min-height: 900px; }
+</style></head><body>
+<header class="g71b"><nav><a href="/feed/">Home</a> <a href="/mynetwork/">My Network</a> <a href="/jobs/">Jobs</a></nav></header>
+<main class="k3x9" id="main">
+  <section class="pz81q" componentkey="com.linkedin.sdui.profile.card.ref7Topcard">
+    <div class="a8f2"><figure aria-hidden="true"><img alt=""></figure></div>
+    <div class="h3j1"><h2 class="t9e0">Kavya Example</h2><p class="q1w2">She/Her</p><p class="u7y6"> · 2nd</p></div>
+    <p class="r5t4">Senior Data Engineer at Example Analytics | Spark, Airflow, dbt</p>
+    <p class="e3w2">Example Analytics · Example Institute of Technology</p>
+    <p class="y6u7">Pune, Maharashtra, India <span>·</span> <a href="/in/kavya-example/overlay/contact-info/">Contact info</a></p>
+    <p class="i8o9"><a href="/mynetwork/">500+ connections</a></p>
+    <button type="button" class="b1n2">Message</button><button type="button" class="b1n2">More</button>
+  </section>
+
+  <section class="pz81q" componentkey="ref7About">
+    <div class="m4n5"><h2 class="t9e0">About</h2></div>
+    <div class="v2c3"><span data-testid="expandable-text-box" id="about-text">I build data platforms that analysts trust. Eight years across batch and streaming pipelines</span>
+      <button type="button" id="about-more" aria-expanded="false">… see more</button></div>
+  </section>
+
+  <section class="pz81q" componentkey="ref7Experience">
+    <div class="m4n5"><h2 class="t9e0"><span aria-hidden="true">Experience</span><span class="visually-hidden">Experience</span></h2></div>
+    <ul class="w0e9">
+      <li class="o1p2">
+        <div class="z3"><p class="x1">Example Analytics</p><p class="x2">Full-time · 4 yrs 10 mos</p><p class="x2">Pune, Maharashtra, India</p></div>
+        <ul class="w0e9">
+          <li class="o1p2"><p class="x1">Senior Data Engineer</p><p class="x2">Jan 2024 - Present · 1 yr 11 mos</p><p class="x2">Hybrid</p>
+            <div class="d4"><span data-testid="expandable-text-box">- Led the move from nightly batch jobs to streaming ingestion with Kafka and Spark.<br>- Cut warehouse cost by 30% by partitioning the largest fact tables.</span></div>
+            <p class="x3">Skills: Apache Spark · Apache Kafka</p></li>
+          <li class="o1p2"><p class="x1">Data Engineer</p><p class="x2">Jan 2022 - Dec 2023 · 2 yrs</p>
+            <div class="d4"><span data-testid="expandable-text-box">Built the dbt project used by four analytics teams.</span></div></li>
+        </ul>
+      </li>
+      <li class="o1p2"><p class="x1">Software Engineer</p><p class="x2">Sample Fintech · Full-time</p><p class="x2">Jun 2018 - Dec 2021 · 3 yrs 7 mos</p><p class="x2">Bengaluru, Karnataka, India · On-site</p>
+        <div class="d4"><span data-testid="expandable-text-box">Wrote the payments reconciliation service in Python.</span></div></li>
+      <li class="o1p2"><p class="x1">Data Intern</p><p class="x2">Placeholder Labs · Internship</p><p class="x2">May 2017 - Jul 2017 · 3 mos</p></li>
+    </ul>
+    <a href="/in/kavya-example/details/experience/">Show all 4 experiences</a>
+  </section>
+
+  <section class="pz81q lz1" data-lazy="education"></section>
+  <section class="pz81q lz1" data-lazy="certifications"></section>
+  <section class="pz81q lz1" data-lazy="projects"></section>
+  <section class="pz81q lz1" data-lazy="skills"></section>
+  <section class="pz81q lz1" data-lazy="recommendations"></section>
+  <section class="pz81q lz1" data-lazy="languages"></section>
+</main>
+<aside class="f9g8"><h2>People also viewed</h2><ul><li><p>Someone Else</p><p>Product Manager</p></li></ul></aside>
+<script>
+  // "see more" reveals the rest of the About text, as the real control does.
+  document.getElementById('about-more').addEventListener('click', function () {
+    document.getElementById('about-text').textContent = 'I build data platforms that analysts trust. Eight years across batch and streaming pipelines, most recently moving a retail analytics stack to near real time. I care about data contracts, tests and clear documentation.';
+    this.setAttribute('aria-expanded', 'true');
+    this.remove();
+  });
+
+  var SECTIONS = {
+    education: '<div class="m4n5"><h2 class="t9e0">Education</h2></div><ul class="w0e9">' +
+      '<li class="o1p2"><p class="x1">Example Institute of Technology</p><p class="x2">Bachelor of Technology - BTech, Computer Science</p><p class="x2">2014 - 2018</p><p class="x2">Grade: 8.4 CGPA</p></li>' +
+      '<li class="o1p2"><p class="x1">Sample Junior College</p><p class="x2">Higher Secondary, Science</p><p class="x2">2012 - 2014</p></li></ul>',
+    certifications: '<div class="m4n5"><h2 class="t9e0">Licenses &amp; certifications</h2></div><ul class="w0e9">' +
+      '<li class="o1p2"><p class="x1">Example Cloud Data Engineer</p><p class="x2">Example Cloud Academy</p><p class="x2">Issued Mar 2024 · Expires Mar 2027</p><p class="x2">Credential ID EX-123</p></li></ul>',
+    projects: '<div class="m4n5"><h2 class="t9e0">Projects</h2></div><ul class="w0e9">' +
+      '<li class="o1p2"><p class="x1">Open data quality checks</p><p class="x2">Jan 2023 - Present</p><p class="x2">Associated with Example Analytics</p><a href="https://example.org/dq-checks">Show project</a><div class="d4">A small library of reusable data quality tests for dbt models.</div></li></ul>',
+    skills: '<div class="m4n5"><h2 class="t9e0">Skills</h2></div><ul class="w0e9">' +
+      '<li class="o1p2"><p class="x1">Apache Spark</p><p class="x2">Endorsed by 12 colleagues</p></li>' +
+      '<li class="o1p2"><p class="x1">dbt</p><p class="x2">3 experiences at Example Analytics</p></li>' +
+      '<li class="o1p2"><p class="x1">SQL</p></li></ul><a href="/in/kavya-example/details/skills/">Show all 18 skills</a>',
+    recommendations: '<div class="m4n5"><h2 class="t9e0">Recommendations</h2></div><ul class="w0e9"><li class="o1p2"><p class="x1">A former manager</p><p class="x2">Kavya is a careful engineer.</p></li></ul>',
+    languages: '<div class="m4n5"><h2 class="t9e0">Languages</h2></div><ul class="w0e9">' +
+      '<li class="o1p2"><p class="x1">English</p><p class="x2">Full professional proficiency</p></li>' +
+      '<li class="o1p2"><p class="x1">Marathi</p><p class="x2">Native or bilingual proficiency</p></li></ul>'
+  };
+  // Lazy sections render a moment after they scroll into view (both an IntersectionObserver and a scroll listener,
+  // like the real page), so a reader that does not scroll sees only empty placeholders.
+  function render(el) {
+    if (el.dataset.done) return;
+    el.dataset.done = '1';
+    setTimeout(function () { el.innerHTML = SECTIONS[el.dataset.lazy]; el.classList.remove('lz1'); }, 150);
+  }
+  var lazy = document.querySelectorAll('[data-lazy]');
+  var io = new IntersectionObserver(function (entries) { entries.forEach(function (e) { if (e.isIntersecting) render(e.target); }); });
+  lazy.forEach(function (el) { io.observe(el); });
+  addEventListener('scroll', function () {
+    lazy.forEach(function (el) { if (el.getBoundingClientRect().top < innerHeight) render(el); });
+  }, { passive: true });
+</script>
+</body></html>
