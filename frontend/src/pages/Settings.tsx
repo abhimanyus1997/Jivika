@@ -1,14 +1,17 @@
-import { Check, ExternalLink, Eye, EyeOff, Lock, Server, ShieldCheck, Sparkles, Trash2, Undo2, Upload } from 'lucide-react'
+import { Check, ExternalLink, Eye, EyeOff, Link2, Lock, Scissors, Server, ShieldCheck, Sparkles, Trash2, Undo2, Unlink, Upload } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
+import { CLIPPER_URL } from '../components/ClipperPromo'
 import { ExportMenu } from '../components/ExportMenu'
 import { ImportDialog } from '../components/ImportDialog'
 import { ModelPicker } from '../components/ModelPicker'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { Badge, Button, Card, ErrorMessage, Field, IconButton, inputCls, Modal, Note, PageHeader, ProviderIcon, toast } from '../components/ui'
-import { api, FALLBACK_PROVIDERS, useAction, useDemo, type Provider } from '../lib/api'
+import { api, FALLBACK_PROVIDERS, useAction, useDemo, type Profile, type Provider, type StructuredProfile } from '../lib/api'
+import { LATEST_CLIPPER_VERSION } from '../lib/clip'
+import { compareVersions, DEFAULT_ANSWERS, isChromium, ping, send, type Answers } from '../lib/clipper-bridge'
 import type { ExportId } from '../lib/portability/export'
 import { snapshotInfo, undoImport } from '../lib/portability/snapshot'
-import { clearAll, getKey, saveKey, setKeyVerified, useKeyVerified, useSettings } from '../lib/store'
+import { clearAll, getKey, normalizeStructured, read, saveKey, setKeyVerified, useKeyVerified, useSettings, useStored } from '../lib/store'
 
 /** Settings row: title and description on the left, controls on the right. */
 function Section({ title, description, children }: { title: string; description: ReactNode; children: ReactNode }) {
@@ -120,6 +123,189 @@ function DataSection({ children }: { children: (openImport: () => void, version:
         }}
       />
     </div>
+  )
+}
+
+const YES_NO = ['', 'Yes', 'No']
+const ANSWER_FIELDS: { key: keyof Answers; label: string; options?: string[] }[] = [
+  { key: 'notice_period', label: 'Notice period' },
+  { key: 'earliest_start', label: 'Earliest start date' },
+  { key: 'expected_salary', label: 'Expected salary' },
+  { key: 'current_salary', label: 'Current salary' },
+  { key: 'work_authorization', label: 'Work authorization' },
+  { key: 'sponsorship_needed', label: 'Needs visa sponsorship', options: YES_NO },
+  { key: 'willing_to_relocate', label: 'Willing to relocate', options: YES_NO },
+  { key: 'how_heard', label: 'How you heard about the role' },
+  { key: 'linkedin', label: 'LinkedIn URL' },
+  { key: 'github', label: 'GitHub URL' },
+  { key: 'portfolio', label: 'Portfolio or website' },
+  { key: 'pronouns', label: 'Pronouns' },
+  { key: 'gender', label: 'Gender', options: ['Prefer not to say', 'Decline to answer', 'Female', 'Male', 'Non-binary'] },
+  { key: 'ethnicity', label: 'Ethnicity', options: ['Decline to answer', 'Prefer not to say'] },
+  { key: 'veteran', label: 'Veteran status', options: ['Decline to answer', 'I am not a protected veteran', 'I identify as a protected veteran'] },
+  { key: 'disability', label: 'Disability status', options: ['Decline to answer', 'No, I do not have a disability', 'Yes, I have a disability'] },
+]
+
+/** The structured profile, or the simple profile's basics when no structured profile exists yet. */
+function profileForClipper(): StructuredProfile | null {
+  const sp = read<StructuredProfile | null>('structuredProfile', null)
+  if (sp) return normalizeStructured(sp)
+  const p = read<Profile | null>('profile', null)
+  if (!p?.name) return null
+  return normalizeStructured({
+    basics: { name: p.name, headline: p.headline, email: p.email ?? '', phone: p.phone ?? '', location: p.location, linkedin: '', website: '', summary: p.summary },
+  })
+}
+
+/** Settings > Jivika Clipper: find the extension, copy the profile and answers into it (Connect), or remove them (Disconnect). */
+function ClipperSection() {
+  const [answers, setAnswers] = useStored<Answers>('clipperAnswers', DEFAULT_ANSWERS)
+  // undefined while checking, null when not found. The extension reports whether it holds a profile and since when.
+  const [ext, setExt] = useState<{ version: string; syncedAt: number | null } | null | undefined>(undefined)
+  const [busy, setBusy] = useState('')
+  const [error, setError] = useState('')
+  const chromium = isChromium()
+
+  const probe = () =>
+    void ping().then((r) =>
+      setExt(r?.ok ? { version: typeof r.version === 'string' ? r.version : '', syncedAt: r.connected && typeof r.syncedAt === 'number' ? r.syncedAt : null } : null),
+    )
+  const syncedAt = ext?.syncedAt
+  useEffect(probe, [])
+
+  async function connect() {
+    setError('')
+    const profile = profileForClipper()
+    if (!profile) return setError('Add your profile first (Profile page), then connect.')
+    const b = profile.basics
+    const filled = { ...answers, linkedin: answers.linkedin || b.linkedin, portfolio: answers.portfolio || b.website }
+    setBusy('connect')
+    try {
+      const r = await send({ type: 'jivika.sync', profile, answers: filled, appUrl: `${location.origin}${location.pathname}` })
+      if (!r?.ok) throw new Error('Jivika Clipper did not accept the profile. Reload the extension and try again.')
+      setExt((e) => e && { ...e, syncedAt: typeof r.syncedAt === 'number' ? r.syncedAt : Date.now() })
+      toast('Profile sent to Jivika Clipper')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'The profile could not be sent.')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  async function disconnect() {
+    setError('')
+    setBusy('disconnect')
+    const r = await send({ type: 'jivika.disconnect' })
+    setBusy('')
+    if (!r?.ok) return setError('Jivika Clipper did not answer. Enable it and try again, or remove the extension.')
+    setExt((e) => e && { ...e, syncedAt: null })
+    toast('Profile removed from Jivika Clipper')
+  }
+
+  const outdated = ext && compareVersions(ext.version, LATEST_CLIPPER_VERSION) < 0
+  return (
+    <Section title="Jivika Clipper" description="Connect the browser extension so it can fill job applications with your profile and the answers below.">
+      <div className="space-y-4">
+        <Card>
+          <div className="space-y-4">
+            {!chromium ? (
+              <Note icon={Scissors}>
+                Connecting works in Chrome, Edge, Brave and other Chromium browsers. In this browser, clip jobs with the bookmarklet from the{' '}
+                <a href={CLIPPER_URL} className="font-medium text-brand-600 hover:underline">
+                  Clipper page
+                </a>
+                .
+              </Note>
+            ) : ext === undefined ? (
+              <p role="status" className="text-[13px] text-muted">
+                Looking for Jivika Clipper...
+              </p>
+            ) : ext === null ? (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="max-w-md text-[13px] leading-5 text-muted">
+                  Jivika Clipper was not found in this browser. Install version {LATEST_CLIPPER_VERSION} or later (older copies cannot connect), then
+                  check again.
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="ghost" onClick={() => {
+                      setExt(undefined)
+                      probe()
+                    }}>
+                    Check again
+                  </Button>
+                  <a href={CLIPPER_URL} className="inline-flex h-8 items-center gap-1.5 px-1 text-sm font-medium text-brand-600 hover:underline">
+                    Install <ExternalLink className="size-3.5" aria-hidden="true" />
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone="brand" dot>
+                    Installed
+                  </Badge>
+                  <span className="t-num text-[13px] text-muted">Version {ext.version || 'unknown'}</span>
+                  {syncedAt && <Badge tone="info">Connected</Badge>}
+                </div>
+                {outdated && (
+                  <Note tone="warning">
+                    A newer Jivika Clipper ({LATEST_CLIPPER_VERSION}) is available.{' '}
+                    <a href={CLIPPER_URL} className="font-medium underline underline-offset-2">
+                      Update it
+                    </a>
+                  </Note>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <Button icon={Link2} onClick={connect} loading={busy === 'connect'} disabled={!!busy}>
+                    {syncedAt ? 'Send profile again' : 'Connect'}
+                  </Button>
+                  {syncedAt && (
+                    <Button variant="secondary" icon={Unlink} onClick={disconnect} loading={busy === 'disconnect'} disabled={!!busy}>
+                      Disconnect
+                    </Button>
+                  )}
+                </div>
+                {syncedAt && (
+                  <p className="text-xs text-faint">
+                    Last sent: {new Date(syncedAt).toLocaleString()}. Send it again after you change your profile or answers.
+                  </p>
+                )}
+              </div>
+            )}
+            <ErrorMessage message={error} />
+            <Note icon={Lock}>
+              Connecting copies your structured profile and the answers below into the extension's own storage in this browser. Nothing is sent to
+              Jivika's servers. The Clipper fills only the application form you choose, when you ask it to, and never submits it. Disconnect removes
+              the copy.
+            </Note>
+          </div>
+        </Card>
+
+        <Card title="Application answers" description="Used by the Clipper for common application questions. Leave a field blank to fill it yourself.">
+          <div className="grid gap-4 sm:grid-cols-2">
+            {ANSWER_FIELDS.map((f) => (
+              <Field key={f.key} label={f.label}>
+                {f.options ? (
+                  <select className={inputCls} value={answers[f.key] ?? ''} onChange={(e) => setAnswers({ ...answers, [f.key]: e.target.value })}>
+                    {f.options.map((o) => (
+                      <option key={o} value={o}>
+                        {o || 'Not set'}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    className={inputCls}
+                    value={answers[f.key] ?? ''}
+                    onChange={(e) => setAnswers({ ...answers, [f.key]: e.target.value.slice(0, 500) })}
+                  />
+                )}
+              </Field>
+            ))}
+          </div>
+        </Card>
+      </div>
+    </Section>
   )
 }
 
@@ -371,6 +557,8 @@ export default function Settings() {
           </Card>
         </Section>
 
+        <ClipperSection />
+
         <DataSection>
           {(openImport, version) => (
             <Section
@@ -416,6 +604,8 @@ export default function Settings() {
               variant="danger"
               icon={Trash2}
               onClick={() => {
+                // The extension keeps its own copy; ask it to forget the profile too.
+                void send({ type: 'jivika.disconnect' }).catch(() => undefined)
                 clearAll()
                 setKey('')
                 setVerified(null)

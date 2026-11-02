@@ -153,6 +153,7 @@ export function ImportDialog({
   open,
   onClose,
   file: initialFile,
+  plan: initialPlan,
   onUnlinkedEvents,
   unlinkedLabel = 'Add the rest as personal calendar entries',
 }: {
@@ -160,6 +161,8 @@ export function ImportDialog({
   onClose: () => void
   /** A file to read straight away (from drag and drop). */
   file?: File | null
+  /** A plan prepared elsewhere (a LinkedIn profile from Jivika Clipper), previewed straight away. */
+  plan?: ImportPlan | null
   /** Calendar events not linked to an application go here (the Calendar page). Without it they are skipped. */
   onUnlinkedEvents?: (events: IcsEvent[]) => void
   unlinkedLabel?: string
@@ -239,12 +242,19 @@ export function ImportDialog({
     // pick is stable enough: it only reads state setters and the AI flag.
   }, [open, initialFile])
 
-  async function structure(text: string) {
+  useEffect(() => {
+    if (!open || !initialPlan) return
+    reset()
+    setPlan(initialPlan)
+    setFileName(KIND_LABEL[initialPlan.source])
+  }, [open, initialPlan])
+
+  async function structure(text: string, source: ImportPlan['source']) {
     setBusy('Building your structured profile')
     setError('')
     try {
       const profile = normalizeStructured(await api.structureProfile(text))
-      setPlan({ kind: 'profile', source: 'text-resume', profile })
+      setPlan({ kind: 'profile', source, profile })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'The resume could not be structured.')
     } finally {
@@ -331,7 +341,7 @@ export function ImportDialog({
         if (rest.length && onUnlinkedEvents && unlinked) onUnlinkedEvents(rest)
         summary = `Added ${linked.length} ${linked.length === 1 ? 'event' : 'events'} to applications${rest.length ? (onUnlinkedEvents && unlinked ? `, ${rest.length} as personal entries` : `, skipped ${rest.length} without an application`) : ''}`
       }
-      if (conflicts && mode === 'merge' && plan.kind !== 'events') summary += ` (${conflicts} already here: ${POLICIES.find((x) => x.value === policy)!.label.toLowerCase()})`
+      if (conflicts && mode === 'merge' && plan.kind !== 'events') summary += ` (${conflicts} already here: ${policies.find((x) => x.value === policy)!.label.toLowerCase()})`
       setDone(summary)
       toast(summary)
     } catch (e) {
@@ -342,6 +352,14 @@ export function ImportDialog({
 
   /* ---------- Rendering ---------- */
 
+  // A clip from the LinkedIn profile page is not a file: no file picker, and wording that names LinkedIn.
+  const fromLinkedIn = plan?.source === 'linkedin-profile'
+  const policies = fromLinkedIn ? POLICIES.map((p) => (p.value === 'file' ? { ...p, label: "Use LinkedIn's" } : p)) : POLICIES
+  const foundLabel = !plan
+    ? ''
+    : fromLinkedIn && plan.kind === 'profile'
+      ? `LinkedIn profile (${SECTION_KEYS.filter((k) => countOf(plan.profile?.[k])).length} sections)`
+      : KIND_LABEL[plan.source]
   const pickButton = (
     <>
       <Button variant="secondary" icon={FileUp} onClick={() => input.current?.click()} disabled={!!busy}>
@@ -443,9 +461,9 @@ export function ImportDialog({
             {plan && (
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-ink">
-                  Found: <Badge tone="info">{KIND_LABEL[plan.source]}</Badge>
+                  Found: <Badge tone="info">{foundLabel}</Badge>
                 </p>
-                {pickButton}
+                {!fromLinkedIn && pickButton}
               </div>
             )}
 
@@ -513,9 +531,13 @@ export function ImportDialog({
 
             {plan?.kind === 'resume-text' && (
               <div className="space-y-3">
-                <p className="text-[13px] text-muted">This looks like a resume in plain text or Markdown. Jivika can turn it into a structured profile with your model.</p>
+                <p className="text-[13px] text-muted">
+                  {plan.source === 'linkedin-profile'
+                    ? 'Jivika Clipper could not tell the sections of this profile apart. Jivika can build a structured profile from the page text with your model; entries the text does not contain are left out.'
+                    : 'This looks like a resume in plain text or Markdown. Jivika can turn it into a structured profile with your model.'}
+                </p>
                 <pre className="max-h-40 overflow-y-auto rounded-lg border border-line bg-canvas p-3 text-xs whitespace-pre-wrap text-ink">{plan.text.slice(0, 1200)}</pre>
-                <Button onClick={() => structure(plan.text)} disabled={!ai || !!busy} loading={busy !== ''}>
+                <Button onClick={() => structure(plan.text, plan.source)} disabled={!ai || !!busy} loading={busy !== ''}>
                   Build profile from this text
                 </Button>
                 {!ai && <Note tone="warning">Add a model API key in Settings to build a profile from text.</Note>}
@@ -655,10 +677,10 @@ export function ImportDialog({
                       label={conflicts ? `When an entry already exists (${conflicts} found)` : 'When an entry already exists'}
                       value={policy}
                       onChange={setPolicy}
-                      options={POLICIES}
+                      options={policies}
                     />
                     <p className="text-xs text-muted">
-                      Entries match by id, applications also by company and role, and profile entries by name. Keep both adds the file's entry as a copy.
+                      Entries match by id, applications also by company and role, and profile entries by name. Keep both adds the {fromLinkedIn ? 'LinkedIn' : "file's"} entry as a copy.
                     </p>
                   </>
                 )}

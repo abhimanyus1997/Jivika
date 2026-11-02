@@ -12,6 +12,7 @@ export type FileKind =
   | 'europass-xml'
   | 'europass-json'
   | 'linkedin-zip'
+  | 'linkedin-profile'
   | 'applications-csv'
   | 'ics'
   | 'text-resume'
@@ -25,6 +26,7 @@ export const KIND_LABEL: Record<FileKind, string> = {
   'europass-xml': 'Europass CV (XML)',
   'europass-json': 'Europass CV (JSON, legacy)',
   'linkedin-zip': 'LinkedIn data export',
+  'linkedin-profile': 'LinkedIn profile',
   'applications-csv': 'Applications spreadsheet (CSV)',
   ics: 'Calendar (.ics)',
   'text-resume': 'Resume text',

@@ -43,6 +43,7 @@ const xml = await import('../xml.ts')
 const detect = await import('../detect.ts')
 const imp = await import('../import.ts')
 const li = await import('../linkedin-export.ts')
+const lp = await import('../linkedin-profile.ts')
 const snapshot = await import('../snapshot.ts')
 const ics = await import('../../ics.ts')
 
@@ -419,6 +420,35 @@ section = 'merge'
   eq(kind('Org,Position Name,Stage\nAcme,Analyst,Applied\nPayCo,Lead,Offer\n'), 'applications-csv', 'CSV with unknown headers goes to column mapping')
   eq(kind('Asha Rao, Data Analyst\nI build dashboards and pipelines for retail teams.\n'), 'text-resume', 'prose with a comma stays resume text')
   eq(kind('<?xml version="1.0"?>\n<!DOCTYPE x [<!ENTITY e "y">]>\n<Candidate></Candidate>'), 'europass-xml', 'Europass with DOCTYPE reaches the XXE check')
+}
+
+{
+  section = 'LinkedIn profile clip'
+  const clip = lp.toProfileClip({
+    source: 'linkedin_profile',
+    clipper_version: '0.2.0',
+    url: 'https://www.linkedin.com/in/sample-person/',
+    basics: { name: ' Sample Person ', headline: 'Data analyst', summary: 'I build dashboards.', linkedin: 'javascript:alert(1)' },
+    experience: [
+      { company: 'Example Co', title: 'Analyst', start: 'Jan 2022', current: true, bullets: ['Built reports', 42, ''] },
+      { company: '', title: '' },
+    ],
+    education: [{ school: 'Sample University', degree: 'BSc' }],
+    skills: [{ items: ['SQL', 'Python'] }, { group: 'Empty', items: [] }],
+    languages: ['English'],
+    certifications: 'not a list',
+    projects: [{ name: 'Dashboards', link: 'ftp://x' }],
+    raw_text: 'x'.repeat(50000),
+  })
+  eq(clip.profile.basics.name, 'Sample Person', 'name trimmed')
+  eq(clip.profile.basics.linkedin, 'https://www.linkedin.com/in/sample-person/', 'unsafe URL replaced by the page URL')
+  eq(clip.profile.experience.map((e) => [e.title, e.current, e.bullets]), [['Analyst', true, ['Built reports', '42']]], 'empty entries dropped, bullets kept as text')
+  eq([clip.profile.education[0].institution, clip.profile.skills, clip.profile.languages.map((l) => l.name)], ['Sample University', [{ group: 'Skills', items: ['SQL', 'Python'], id: clip.profile.skills[0].id }], ['English']], 'schools, skill groups and string entries')
+  eq([clip.profile.certifications, clip.profile.projects[0].link, clip.raw_text.length, clip.sections], [[], '', lp.RAW_TEXT_LIMIT, 6], 'caps, bad links and section count')
+  ok(clip.profile.experience[0].id, 'entries get ids')
+  eq(lp.toProfileClip({ description: 'a job' }), null, 'job clips are not profiles')
+  eq(lp.toProfileClip({ source: 'linkedin_profile', raw_text: 'Sample Person Analyst' }).sections, 0, 'text-only clip has no sections')
+  eq(lp.reviewInput(clip), { headline: 'Data analyst', about: 'I build dashboards.', experience: 'Analyst at Example Co\nJan 2022 - Present\nBuilt reports\n42' }, 'review form')
 }
 
 log(`${passed} passed, ${failures.length} failed`)

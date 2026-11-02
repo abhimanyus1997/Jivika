@@ -526,7 +526,7 @@ export const useSavedSearches = () => useStored<SavedSearch[]>('savedSearches', 
 const SECRET_KEYS = new Set(['apikey', 'keyVerified'])
 /** Stored names an import may contain. Entries ending in '.' are prefixes. */
 const KNOWN_KEYS = [
-  'applications', 'applicationDraft', 'applicationsView', 'atsHistory', 'bannerDismissed', 'careerInput', 'careerPath', 'clip', 'clipperPromoDismissed', 'clipReceived', 'coding',
+  'applications', 'applicationDraft', 'applicationsView', 'atsHistory', 'bannerDismissed', 'careerInput', 'careerPath', 'clip', 'clipperAnswers', 'clipperPromoDismissed', 'clipReceived', 'coding',
   'coding.draft.', 'coverLetter', 'cvReview', 'daysOff', 'dismissedJobs', 'funnelRange', 'history', 'holidayImports', 'holidaySettings', 'inbox', 'interview', 'interview.tab', 'jd', 'jobSearch', 'lastMatch',
   'lastMatchJd', 'linkedinInput', 'linkedinReview', 'matches', 'pastSearches', 'profile', 'resources.', 'resume', 'resumeSettings', 'roadmapDone',
   'savedJobs', 'savedSearches', 'settings', 'sidebarCollapsed', 'signature', 'structuredProfile', 'tailoredResumes', 'tailorRequest',

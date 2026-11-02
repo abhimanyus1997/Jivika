@@ -33,10 +33,12 @@ import {
   useProfile,
   useResume,
   useResumeSettings,
+  useStored,
   useStructuredProfile,
   type SectionKey,
 } from '../lib/store'
 import type { StructuredProfile } from '../lib/api'
+import type { ImportPlan } from '../lib/portability/import'
 
 const EMPTY: Profile = {
   name: '',
@@ -342,6 +344,8 @@ export default function ProfilePage() {
   const [skillInput, setSkillInput] = useState('')
   const extract = useAction(api.profile)
   const [importing, setImporting] = useState(false)
+  // A LinkedIn profile sent by Jivika Clipper (lib/clip.ts), previewed in the import dialog.
+  const [profileClip, setProfileClip] = useStored<ImportPlan | null>('profileClip', null)
 
   useEffect(() => {
     setDraft(profile ?? EMPTY)
@@ -423,7 +427,14 @@ export default function ProfilePage() {
         }
       />
 
-      <ImportDialog open={importing} onClose={() => setImporting(false)} />
+      <ImportDialog
+        open={importing || !!profileClip}
+        plan={profileClip}
+        onClose={() => {
+          setImporting(false)
+          setProfileClip(null)
+        }}
+      />
       <ProfileSummary profile={profile} />
       <KeyNotice />
       <ErrorMessage message={extract.error} />

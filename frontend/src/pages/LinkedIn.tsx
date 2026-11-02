@@ -12,6 +12,7 @@ import {
   Field,
   inputCls,
   KeyNotice,
+  Note,
   PageHeader,
   ScoreRing,
   scoreBand,
@@ -23,7 +24,12 @@ import { pushHistory, useLinkedInReview, useProfile, useStored } from '../lib/st
 
 export default function LinkedIn() {
   const [profile] = useProfile()
-  const [form, setForm] = useStored('linkedinInput', { headline: profile?.headline ?? '', about: '', experience: '' })
+  // clipped: filled by Jivika Clipper from the profile page (lib/clip.ts), until the next review.
+  const [form, setForm] = useStored<{ headline: string; about: string; experience: string; clipped?: boolean }>('linkedinInput', {
+    headline: profile?.headline ?? '',
+    about: '',
+    experience: '',
+  })
   const [review, setReview] = useLinkedInReview()
   const key = useAiReady()
   const action = useAction(api.linkedin)
@@ -36,6 +42,7 @@ export default function LinkedIn() {
       experience: form.experience.trim() || undefined,
     })
     if (r) {
+      setForm((f) => ({ ...f, clipped: false }))
       setReview(r)
       pushHistory('linkedin', r.score)
     }
@@ -49,6 +56,18 @@ export default function LinkedIn() {
         <div className="lg:sticky lg:top-[76px] lg:max-h-[calc(100vh-100px)] lg:overflow-y-auto">
           <Card title="Your profile" description="Paste sections from your LinkedIn profile.">
             <div className="space-y-4">
+              {form.clipped && (
+                <Note>
+                  Filled in from your LinkedIn profile by Jivika Clipper. Check the text, then run the review.
+                  {key && !empty && (
+                    <div className="mt-2">
+                      <Button variant="secondary" size="sm" icon={Contact} onClick={run} loading={action.loading}>
+                        Run review
+                      </Button>
+                    </div>
+                  )}
+                </Note>
+              )}
               <Field label="Headline">
                 <input className={inputCls} value={form.headline} onChange={(e) => setForm({ ...form, headline: e.target.value })} />
               </Field>

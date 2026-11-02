@@ -34,6 +34,8 @@ export interface JobSeed {
   salary?: string
   posted_at?: string
   source?: string
+  /** 'Applied' when the clipper's Track this application sent it; otherwise the application starts as a Draft. */
+  status?: 'Applied'
 }
 
 const SEED_KEY = 'jivika.newApplicationSeed'
@@ -129,6 +131,7 @@ interface Draft {
   deadline: string
   link: string
   description: string
+  status?: 'Applied'
 }
 
 const blank: Draft = { company: '', role: '', location: '', work_mode: '', salary: '', deadline: '', link: '', description: '' }
@@ -144,6 +147,7 @@ function fromSeed(j: Partial<JobSeed>): Draft {
     work_mode: guessWorkMode(j.location ?? ''),
     salary: j.salary ?? '',
     link: j.url ?? '',
+    status: j.status === 'Applied' ? 'Applied' : undefined,
     // Postings that already name the role (pasted job descriptions) are used as they are.
     description: [j.title && j.description?.includes(j.title) ? '' : head, j.description ?? ''].filter((s) => s.trim()).join('\n\n'),
   }
@@ -219,6 +223,14 @@ export default function NewApplication() {
   useEffect(() => {
     sessionStorage.removeItem(SEED_KEY)
     sessionStorage.removeItem(DRAFT_KEY)
+    // A job clipped with 'Track this application' arrives after the page has opened (lib/clip.ts).
+    const onSeed = () => {
+      setD(readSeed())
+      setStep(0)
+      sessionStorage.removeItem(SEED_KEY)
+    }
+    window.addEventListener('jivika:seed', onSeed)
+    return () => window.removeEventListener('jivika:seed', onSeed)
   }, [])
   // Move focus to the new step's heading; the button that was focused has unmounted.
   useEffect(() => {
@@ -254,13 +266,14 @@ export default function NewApplication() {
 
   async function create() {
     const t = today()
+    const status = d.status ?? 'Draft'
     const app: Application = {
       id: newId(),
       company: d.company.trim(),
       role: d.role.trim(),
       date: t,
       created: t,
-      status: 'Draft',
+      status,
       link: d.link.trim(),
       notes: '',
       description: d.description.trim(),
@@ -269,7 +282,8 @@ export default function NewApplication() {
       salary: d.salary.trim(),
       deadline: d.deadline,
       requirements: req ?? undefined,
-      history: [{ status: 'Draft', date: t }],
+      history: [{ status, date: t }],
+      sent: status === 'Applied' ? t : undefined,
     }
     setApps((list) => [app, ...list])
     if (ready && hasProfile && app.description) {

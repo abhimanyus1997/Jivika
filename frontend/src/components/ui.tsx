@@ -726,19 +726,19 @@ export function KeyNotice() {
 
 /* ---------- Toast ---------- */
 
-let toastMsg: { id: number; text: string } | null = null
+let toastMsg: { id: number; text: string; link?: { href: string; label: string } } | null = null
 const toastSubs = new Set<() => void>()
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 
-/** Show a short bottom-right confirmation, e.g. toast('Copied to clipboard'). */
-export function toast(text: string) {
-  toastMsg = { id: Date.now(), text }
+/** Show a short bottom-right confirmation, e.g. toast('Copied to clipboard'). A link keeps it up longer so it can be followed. */
+export function toast(text: string, link?: { href: string; label: string }) {
+  toastMsg = { id: Date.now(), text, link }
   toastSubs.forEach((f) => f())
   clearTimeout(toastTimer)
   toastTimer = setTimeout(() => {
     toastMsg = null
     toastSubs.forEach((f) => f())
-  }, 2400)
+  }, link ? 8000 : 2400)
 }
 
 /** Mounted once in App. */
@@ -756,6 +756,11 @@ export function Toaster() {
         <div key={msg.id} className="flex items-center gap-2 rounded-lg border border-line bg-ink px-3 py-2 text-[13px] text-white shadow-pop">
           <Check className="size-4 text-brand-200" aria-hidden="true" />
           {msg.text}
+          {msg.link && (
+            <a href={msg.link.href} className="pointer-events-auto font-medium text-brand-200 underline underline-offset-2">
+              {msg.link.label}
+            </a>
+          )}
         </div>
       )}
     </div>
