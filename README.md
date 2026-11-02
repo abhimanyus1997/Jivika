@@ -17,7 +17,7 @@
 [![Tailwind CSS v4](https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4.svg?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![Deployed on Vercel](https://img.shields.io/badge/deployed_on-Vercel-000000.svg?logo=vercel&logoColor=white)](https://jivika.abhimanyu.fyi)
 
-<img src="docs/media/hero.gif" alt="Jivika dashboard, then a job match run showing the match score and missing skills" width="100%">
+<img src="docs/media/hero.gif" alt="Jivika dashboard, then a new application with its requirement match and a tailored resume" width="100%">
 
 </div>
 
@@ -74,15 +74,31 @@ Screenshots follow your GitHub theme. They show seeded demo data for a fictional
 
 <table>
   <tr>
-    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/dashboard-dark.png"><img src="frontend/public/img/dashboard.png" alt="Dashboard"></picture><br><p align="center">Dashboard</p></td>
-    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/job-search-dark.png"><img src="frontend/public/img/job-search.png" alt="Job search"></picture><br><p align="center">Job search</p></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/dashboard-dark.png"><img src="frontend/public/img/dashboard.png" alt="Dashboard with the application funnel and items worth a look"></picture><br><p align="center">Dashboard</p></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/new-application-dark.png"><img src="frontend/public/img/new-application.png" alt="New application checking each job requirement against the profile, with evidence"></picture><br><p align="center">New application</p></td>
   </tr>
   <tr>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/application-dark.png"><img src="frontend/public/img/application.png" alt="Application page with a tailored resume and refine suggestions"></picture><br><p align="center">Application page</p></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/applications-dark.png"><img src="frontend/public/img/applications.png" alt="Applications board with a Closed column, apply-by dates and requirement matches"></picture><br><p align="center">Applications board</p></td>
+  </tr>
+  <tr>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/calendar-dark.png"><img src="frontend/public/img/calendar.png" alt="Calendar month with an interview, apply-by dates and Indian public holidays"></picture><br><p align="center">Calendar and holidays</p></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/inbox-dark.png"><img src="frontend/public/img/inbox.png" alt="Inbox with employer emails sorted by type and a suggested status for each application"></picture><br><p align="center">Inbox</p></td>
+  </tr>
+  <tr>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/job-search-dark.png"><img src="frontend/public/img/job-search.png" alt="Job search results from several sources, including Hacker News and Y Combinator, with the selected listing"></picture><br><p align="center">Job search</p></td>
     <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/job-match-dark.png"><img src="frontend/public/img/job-match.png" alt="Job match"></picture><br><p align="center">Job match</p></td>
-    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/job-match-plan-dark.png"><img src="frontend/public/img/job-match-plan.png" alt="Job match transition plan with checked learning resources"></picture><br><p align="center">Transition plan with resources</p></td>
   </tr>
   <tr>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/job-match-plan-dark.png"><img src="frontend/public/img/job-match-plan.png" alt="Job match transition plan with checked learning resources"></picture><br><p align="center">Transition plan with resources</p></td>
     <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/ats-checker-dark.png"><img src="frontend/public/img/ats-checker.png" alt="ATS checker"></picture><br><p align="center">ATS checker</p></td>
+  </tr>
+  <tr>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/resume-dark.png"><img src="frontend/public/img/resume.png" alt="Resume page with the theme gallery and a live preview"></picture><br><p align="center">Resume themes</p></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/resume-customize-dark.png"><img src="frontend/public/img/resume-customize.png" alt="Resume theme builder with fonts, sizes, accent colour and heading styles"></picture><br><p align="center">Resume theme builder</p></td>
+  </tr>
+  <tr>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/profile-dark.png"><img src="frontend/public/img/profile.png" alt="Structured profile editor with the profile strength meter"></picture><br><p align="center">Profile</p></td>
     <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/cv-review-dark.png"><img src="frontend/public/img/cv-review.png" alt="CV review"></picture><br><p align="center">CV review</p></td>
   </tr>
   <tr>
@@ -95,10 +111,10 @@ Screenshots follow your GitHub theme. They show seeded demo data for a fictional
   </tr>
   <tr>
     <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/cover-letter-dark.png"><img src="frontend/public/img/cover-letter.png" alt="Cover letter on the Classic template"></picture><br><p align="center">Cover letter</p></td>
-    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/applications-dark.png"><img src="frontend/public/img/applications.png" alt="Applications"></picture><br><p align="center">Applications</p></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/settings-dark.png"><img src="frontend/public/img/settings.png" alt="Settings"></picture><br><p align="center">Settings</p></td>
   </tr>
   <tr>
-    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/settings-dark.png"><img src="frontend/public/img/settings.png" alt="Settings"></picture><br><p align="center">Settings</p></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/settings-clipper-dark.png"><img src="frontend/public/img/settings-clipper.png" alt="Jivika Clipper section in Settings, connected, with application answers"></picture><br><p align="center">Jivika Clipper settings</p></td>
     <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="frontend/public/img/landing-dark.png"><img src="frontend/public/img/landing.png" alt="Jivika website"></picture><br><p align="center">Website</p></td>
   </tr>
 </table>
@@ -106,6 +122,15 @@ Screenshots follow your GitHub theme. They show seeded demo data for a fictional
 ### Walkthroughs
 
 Short clips of the main flows. Each opens as a GIF; the MP4 links are smaller and sharper.
+
+<details>
+<summary><strong>Start a new application</strong></summary>
+
+Paste a job posting, see each requirement checked against your profile with the evidence, then create the application with a tailored resume and cover letter. ([MP4](docs/media/new-application.mp4))
+
+<img src="docs/media/new-application.gif" alt="Pasting a job posting, checking the requirements against the profile and creating the application" width="100%">
+
+</details>
 
 <details>
 <summary><strong>Import a job link and run a match</strong></summary>
@@ -135,6 +160,33 @@ Search live listings, compare Quick fit scores, and send a role to the applicati
 </details>
 
 <details>
+<summary><strong>Move an application on the board</strong></summary>
+
+Drag a card to another status column, then open the application page. ([MP4](docs/media/board.mp4))
+
+<img src="docs/media/board.gif" alt="Dragging an application card to Screening and opening its application page" width="100%">
+
+</details>
+
+<details>
+<summary><strong>Plan around holidays</strong></summary>
+
+The calendar shows public holidays for your country next to interviews, follow-ups and apply-by dates, and warns when an entry falls on a holiday. ([MP4](docs/media/calendar-holidays.mp4))
+
+<img src="docs/media/calendar-holidays.gif" alt="Calendar with Diwali and Guru Nanak Jayanti, an interview on a holiday and the warning when adding an entry" width="100%">
+
+</details>
+
+<details>
+<summary><strong>Sort an employer email</strong></summary>
+
+Paste an email from an employer; Jivika links it to the application, suggests a status and offers the proposed times as interviews. ([MP4](docs/media/inbox.mp4))
+
+<img src="docs/media/inbox.gif" alt="Pasting an interview invitation, updating the application status and adding the interview" width="100%">
+
+</details>
+
+<details>
 <summary><strong>Solve a coding problem in the playground</strong></summary>
 
 Open a generated SQL problem, reveal a hint, write the query, then Run and Submit. The query runs in a Web Worker in your browser and the result rows are compared with the expected rows. ([MP4](docs/media/coding.mp4))
@@ -149,6 +201,15 @@ Open a generated SQL problem, reveal a hint, write the query, then Run and Submi
 Switch between the Classic, Modern and Compact templates, add a typed or drawn signature, then download the letter as an A4 PDF. ([MP4](docs/media/cover-letter.mp4))
 
 <img src="docs/media/cover-letter.gif" alt="Switching cover letter templates, adding a typed and a drawn signature, and choosing Download PDF" width="100%">
+
+</details>
+
+<details>
+<summary><strong>Export and import your data</strong></summary>
+
+Export applications from the menu, then import a Jivika export, preview what it contains and merge it with your data. ([MP4](docs/media/export-import.mp4))
+
+<img src="docs/media/export-import.gif" alt="Opening the export menu, choosing a Jivika export to import, previewing it and merging" width="100%">
 
 </details>
 
