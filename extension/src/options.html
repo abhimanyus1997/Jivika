@@ -11,6 +11,17 @@
     <p id="status" class="hint" role="status"></p>
     <button type="button" id="reset">Reset to default</button>
   </form>
+  <section aria-labelledby="sites-title">
+    <h2 id="sites-title" class="title">Fill with Jivika button</h2>
+    <p class="hint">Sites where you turned on the in-page button. Removing a site also removes Jivika Clipper's access to it.</p>
+    <ul id="sites" class="sites"></ul>
+  </section>
+  <section aria-labelledby="conn-title">
+    <h2 id="conn-title" class="title">Connected profile</h2>
+    <p id="conn" class="hint" role="status"></p>
+    <button type="button" id="forget" hidden>Remove my profile from this browser</button>
+  </section>
+  <p class="hint">Jivika Clipper version <span id="version"></span></p>
 </main>
 <script src="clip.js"></script>
 <script src="options.js"></script>

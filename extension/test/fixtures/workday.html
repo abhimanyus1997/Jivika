@@ -1,0 +1,50 @@
+<!doctype html>
+<!-- Synthetic Workday-style multi-step application (example.wd5.myworkdayjobs.com). Invented company.
+     Inputs behave like React controlled inputs: the app keeps its own state, learns about typing only from input events
+     where the value differs from the value it last set (React's value tracker), and re-renders the state on blur.
+     So `el.value = x` is lost on blur; the native value setter followed by an input event sticks. -->
+<html><head><meta charset="utf-8"><title>Apply - Example Workday Careers</title></head><body>
+<div data-automation-id="applyFlowPage">
+  <ol data-automation-id="progressBar"><li data-automation-id="progressBarActiveStep">My Information</li><li>My Experience</li><li>Review</li></ol>
+  <div data-automation-id="applyFlowMyInfoPage" id="step1">
+    <h2>My Information</h2>
+    <div data-automation-id="formField-legalName--firstName"><label for="w1">First Name<abbr title="required">*</abbr></label><input id="w1" data-automation-id="legalNameSection_firstName" type="text" aria-required="true"></div>
+    <div data-automation-id="formField-legalName--lastName"><label for="w2">Last Name<abbr title="required">*</abbr></label><input id="w2" data-automation-id="legalNameSection_lastName" type="text" aria-required="true"></div>
+    <div data-automation-id="formField-email"><label for="w3">Email Address<abbr title="required">*</abbr></label><input id="w3" data-automation-id="email" type="text" aria-required="true"></div>
+    <div data-automation-id="formField-countryPhoneCode"><label for="w4">Country Phone Code</label>
+      <select id="w4" data-automation-id="countryPhoneCode"><option value="">Select One</option><option value="US">United States of America (+1)</option><option value="IN">India (+91)</option><option value="GB">United Kingdom (+44)</option></select></div>
+    <div data-automation-id="formField-phoneNumber"><label for="w5">Phone Number<abbr title="required">*</abbr></label><input id="w5" data-automation-id="phone-number" type="text" aria-required="true"></div>
+    <div data-automation-id="formField-addressSection_city"><label for="w6">City</label><input id="w6" data-automation-id="addressSection_city" type="text"></div>
+    <div data-automation-id="formField-source"><label id="w7l">How Did You Hear About Us?<abbr title="required">*</abbr></label>
+      <button type="button" id="w7" data-automation-id="multiselectInputContainer" aria-haspopup="listbox" aria-required="true" aria-labelledby="w7l">Select One</button></div>
+  </div>
+  <div data-automation-id="applyFlowMyExpPage" id="step2" style="display:none">
+    <h2>My Experience</h2>
+    <div><label for="w8">Job Title</label><input id="w8" data-automation-id="jobTitle" type="text"></div>
+    <div><label for="w9">Company</label><input id="w9" data-automation-id="company" type="text"></div>
+  </div>
+  <div data-automation-id="pageFooter"><button type="button" data-automation-id="pageFooterNextButton" id="next">Save and Continue</button></div>
+</div>
+<script>
+  window.__state = {};
+  window.__next = 0;
+  var desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+  document.querySelectorAll('input').forEach(function (el) {
+    var tracked = '';
+    window.__state[el.id] = '';
+    // The tracker: assignments through the element's own property are remembered, so the input event looks like no change.
+    Object.defineProperty(el, 'value', {
+      configurable: true,
+      get: function () { return desc.get.call(this); },
+      set: function (v) { tracked = String(v); desc.set.call(this, v); }
+    });
+    el.addEventListener('input', function () {
+      var now = desc.get.call(el);
+      if (now !== tracked) { tracked = now; window.__state[el.id] = now; }
+    });
+    // Re-render from state, as a controlled input does.
+    el.addEventListener('blur', function () { desc.set.call(el, window.__state[el.id]); tracked = window.__state[el.id]; });
+  });
+  document.getElementById('next').addEventListener('click', function () { window.__next++; });
+</script>
+</body></html>

@@ -1,0 +1,22 @@
+<!doctype html>
+<!-- Synthetic Workable-style application (apply.workable.com). Invented company and questions. -->
+<html><head><meta charset="utf-8"><title>Apply - Wingtip Toys</title></head><body>
+<form data-ui="application-form" id="form">
+  <fieldset><legend>Personal information</legend>
+    <div><label for="firstname">First name*</label><input id="firstname" name="firstname" data-ui="firstname" required></div>
+    <div><label for="lastname">Last name*</label><input id="lastname" name="lastname" data-ui="lastname" required></div>
+    <div><label for="email">Email*</label><input id="email" name="email" data-ui="email" type="email" required></div>
+    <div><label for="headline">Headline (Optional)</label><input id="headline" name="headline" data-ui="headline"></div>
+    <div><label for="phone">Phone</label><input id="phone" name="phone" data-ui="phone" type="tel" value="+1 555 0100"></div>
+    <div><label for="address">Address (Optional)</label><input id="address" name="address" data-ui="address"></div>
+  </fieldset>
+  <fieldset><legend>Are you willing to relocate?</legend>
+    <label><input type="radio" name="QA_8812" value="true"> Yes</label>
+    <label><input type="radio" name="QA_8812" value="false"> No</label>
+  </fieldset>
+  <div><label><input type="checkbox" name="QA_8813" data-ui="QA_8813"> I require visa sponsorship to work in this country</label></div>
+  <div><label for="QA_8814">Cover letter</label><textarea id="QA_8814" name="QA_8814"></textarea></div>
+  <button type="submit" data-ui="submit-application">Submit application</button>
+</form>
+<script>window.__submitted = 0; document.getElementById('form').addEventListener('submit', function (e) { e.preventDefault(); window.__submitted++; });</script>
+</body></html>

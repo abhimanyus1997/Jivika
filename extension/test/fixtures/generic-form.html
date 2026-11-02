@@ -1,0 +1,25 @@
+<!doctype html>
+<!-- Synthetic generic application form on a company site: labels by wrapping, aria-labelledby, placeholder only,
+     autocomplete attributes and plain text before the field. Invented company. -->
+<html><head><meta charset="utf-8"><title>Apply - Contoso Careers</title></head><body>
+<h1>Backend Engineer</h1>
+<form id="apply">
+  <label>Your name <input name="f1"></label>
+  <span id="lbl-mail">Work email</span><input name="f2" aria-labelledby="lbl-mail">
+  <input name="f3" placeholder="Mobile number">
+  <input name="f4" autocomplete="address-level2">
+  <div class="row"><div class="q">Highest degree</div><div><input name="f5"></div></div>
+  <div class="row"><div class="q">University</div><input name="f6"></div>
+  <div class="row"><div class="q">Graduation year</div><input name="f7" type="number"></div>
+  <label>Current CTC <input name="f8"></label>
+  <label>Expected CTC <input name="f9"></label>
+  <label>Earliest start date <input name="f10" type="date"></label>
+  <label>Portfolio <input name="f11" type="url"></label>
+  <label>Pronouns <select name="f12"><option value="">Choose</option><option>she/her</option><option>he/him</option><option>they/them</option></select></label>
+  <label>Disability <select name="f13"><option value="">Choose</option><option>Yes</option><option>No</option><option>I do not want to answer</option></select></label>
+  <label>Anything else you would like us to know? <textarea name="f14"></textarea></label>
+  <input type="hidden" name="token" value="abc">
+  <button type="submit">Send</button>
+</form>
+<script>window.__submitted = 0; document.getElementById('apply').addEventListener('submit', function (e) { e.preventDefault(); window.__submitted++; });</script>
+</body></html>

@@ -1,0 +1,27 @@
+<!doctype html>
+<!-- Synthetic SmartRecruiters-style application (jobs.smartrecruiters.com): fields inside custom elements with open shadow roots.
+     Invented company. -->
+<html><head><meta charset="utf-8"><title>Apply - Tailspin Toys</title></head><body>
+<oc-oneclick-form>
+  <h1>Quality Analyst</h1>
+  <sr-field data-id="first-name-input" data-label="First name" data-required="1"></sr-field>
+  <sr-field data-id="last-name-input" data-label="Last name" data-required="1"></sr-field>
+  <sr-field data-id="email-input" data-label="Email" data-required="1" data-type="email"></sr-field>
+  <sr-field data-id="confirm-email-input" data-label="Confirm your email" data-required="1" data-type="email"></sr-field>
+  <sr-field data-id="linkedin-input" data-label="LinkedIn profile"></sr-field>
+  <sr-field data-id="spl-q-1" data-label="Notice period (in days)"></sr-field>
+  <button type="button" id="apply">Apply</button>
+</oc-oneclick-form>
+<script>
+  customElements.define('sr-field', class extends HTMLElement {
+    connectedCallback() {
+      var root = this.attachShadow({ mode: 'open' });
+      var id = this.dataset.id;
+      root.innerHTML = '<label for="' + id + '">' + this.dataset.label + (this.dataset.required ? ' *' : '') + '</label>' +
+        '<input id="' + id + '" type="' + (this.dataset.type || 'text') + '"' + (this.dataset.required ? ' required' : '') + '>';
+    }
+  });
+  window.__clicked = 0;
+  document.getElementById('apply').addEventListener('click', function () { window.__clicked++; });
+</script>
+</body></html>
