@@ -48,7 +48,11 @@ Jivika sets no cookies and includes no analytics, advertising or tracking script
 
 ## Jivika Clipper
 
-The browser extension requests the `activeTab`, `scripting` and `storage` permissions. It reads only the active tab, and only when the user opens its toolbar popup (the bookmarklet runs only when clicked). It sends nothing to Jivika's servers: the extracted job opens in the app inside the URL fragment (`/app/#match?clip=...`), which browsers never send to a server, and the app removes it from the address bar after reading it. Extension storage (`chrome.storage.sync`) holds only the app address set on the options page.
+The browser extension requests the `activeTab`, `scripting` and `storage` permissions, plus optional per-site host access (`optional_host_permissions`) that is requested only when the user turns on the in-page Fill with Jivika button for a site. It reads only the active tab, and only when the user opens its toolbar popup (the bookmarklet runs only when clicked). It sends nothing to Jivika's servers: an extracted job or LinkedIn profile opens in the app inside the URL fragment (`/app/#match?clip=...`, `/app/#profile?clip=...`), which browsers never send to a server, and the app removes it from the address bar after reading it. A profile too large for the URL is held in extension memory and handed to the app over the extension message channel (`#profile?clipRef=<id>`, `jivika.fetchClip`).
+
+- **Connecting** (Settings > Jivika Clipper) sends the structured profile and the application answers from the app to the extension with `chrome.runtime.sendMessage` (`externally_connectable`, limited to the Jivika origin and localhost; the extension also checks the sender origin and caps messages at 200 KB). The extension keeps them in `chrome.storage.local` with the app address and sync time. Disconnect and Clear all local data ask the extension to delete them; removing the extension deletes them too.
+- **Autofill** writes only into the form on the tab the user chose, never touches file inputs, and never submits or moves to the next step. Filled values are not sent anywhere.
+- Extension settings (the app address, sites with the in-page button) stay in extension storage. The clip payload carries the extension version (`clipper_version`) so the app can show an update notice; nothing is fetched to check for updates.
 
 ## Contact
 

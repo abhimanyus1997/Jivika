@@ -172,9 +172,16 @@ Press Ctrl K, type a few letters and press Enter to jump to any page or action. 
 
 ## Jivika Clipper
 
-Naukri, and at times LinkedIn, block server-side imports of job links, and Jivika does not work around bot protection. Jivika Clipper is a Manifest V3 browser extension (Chrome, Edge, Brave) that reads the job from the page you are viewing, in your own browser, when you click its button. It uses only the `activeTab` and `scripting` permissions (plus `storage` for its own settings), sends nothing to Jivika's servers, and hands the job to the app in the URL fragment (`/app/#match?clip=<payload>`), which is never sent to any server. The app validates the payload, caps every field, treats it as plain text and removes it from the URL.
+Naukri, and at times LinkedIn, block server-side imports of job links, and Jivika does not work around bot protection. Jivika Clipper is a Manifest V3 browser extension (Chrome, Edge, Brave) that reads the job from the page you are viewing, in your own browser, when you click its button. It uses only the `activeTab` and `scripting` permissions (plus `storage` for its settings and, once connected, your profile and answers, and optional per-site access only when you turn on its in-page button), sends nothing to Jivika's servers, and hands the job to the app in the URL fragment (`/app/#match?clip=<payload>`), which is never sent to any server. The app validates the payload, caps every field, treats it as plain text and removes it from the URL.
 
-Install steps, the bookmarklet fallback and the list of supported sites are on the [Clipper page](https://jivika.abhimanyu.fyi/clipper/). The extension source lives in `extension/`.
+Version 0.2 adds:
+
+- **LinkedIn profile import.** On your own profile (`linkedin.com/in/<name>/`), the Clipper loads every section and sends a structured profile to `#profile` (previewed in the import dialog: choose entries, merge or replace, undo) or to `#linkedin` (fills the LinkedIn review). When too few sections are recognised, the app structures the page text through `/api/profile/structure`, which keeps only what the text contains.
+- **Connect to Jivika.** Settings > Jivika Clipper finds the extension through `externally_connectable` (fixed extension ID from the manifest key), shows its version, and on Connect copies the structured profile and the application answers (notice period, salary, work authorization, EEO defaults of "Prefer not to say" or "Decline to answer") into extension storage. Disconnect removes them. Chromium browsers only.
+- **Opt-in autofill.** Fill this application fills the form on the current tab (all frames, with adapters for Greenhouse, Lever, Ashby, Workday, SmartRecruiters and Workable), outlines what it filled and what still needs you, and never attaches files or submits. A per-site in-page button is available behind an explicit permission request.
+- **Version notice.** Every clip carries `clipper_version`; when it is older than `LATEST_CLIPPER_VERSION` (`frontend/src/lib/clip.ts`), the app links to the update steps.
+
+Install steps, the bookmarklet fallback, version checks and the list of supported sites are on the [Clipper page](https://jivika.abhimanyu.fyi/clipper/). The extension source lives in `extension/`.
 
 ## How it works
 

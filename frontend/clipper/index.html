@@ -18,12 +18,12 @@
         <div class="wrap mx-auto max-w-[800px]">
           <p class="eyebrow">Jivika Clipper</p>
           <h1 class="h-display mt-4">Send any job to Jivika in one click.</h1>
-          <p class="lead mt-6">Some job sites, including Naukri and at times LinkedIn, block server imports. Jivika Clipper is a small browser extension that reads the job you are already viewing and opens it in Jivika, ready for a match, ATS check, cover letter or interview prep.</p>
+          <p class="lead mt-6">Some job sites, including Naukri and at times LinkedIn, block server imports. Jivika Clipper is a small browser extension that reads the job you are already viewing and opens it in Jivika, ready for a match, ATS check, cover letter or interview prep. It can also import your LinkedIn profile and fill application forms for you to check.</p>
           <div class="mt-8 flex flex-wrap gap-3">
             <a href="%BASE%/downloads/jivika-clipper.zip" class="btn btn-primary h-11 px-5" download>Download Jivika Clipper</a>
             <a href="#bookmarklet" class="btn btn-secondary h-11 px-5">Use the bookmarklet</a>
           </div>
-          <p class="mt-3 text-sm text-muted">Version 0.1.0 for Chrome, Edge and Brave. A Chrome Web Store listing is planned.</p>
+          <p class="mt-3 text-sm text-muted">Version 0.2.0 for Chrome, Edge and Brave. A Chrome Web Store listing is planned. <a href="#version" class="link">Check your version</a></p>
         </div>
       </section>
 
@@ -35,7 +35,7 @@
           </article>
           <article class="card">
             <h2 class="t-title text-[15px]">Privacy</h2>
-            <p class="mt-2 text-sm leading-6 text-muted">It reads only the current tab, and only when you click. It sends nothing to our servers: the job travels to the app in the URL fragment, which browsers never send to a server. Each clip opens Jivika in a new tab. It has no background access to your browsing, no analytics and no remote code.</p>
+            <p class="mt-2 text-sm leading-6 text-muted">It reads only the current tab, and only when you click. It sends nothing to our servers: the job travels to the app in the URL fragment, which browsers never send to a server. Each clip opens Jivika in a new tab. It has no analytics and no remote code.</p>
           </article>
         </div>
       </section>
@@ -76,10 +76,85 @@
         </div>
       </section>
 
+      <section id="linkedin-profile" class="section border-t border-line">
+        <div class="wrap mx-auto max-w-[800px]">
+          <h2 class="h-section">Import your LinkedIn profile</h2>
+          <p class="mt-4 text-muted">Open your own profile on LinkedIn (linkedin.com/in/your-name) and click the Clipper. Instead of the job buttons you see two choices:</p>
+          <ul class="mt-4 list-disc space-y-2 pl-5 text-muted">
+            <li><strong class="text-ink">Import to my profile</strong> opens the Jivika Profile page with a preview of your experience, education, skills, languages, certifications, projects and publications. Choose what to keep, then merge it with your profile or replace it. You can undo the import.</li>
+            <li><strong class="text-ink">Review my LinkedIn</strong> fills the LinkedIn review with your headline, About section and recent roles, ready for a review.</li>
+          </ul>
+          <p class="mt-4 text-muted">Before reading, the Clipper scrolls through the page and opens the "see more" sections so nothing is cut off, then returns you to where you were. If it cannot tell the sections apart, Jivika offers to build your profile from the page text with your model, which leaves out anything the text does not contain. Recommendations are never read.</p>
+        </div>
+      </section>
+
+      <section id="fill" class="section border-t border-line">
+        <div class="wrap mx-auto max-w-[800px]">
+          <h2 class="h-section">Fill applications</h2>
+          <p class="mt-4 text-muted">On an application form (Greenhouse, Lever, Ashby, Workday, SmartRecruiters, Workable and most other forms), open the Clipper and choose Fill this application. It fills your name, contact details, links, current role, education and the answers you saved in Jivika, such as notice period or work authorization.</p>
+          <ul class="mt-4 list-disc space-y-2 pl-5 text-muted">
+            <li>Filled fields get a green outline; required fields it could not fill get an amber one, so you can see what is left for you.</li>
+            <li>It never attaches files, never submits the form and never moves to the next step. On multi-step forms such as Workday, it fills the step you are on.</li>
+            <li>Diversity questions (gender, ethnicity, veteran and disability status) are answered with "Prefer not to say" or "Decline to answer" unless you choose otherwise in Jivika.</li>
+          </ul>
+          <p class="mt-4 text-muted">Filling needs a connected profile, see below. Check every answer before you submit.</p>
+        </div>
+      </section>
+
+      <section id="connect" class="section border-t border-line">
+        <div class="wrap mx-auto max-w-[800px]">
+          <h2 class="h-section">Connect to Jivika</h2>
+          <p class="mt-4 text-muted">Open <a href="%BASE%/app/#settings" class="link">Jivika Settings</a> and find the Jivika Clipper section. It shows whether the Clipper is installed and which version. Fill in your application answers, then choose Connect: Jivika copies your profile and answers into the extension's own storage in this browser. Choose Send profile again after you change them, or Disconnect to remove the copy.</p>
+          <p class="mt-4 text-muted">Connecting works in Chrome, Edge, Brave and other Chromium browsers, and only from the Jivika app. Nothing is sent to Jivika's servers.</p>
+        </div>
+      </section>
+
+      <section id="version" class="section border-t border-line">
+        <div class="wrap mx-auto max-w-[800px]">
+          <h2 class="h-section">Check your version</h2>
+          <p class="mt-4 text-muted">The current version is 0.2.0. The Clipper shows its version at the bottom of its window, Jivika Settings shows the installed version, and Jivika tells you when a clip comes from an older copy.</p>
+          <ol class="mt-8 space-y-6">
+            <li class="flex gap-4">
+              <span class="t-num flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-[13px] font-semibold text-brand-700">1</span>
+              <div>
+                <h3 class="t-title text-[15px]">Download the new version</h3>
+                <p class="mt-1 text-muted"><a href="%BASE%/downloads/jivika-clipper.zip" class="link" download>Download jivika-clipper.zip</a> and extract it over the folder you loaded before (or into a new folder).</p>
+              </div>
+            </li>
+            <li class="flex gap-4">
+              <span class="t-num flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-[13px] font-semibold text-brand-700">2</span>
+              <div>
+                <h3 class="t-title text-[15px]">Reload it</h3>
+                <p class="mt-1 text-muted">On the extensions page, choose the reload button on the Jivika Clipper card. If you used a new folder, remove the old copy and load the new folder with Load unpacked.</p>
+              </div>
+            </li>
+            <li class="flex gap-4">
+              <span class="t-num flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-[13px] font-semibold text-brand-700">3</span>
+              <div>
+                <h3 class="t-title text-[15px]">Confirm</h3>
+                <p class="mt-1 text-muted">Open the Clipper: the footer should read version 0.2.0. Your settings are kept.</p>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section id="permissions" class="section border-t border-line">
+        <div class="wrap mx-auto max-w-[800px]">
+          <h2 class="h-section">Permissions</h2>
+          <ul class="mt-6 space-y-3 text-muted">
+            <li><strong class="text-ink">Read the current tab when you click (activeTab, scripting).</strong> The Clipper reads or fills only the tab you clicked it on, at that moment.</li>
+            <li><strong class="text-ink">Storage.</strong> Keeps its settings and, when you connect, your profile and answers, in this browser only.</li>
+            <li><strong class="text-ink">Talk to the Jivika app (externally connectable).</strong> Only pages on jivika.abhimanyu.fyi and your own computer (localhost) can ask for its version. Connecting and disconnecting work from jivika.abhimanyu.fyi, or from a local copy of Jivika only after you save its address in the Clipper options. No other site can reach it.</li>
+            <li><strong class="text-ink">Optional per-site access, off by default.</strong> If you turn on "Show a Fill with Jivika button on this site", your browser asks for access to that one site. You can remove sites, and their access, in the Clipper options at any time.</li>
+          </ul>
+        </div>
+      </section>
+
       <section id="bookmarklet" class="section border-y border-line bg-surface">
         <div class="wrap mx-auto max-w-[800px]">
           <h2 class="h-section">Bookmarklet</h2>
-          <p class="mt-4 text-muted">Prefer not to install an extension? Drag this link to your bookmarks bar, then click the bookmark on a job page. It sends the job to Job match.</p>
+          <p class="mt-4 text-muted">Prefer not to install an extension? Drag this link to your bookmarks bar, then click the bookmark on a job page. It sends the job to Job match, or on your LinkedIn profile, imports it to your Jivika profile. To update the bookmarklet, drag the link again and replace the old bookmark.</p>
           <div class="mt-6 flex flex-wrap items-center gap-3">
             <a href="#bookmarklet" class="btn btn-primary h-11 px-5" data-bookmarklet draggable="true">Clip to Jivika</a>
             <button type="button" class="btn btn-secondary h-11 px-5" data-bookmarklet-copy>Copy bookmarklet code</button>
